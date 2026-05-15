@@ -32,7 +32,7 @@ dotnet test
 - **Worker:** `XmlSyncWorker` is a `BackgroundService` inside `SmileyApi.Api/Workers/`. Do not move it to a separate project yet.
 - **XML source URL:** `https://www.foedevarestyrelsen.dk/Media/638212360788086849/Smiley_xml.xml`
 - **DbContext in worker:** always resolve via `IServiceScopeFactory` — never inject `SmileyDbContext` directly into the worker
-- **Bulk inserts:** never insert XML sync rows one-by-one with EF. Use `EFCore.BulkExtensions` or raw `MERGE` SQL
+- **Bulk inserts:** never insert XML sync rows one-by-one with EF. Use raw `MERGE` SQL via `SqlBulkCopy` + temp tables (implemented in `EstablishmentSyncService`). Do NOT use `EFCore.BulkExtensions` — v10 is a .NET 10-only meta-package; no compatible version is referenced.
 - **Natural key:** use `navnelbnr` (Fødevarestyrelsen's ID) for upsert diffing — not CVR, which can be missing
 - **Geo (MVP):** lat/lng stored as `float` columns, Haversine in raw SQL. Do not add `geography` column yet.
 - **Error responses:** always return `{ "error": { "code": "...", "message": "..." } }` — no other shape

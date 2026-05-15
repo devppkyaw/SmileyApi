@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 using SmileyApi.Api.Endpoints;
+using SmileyApi.Api.Workers;
 using SmileyApi.Core.Interfaces;
 using SmileyApi.Infrastructure.Data;
 using SmileyApi.Infrastructure.Repositories;
@@ -13,6 +14,11 @@ builder.Services.AddDbContext<SmileyDbContext>(options =>
 
 builder.Services.AddScoped<IEstablishmentRepository, EstablishmentRepository>();
 builder.Services.AddScoped<IApiKeyService, ApiKeyService>();
+builder.Services.AddScoped<EstablishmentSyncService>();
+
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton<FodevareXmlParser>();
+builder.Services.AddHostedService<XmlSyncWorker>();
 
 builder.Services.AddOpenApi();
 
