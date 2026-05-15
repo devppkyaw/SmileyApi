@@ -126,8 +126,17 @@ public class EstablishmentSyncService(SmileyDbContext db, ILogger<EstablishmentS
 
             await ExecAsync(conn, @"
                 MERGE Inspections WITH (HOLDLOCK) AS T
-                USING #inspection_staging AS S
-                    ON T.EstablishmentId = S.EstablishmentId AND T.InspectedOn = S.InspectedOn
+                USING (
+                    SELECT EstablishmentId, SmileyScore, InspectedOn, RecordedAt
+                    FROM (
+                        SELECT *, ROW_NUMBER() OVER (
+                            PARTITION BY EstablishmentId, InspectedOn
+                            ORDER BY (SELECT NULL)
+                        ) AS rn
+                        FROM #inspection_staging
+                    ) AS x
+                    WHERE rn = 1
+                ) AS S ON T.EstablishmentId = S.EstablishmentId AND T.InspectedOn = S.InspectedOn
                 WHEN NOT MATCHED THEN INSERT (
                     EstablishmentId, SmileyScore, InspectedOn, RecordedAt
                 ) VALUES (
