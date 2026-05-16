@@ -1,3 +1,4 @@
+using Azure.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
@@ -13,6 +14,13 @@ using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Wire up Key Vault as a config source when running on Azure.
+// DefaultAzureCredential uses the App Service Managed Identity automatically;
+// locally it falls back to Azure CLI / VS credentials.
+var kvUri = builder.Configuration["AZURE_KEY_VAULT_URI"];
+if (!string.IsNullOrEmpty(kvUri))
+    builder.Configuration.AddAzureKeyVault(new Uri(kvUri), new DefaultAzureCredential());
+
 builder.Services.AddDbContext<SmileyDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 
@@ -25,6 +33,7 @@ builder.Services.AddSingleton<FodevareXmlParser>();
 builder.Services.AddHostedService<XmlSyncWorker>();
 
 builder.Services.AddOpenApi();
+builder.Services.AddApplicationInsightsTelemetry();
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -57,9 +66,21 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
+// Run any pending EF migrations on startup in non-dev environments.
+// In dev, the developer runs migrations manually via dotnet ef database update.
+if (!app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    await scope.ServiceProvider.GetRequiredService<SmileyDbContext>().Database.MigrateAsync();
+}
+
 app.UseStaticFiles();
-app.MapOpenApi();
-app.MapScalarApiReference();
+
+if (!app.Environment.IsProduction())
+{
+    app.MapOpenApi();
+    app.MapScalarApiReference();
+}
 
 app.UseMiddleware<ApiKeyMiddleware>();
 app.UseRateLimiter();

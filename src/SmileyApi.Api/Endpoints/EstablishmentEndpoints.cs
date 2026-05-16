@@ -7,11 +7,14 @@ public static class EstablishmentEndpoints
 {
     public static void MapEstablishmentEndpoints(this WebApplication app)
     {
-        app.MapPost("/admin/keys", async (KeyRequest req, IApiKeyService svc, CancellationToken ct) =>
+        if (!app.Environment.IsProduction())
         {
-            var plaintext = await svc.GenerateAsync(req.Email, req.Tier, ct);
-            return Results.Ok(new { key = plaintext, email = req.Email, tier = req.Tier });
-        });
+            app.MapPost("/admin/keys", async (KeyRequest req, IApiKeyService svc, CancellationToken ct) =>
+            {
+                var plaintext = await svc.GenerateAsync(req.Email, req.Tier, ct);
+                return Results.Ok(new { key = plaintext, email = req.Email, tier = req.Tier });
+            });
+        }
 
         var v1 = app.MapGroup("/v1/establishments")
                     .RequireRateLimiting("api-key-tier");
