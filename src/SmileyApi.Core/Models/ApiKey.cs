@@ -9,4 +9,5 @@ public class ApiKey
     public int RequestsToday { get; set; }
     public DateTime CreatedAt { get; set; }
     public bool IsActive { get; set; }
+    public DateTime LastResetAt { get; set; }
 }
