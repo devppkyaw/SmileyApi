@@ -71,7 +71,8 @@ public class EstablishmentSyncService(SmileyDbContext db, ILogger<EstablishmentS
                     ISNULL(T.IndustryName,'')            <> ISNULL(S.IndustryName,'') OR
                     ISNULL(CAST(T.GeoLat AS NVARCHAR(40)),'') <> ISNULL(CAST(S.GeoLat AS NVARCHAR(40)),'') OR
                     ISNULL(CAST(T.GeoLng AS NVARCHAR(40)),'') <> ISNULL(CAST(S.GeoLng AS NVARCHAR(40)),'') OR
-                    ISNULL(T.ReportUrl,   '')            <> ISNULL(S.ReportUrl,   '')
+                    ISNULL(T.ReportUrl,   '')            <> ISNULL(S.ReportUrl,   '') OR
+                    ISNULL(T.LatestScore, -1)            <> ISNULL(S.LatestScore, -1)
                 ) THEN UPDATE SET
                     T.CvrNumber    = S.CvrNumber,
                     T.Name         = S.Name,
@@ -155,6 +156,8 @@ public class EstablishmentSyncService(SmileyDbContext db, ILogger<EstablishmentS
                     ) AS x
                     WHERE rn = 1
                 ) AS S ON T.EstablishmentId = S.EstablishmentId AND T.InspectedOn = S.InspectedOn
+                WHEN MATCHED AND T.SmileyScore <> S.SmileyScore THEN UPDATE SET
+                    T.SmileyScore = S.SmileyScore
                 WHEN NOT MATCHED THEN INSERT (
                     EstablishmentId, SmileyScore, InspectedOn, RecordedAt
                 ) VALUES (
