@@ -1,4 +1,6 @@
 using Azure.Identity;
+using Hangfire;
+using Hangfire.SqlServer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
@@ -8,6 +10,7 @@ using SmileyApi.Api.Workers;
 using SmileyApi.Core.Interfaces;
 using SmileyApi.Core.Models;
 using SmileyApi.Infrastructure.Data;
+using SmileyApi.Infrastructure.Jobs;
 using SmileyApi.Infrastructure.Repositories;
 using SmileyApi.Infrastructure.Services;
 using System.Threading.RateLimiting;
@@ -27,13 +30,35 @@ builder.Services.AddDbContext<SmileyDbContext>(options =>
 builder.Services.AddScoped<IEstablishmentRepository, EstablishmentRepository>();
 builder.Services.AddScoped<IApiKeyService, ApiKeyService>();
 builder.Services.AddScoped<EstablishmentSyncService>();
+builder.Services.AddScoped<WebhookService>();
+builder.Services.AddScoped<WebhookDeliveryJob>();
 
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient("webhook", client => client.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddSingleton<FodevareXmlParser>();
 builder.Services.AddHostedService<XmlSyncWorker>();
 
+var connectionString = builder.Configuration.GetConnectionString("Default")!;
+builder.Services.AddHangfire(config => config
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UseSqlServerStorage(connectionString, new SqlServerStorageOptions
+    {
+        CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+        SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+        QueuePollInterval = TimeSpan.Zero,
+        UseRecommendedIsolationLevel = true,
+        DisableGlobalLocks = true
+    }));
+builder.Services.AddHangfireServer();
+
 builder.Services.AddOpenApi();
-builder.Services.AddApplicationInsightsTelemetry();
+
+var aiConnectionString = builder.Configuration["ApplicationInsights:ConnectionString"]
+    ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+if (!string.IsNullOrEmpty(aiConnectionString))
+    builder.Services.AddApplicationInsightsTelemetry();
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -66,6 +91,24 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var exceptionFeature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        logger.LogError(
+            exceptionFeature?.Error,
+            "Unhandled exception on {Method} {Path}",
+            context.Request.Method,
+            context.Request.Path);
+        context.Response.StatusCode = 500;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsync(
+            """{"error":{"code":"internal_error","message":"An unexpected error occurred."}}""");
+    });
+});
+
 // Run any pending EF migrations on startup in non-dev environments.
 // In dev, the developer runs migrations manually via dotnet ef database update.
 if (!app.Environment.IsDevelopment())
@@ -74,12 +117,14 @@ if (!app.Environment.IsDevelopment())
     await scope.ServiceProvider.GetRequiredService<SmileyDbContext>().Database.MigrateAsync();
 }
 
+app.UseDefaultFiles();
 app.UseStaticFiles();
 
 if (!app.Environment.IsProduction())
 {
     app.MapOpenApi();
     app.MapScalarApiReference();
+    app.UseHangfireDashboard("/hangfire");
 }
 
 app.UseMiddleware<ApiKeyMiddleware>();
@@ -89,6 +134,9 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
    .ExcludeFromDescription();
 
 app.MapEstablishmentEndpoints();
+app.MapLeadsEndpoint();
+app.MapAdminEndpoints();
+app.MapWebhookEndpoints();
 
 app.Run();
 

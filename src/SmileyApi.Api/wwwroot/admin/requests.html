@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smiley API — Lead Requests</title>
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    .page-header { padding: 48px 0 32px; }
+    .page-header h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; }
+    .page-header p  { color: var(--text-muted); }
+
+    .requests-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    .requests-table th {
+      text-align: left;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .requests-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .requests-table tr:last-child td { border-bottom: none; }
+    .use-case-cell {
+      max-width: 260px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    .date-cell { white-space: nowrap; color: var(--text-muted); font-size: 0.85rem; }
+
+    .btn-approve {
+      padding: 7px 16px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn-approve:hover    { opacity: 0.85; }
+    .btn-approve:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .key-result {
+      background: var(--surface);
+      border: 1px solid var(--green);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      font-size: 0.82rem;
+    }
+    .key-result .key-label {
+      color: var(--green);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .key-result code {
+      display: block;
+      word-break: break-all;
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: 0.82rem;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .key-result .copy-hint {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 64px 0;
+      color: var(--text-muted);
+    }
+    .empty-state .empty-icon { font-size: 2.5rem; margin-bottom: 16px; }
+
+    .loading {
+      text-align: center;
+      padding: 48px 0;
+      color: var(--text-muted);
+    }
+
+    .error-banner {
+      background: rgba(248,113,113,0.1);
+      border: 1px solid var(--red);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      color: var(--red);
+      margin-bottom: 24px;
+    }
+  </style>
+</head>
+<body>
+
+<header class="hero" style="padding-bottom: 48px;">
+  <nav class="nav">
+    <span class="nav-logo">Smiley<span class="accent">API</span> <span style="color:var(--text-muted);font-weight:400;font-size:0.9rem;">Admin</span></span>
+    <a href="/admin/" class="nav-link">← Admin</a>
+  </nav>
+</header>
+
+<div class="container" style="padding-bottom: 80px;">
+  <div class="page-header">
+    <h1>Lead Requests</h1>
+    <p>Pending API access requests awaiting approval.</p>
+  </div>
+
+  <div id="error-container"></div>
+  <div id="content"><div class="loading">Loading requests...</div></div>
+</div>
+
+<script>
+(async function () {
+  const content = document.getElementById('content');
+  const errorContainer = document.getElementById('error-container');
+
+  async function loadRequests() {
+    try {
+      const res = await fetch('/admin/requests');
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const requests = await res.json();
+      render(requests);
+    } catch (err) {
+      errorContainer.innerHTML = `<div class="error-banner">Failed to load requests: ${err.message}</div>`;
+      content.innerHTML = '';
+    }
+  }
+
+  function render(requests) {
+    if (requests.length === 0) {
+      content.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">&#x2705;</div>
+          <p>No pending requests.</p>
+        </div>`;
+      return;
+    }
+
+    const rows = requests.map(r => `
+      <tr id="row-${r.id}">
+        <td><strong>${escHtml(r.name)}</strong><br><span style="color:var(--text-muted);font-size:0.85rem;">${escHtml(r.email)}</span></td>
+        <td>${escHtml(r.company ?? '—')}</td>
+        <td class="use-case-cell">${escHtml(r.useCase)}</td>
+        <td class="date-cell">${formatDate(r.submittedAt)}</td>
+        <td class="action-cell">
+          <button class="btn-approve" onclick="approve(${r.id}, this)">Approve</button>
+        </td>
+      </tr>`).join('');
+
+    content.innerHTML = `
+      <div class="table-wrap">
+        <table class="requests-table">
+          <thead>
+            <tr>
+              <th>Name / Email</th>
+              <th>Company</th>
+              <th>Use Case</th>
+              <th>Submitted</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  window.approve = async function (id, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Approving...';
+    try {
+      const res = await fetch(`/admin/requests/${id}/approve`, { method: 'POST' });
+      const data = await res.json();
+      const actionCell = document.querySelector(`#row-${id} .action-cell`);
+      if (res.ok) {
+        actionCell.innerHTML = `
+          <div class="key-result">
+            <div class="key-label">API Key — copy before leaving</div>
+            <code title="Click to copy" onclick="copyKey(this)">${escHtml(data.key)}</code>
+            <div class="copy-hint">Click key to copy &middot; tier: ${escHtml(data.tier)}</div>
+          </div>`;
+      } else {
+        btn.disabled = false;
+        btn.textContent = 'Approve';
+        actionCell.insertAdjacentHTML('beforebegin',
+          `<div class="error-banner" style="margin-bottom:8px;">${escHtml(data.error?.message ?? 'Approval failed.')}</div>`);
+      }
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = 'Approve';
+      alert('Network error: ' + err.message);
+    }
+  };
+
+  window.copyKey = function (el) {
+    navigator.clipboard.writeText(el.textContent).then(() => {
+      const hint = el.nextElementSibling;
+      const orig = hint.textContent;
+      hint.textContent = 'Copied!';
+      setTimeout(() => { hint.textContent = orig; }, 2000);
+    });
+  };
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function formatDate(iso) {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+      + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  loadRequests();
+})();
+</script>
+
+</body>
+</html>

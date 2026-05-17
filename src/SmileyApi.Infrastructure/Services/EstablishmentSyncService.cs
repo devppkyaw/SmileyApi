@@ -6,6 +6,8 @@ using System.Data;
 
 namespace SmileyApi.Infrastructure.Services;
 
+public record ScoreChange(int EstablishmentId, int OldScore, int NewScore);
+
 public record SyncRow(
     int Navnelbnr,
     string? CvrNumber,
@@ -23,7 +25,7 @@ public record SyncRow(
 
 public class EstablishmentSyncService(SmileyDbContext db, ILogger<EstablishmentSyncService> logger)
 {
-    public async Task SyncAsync(IReadOnlyList<SyncRow> rows, CancellationToken ct)
+    public async Task<IReadOnlyList<ScoreChange>> SyncAsync(IReadOnlyList<SyncRow> rows, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
         var conn = (SqlConnection)db.Database.GetDbConnection();
@@ -51,11 +53,12 @@ public class EstablishmentSyncService(SmileyDbContext db, ILogger<EstablishmentS
         await BulkCopyAsync(conn, "#estab_staging", BuildEstabDataTable(rows), ct);
 
         int inserted = 0, updated = 0;
+        var scoreChanges = new List<ScoreChange>();
         await using (var cmd = conn.CreateCommand())
         {
             cmd.CommandTimeout = 300;
             cmd.CommandText = @"
-                DECLARE @out TABLE (action NVARCHAR(10));
+                DECLARE @out TABLE (action NVARCHAR(10), EstId INT, OldScore INT NULL, NewScore INT NULL);
                 MERGE Establishments WITH (HOLDLOCK) AS T
                 USING #estab_staging AS S ON T.Navnelbnr = S.Navnelbnr
                 WHEN MATCHED AND (
@@ -91,8 +94,16 @@ public class EstablishmentSyncService(SmileyDbContext db, ILogger<EstablishmentS
                     S.IndustryCode, S.IndustryName, S.GeoLat, S.GeoLng, S.ReportUrl,
                     S.LatestScore, GETUTCDATE(), GETUTCDATE()
                 )
-                OUTPUT $action INTO @out;
-                SELECT action, COUNT(*) FROM @out GROUP BY action;";
+                OUTPUT $action, INSERTED.Id, DELETED.LatestScore, INSERTED.LatestScore
+                INTO @out (action, EstId, OldScore, NewScore);
+
+                SELECT action, COUNT(*) FROM @out GROUP BY action;
+
+                SELECT EstId, OldScore, NewScore FROM @out
+                WHERE action = 'UPDATE'
+                  AND OldScore IS NOT NULL
+                  AND NewScore IS NOT NULL
+                  AND OldScore <> NewScore;";
 
             using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
@@ -101,6 +112,13 @@ public class EstablishmentSyncService(SmileyDbContext db, ILogger<EstablishmentS
                 var count = reader.GetInt32(1);
                 if (action == "INSERT") inserted = count;
                 else if (action == "UPDATE") updated = count;
+            }
+
+            // Second result set: score changes
+            if (await reader.NextResultAsync(ct))
+            {
+                while (await reader.ReadAsync(ct))
+                    scoreChanges.Add(new ScoreChange(reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2)));
             }
         }
 
@@ -145,8 +163,10 @@ public class EstablishmentSyncService(SmileyDbContext db, ILogger<EstablishmentS
         }
 
         logger.LogInformation(
-            "Sync complete: {New} new, {Updated} updated, {Unchanged} unchanged; {Inspections} inspection rows staged.",
-            inserted, updated, rows.Count - inserted - updated, inspCount);
+            "Sync complete: {New} new, {Updated} updated, {Unchanged} unchanged; {Inspections} inspection rows staged; {ScoreChanges} score change(s).",
+            inserted, updated, rows.Count - inserted - updated, inspCount, scoreChanges.Count);
+
+        return scoreChanges;
     }
 
     private static DataTable BuildEstabDataTable(IReadOnlyList<SyncRow> rows)

@@ -9,6 +9,7 @@ public class SmileyDbContext(DbContextOptions<SmileyDbContext> options) : DbCont
     public DbSet<Inspection> Inspections => Set<Inspection>();
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
     public DbSet<WebhookSubscription> WebhookSubscriptions => Set<WebhookSubscription>();
+    public DbSet<AccessRequest> AccessRequests => Set<AccessRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -43,8 +44,22 @@ public class SmileyDbContext(DbContextOptions<SmileyDbContext> options) : DbCont
         modelBuilder.Entity<WebhookSubscription>(e =>
         {
             e.Property(x => x.CallbackUrl).HasMaxLength(1024);
+            e.Property(x => x.SecretKey).HasMaxLength(64);
             e.HasOne(x => x.ApiKey).WithMany().HasForeignKey(x => x.ApiKeyId);
             e.HasOne(x => x.Establishment).WithMany().HasForeignKey(x => x.EstablishmentId);
+        });
+
+        modelBuilder.Entity<AccessRequest>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(256);
+            e.Property(x => x.Email).HasMaxLength(256);
+            e.Property(x => x.Company).HasMaxLength(256);
+            e.Property(x => x.UseCase).HasMaxLength(2000);
+            e.HasOne(x => x.ApiKey)
+             .WithMany()
+             .HasForeignKey(x => x.ApiKeyId)
+             .IsRequired(false)
+             .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

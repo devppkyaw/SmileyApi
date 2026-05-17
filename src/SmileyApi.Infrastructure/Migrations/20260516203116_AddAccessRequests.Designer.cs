@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SmileyApi.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using SmileyApi.Infrastructure.Data;
 namespace SmileyApi.Infrastructure.Migrations
 {
     [DbContext(typeof(SmileyDbContext))]
-    partial class SmileyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260516203116_AddAccessRequests")]
+    partial class AddAccessRequests
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -30,9 +33,6 @@ namespace SmileyApi.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("ApiKeyId")
-                        .HasColumnType("int");
-
                     b.Property<string>("Company")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
@@ -47,9 +47,6 @@ namespace SmileyApi.Infrastructure.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
-
                     b.Property<DateTime>("SubmittedAt")
                         .HasColumnType("datetime2");
 
@@ -59,8 +56,6 @@ namespace SmileyApi.Infrastructure.Migrations
                         .HasColumnType("nvarchar(2000)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ApiKeyId");
 
                     b.ToTable("AccessRequests");
                 });
@@ -222,11 +217,6 @@ namespace SmileyApi.Infrastructure.Migrations
                     b.Property<int>("EstablishmentId")
                         .HasColumnType("int");
 
-                    b.Property<string>("SecretKey")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
                     b.HasKey("Id");
 
                     b.HasIndex("ApiKeyId");
@@ -234,16 +224,6 @@ namespace SmileyApi.Infrastructure.Migrations
                     b.HasIndex("EstablishmentId");
 
                     b.ToTable("WebhookSubscriptions");
-                });
-
-            modelBuilder.Entity("SmileyApi.Core.Models.AccessRequest", b =>
-                {
-                    b.HasOne("SmileyApi.Core.Models.ApiKey", "ApiKey")
-                        .WithMany()
-                        .HasForeignKey("ApiKeyId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("ApiKey");
                 });
 
             modelBuilder.Entity("SmileyApi.Core.Models.Inspection", b =>

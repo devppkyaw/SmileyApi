@@ -17,7 +17,7 @@ When you run `az deployment group create ...`, Azure reads the Bicep and provisi
 
 3. **Key Vault + connection string secret** (`keyvault.bicep`) — stores the Azure SQL connection string as a secret named `ConnectionStrings--Default`. Your app reads it from here at startup instead of `appsettings.json`. The SQL password never sits in a file or environment variable.
 
-4. **App Service Plan + App Service** (`appservice.bicep`) — the Linux host that runs your ASP.NET Core process. This hosts both the API *and* the `XmlSyncWorker` background service in the same process, exactly like `dotnet run` locally, just on Azure infrastructure. B1 = ~$13/mo.
+4. **App Service Plan + App Service** (`appservice.bicep`) — the Linux host that runs your ASP.NET Core process. This hosts both the API *and* the `XmlSyncWorker` background service in the same process, exactly like `dotnet run` locally, just on Azure infrastructure. Currently F1 (Free) — upgrade to B1 (~$13/mo) when needed.
 
 5. **Key Vault role assignment** (`main.bicep`) — gives the App Service permission to read from the Key Vault using its **Managed Identity** (an automatically-managed Azure AD identity). No credentials stored anywhere — the App Service proves who it is to Key Vault cryptographically.
 
@@ -119,7 +119,7 @@ Older Key Vault access policies are per-vault configuration objects that are eas
 **Basic 5 DTU SQL tier (~$5/mo).**  
 The workload is a periodic background sync (57k rows once per 24h via `SqlBulkCopy` + `MERGE`) plus low-traffic API reads. Basic provides 2 GB storage and 5 DTUs — sufficient for this data volume. Scaling to Standard S0 (10 DTUs, ~$15/mo) or higher is a one-command operation and does not require any application changes.
 
-**`softDeleteRetentionDays: 7` on Key Vault.**  
+**`softDeleteRetentionInDays: 7` on Key Vault.**  
 Azure requires soft-delete on new vaults. Seven days is the minimum allowed. This means accidentally deleted secrets can be recovered within a week, and accidental vault deletion does not immediately destroy the connection string.
 
 ---
@@ -133,10 +133,10 @@ Azure requires soft-delete on new vaults. Seven days is the minimum allowed. Thi
 | SQL Server | `sql-smiley-api-{env}-{suffix}` | — | — |
 | SQL Database | `SmileyApi` | Basic, 5 DTU, 2 GB | ~$5 |
 | Key Vault | `kv-smiley-api-{env}-{suffix}` (max 24 chars) | Standard | ~$0 |
-| App Service Plan | `asp-smiley-api-{env}-{suffix}` | B1 Linux | ~$13 |
-| App Service | `app-smiley-api-{env}-{suffix}` | — (on B1 plan) | included |
+| App Service Plan | `asp-smiley-api-{env}-{suffix}` | F1 Free (upgrade to B1 when ready) | $0 ($13 on B1) |
+| App Service | `app-smiley-api-{env}-{suffix}` | — (on F1 plan) | included |
 
-**Total estimated: ~$18/mo per environment.**
+**Total estimated: ~$5/mo (F1 free tier) — ~$18/mo after upgrading to B1.**
 
 ---
 
@@ -170,17 +170,17 @@ az account set --subscription "<subscription-id>"
 
 Run from the repo root. The deployment takes 3–5 minutes.
 
-```bash
-az group create --name rg-smiley-api-prod --location westeurope
+```powershell
+az group create --name rg-smiley-api-prod --location northeurope
 
-az deployment group create \
-  --resource-group rg-smiley-api-prod \
-  --template-file infra/main.bicep \
-  --parameters infra/parameters/prod.bicepparam \
-  --parameters sqlAdminPassword="<your-strong-password>"
+$env:SQL_ADMIN_PASSWORD = "<your-strong-password>"
+az deployment group create `
+  --resource-group rg-smiley-api-prod `
+  --template-file infra/main.bicep `
+  --parameters infra/parameters/prod.bicepparam
 ```
 
-SQL password rules: minimum 8 characters, must contain uppercase, lowercase, digit, and a special character (e.g. `MyP@ssw0rd!`). This password is not committed anywhere — it lives only in Key Vault after this command runs.
+SQL password rules: minimum 8 characters, must contain uppercase, lowercase, digit, and a special character (e.g. `MyP@ssw0rd!`). The password is passed via the `SQL_ADMIN_PASSWORD` environment variable — it is never committed to any file and lives only in Key Vault after this command runs.
 
 ---
 

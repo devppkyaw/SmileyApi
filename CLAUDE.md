@@ -39,7 +39,6 @@ dotnet test
 - **No frontend framework:** landing page is plain HTML/CSS in `wwwroot/` — do not introduce React or similar
 
 ## What Is Post-MVP (Do Not Build Yet)
-- Webhooks and Hangfire
 - Postal-code neighbourhood scores
 - Reliability trend scoring
 - CVR enrichment

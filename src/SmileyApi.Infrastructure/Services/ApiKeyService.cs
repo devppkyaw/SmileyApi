@@ -30,13 +30,13 @@ public class ApiKeyService(SmileyDbContext db) : IApiKeyService
         return apiKey;
     }
 
-    public async Task<string> GenerateAsync(string ownerEmail, string tier = "free", CancellationToken ct = default)
+    public async Task<(string Plaintext, ApiKey Key)> GenerateAsync(string ownerEmail, string tier = "free", CancellationToken ct = default)
     {
         var rawBytes = RandomNumberGenerator.GetBytes(32);
         var plaintext = Convert.ToBase64String(rawBytes)
                                .Replace('+', '-').Replace('/', '_').TrimEnd('=');
 
-        db.ApiKeys.Add(new ApiKey
+        var apiKey = new ApiKey
         {
             KeyHash       = HashKey(plaintext),
             OwnerEmail    = ownerEmail,
@@ -45,10 +45,11 @@ public class ApiKeyService(SmileyDbContext db) : IApiKeyService
             CreatedAt     = DateTime.UtcNow,
             LastResetAt   = DateTime.UtcNow,
             IsActive      = true
-        });
+        };
+        db.ApiKeys.Add(apiKey);
         await db.SaveChangesAsync(ct);
 
-        return plaintext;
+        return (plaintext, apiKey);
     }
 
     private static string HashKey(string rawKey) =>

@@ -11,7 +11,7 @@ public static class EstablishmentEndpoints
         {
             app.MapPost("/admin/keys", async (KeyRequest req, IApiKeyService svc, CancellationToken ct) =>
             {
-                var plaintext = await svc.GenerateAsync(req.Email, req.Tier, ct);
+                var (plaintext, _) = await svc.GenerateAsync(req.Email, req.Tier, ct);
                 return Results.Ok(new { key = plaintext, email = req.Email, tier = req.Tier });
             });
         }

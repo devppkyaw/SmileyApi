@@ -47,6 +47,15 @@ public class XmlSyncWorker(
 
         using var scope = scopeFactory.CreateScope();
         var syncService = scope.ServiceProvider.GetRequiredService<EstablishmentSyncService>();
-        await syncService.SyncAsync(syncRows, ct);
+        var scoreChanges = await syncService.SyncAsync(syncRows, ct);
+
+        if (scoreChanges.Count > 0)
+        {
+            var webhookSvc = scope.ServiceProvider.GetRequiredService<WebhookService>();
+            var webhookChanges = scoreChanges
+                .Select(c => new WebhookScoreChange(c.EstablishmentId, c.OldScore, c.NewScore))
+                .ToList();
+            await webhookSvc.EnqueueDeliveriesAsync(webhookChanges, ct);
+        }
     }
 }

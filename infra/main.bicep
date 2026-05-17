@@ -72,7 +72,7 @@ resource kvRef 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
 }
 
 resource kvRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(kvRef.id, appservice.outputs.principalId, kvSecretsUserRoleId)
+  name: guid(resourceGroup().id, kvName, kvSecretsUserRoleId)
   scope: kvRef
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', kvSecretsUserRoleId)
