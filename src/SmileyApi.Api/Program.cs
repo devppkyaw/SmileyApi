@@ -53,6 +53,10 @@ builder.Services.AddHangfire(config => config
     }));
 builder.Services.AddHangfireServer();
 
+builder.Services.AddCors(options =>
+    options.AddPolicy("widget", policy =>
+        policy.AllowAnyOrigin().WithMethods("GET").WithHeaders("Content-Type")));
+
 builder.Services.AddOpenApi();
 
 var aiConnectionString = builder.Configuration["ApplicationInsights:ConnectionString"]
@@ -75,6 +79,20 @@ builder.Services.AddRateLimiter(options =>
             {
                 PermitLimit          = limit,
                 Window               = TimeSpan.FromDays(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit           = 0
+            });
+    });
+
+    options.AddPolicy("widget-ip", httpContext =>
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ip,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit          = 60,
+                Window               = TimeSpan.FromMinutes(1),
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit           = 0
             });
@@ -119,6 +137,7 @@ if (!app.Environment.IsDevelopment())
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
+app.UseCors();
 
 if (!app.Environment.IsProduction())
 {
@@ -137,6 +156,7 @@ app.MapEstablishmentEndpoints();
 app.MapLeadsEndpoint();
 app.MapAdminEndpoints();
 app.MapWebhookEndpoints();
+app.MapWidgetEndpoints();
 
 app.Run();
 

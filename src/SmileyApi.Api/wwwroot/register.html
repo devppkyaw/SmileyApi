@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Register your business to get a free Smiley score widget with score history and email alerts." />
+  <title>Register — Smiley API</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<header class="hero" style="padding-bottom:40px">
+  <nav class="nav">
+    <a href="/" class="nav-logo" style="text-decoration:none">Smiley<span class="accent">API</span></a>
+    <a href="/" class="nav-link">← Back to home</a>
+  </nav>
+  <div class="hero-content" style="padding-top:60px">
+    <h1 style="font-size:clamp(1.8rem,4vw,2.5rem)">Business registration<br><span class="accent">coming soon</span></h1>
+    <p class="hero-sub">
+      Leave your email and we'll notify you the moment self-service registration opens.
+      You'll get a free account with your <code>BusinessId</code> for multi-CVR widget embedding and score-history charts.
+    </p>
+  </div>
+</header>
+
+<section class="access">
+  <div class="container">
+    <h2 class="section-title">Get early access</h2>
+    <p class="section-sub">No spam. One email when registration opens.</p>
+    <form class="access-form" id="notifyForm" style="max-width:420px">
+      <div class="form-row">
+        <label for="email">Email <span class="required">*</span></label>
+        <input type="email" id="email" name="email" required placeholder="you@company.com" />
+      </div>
+      <div class="form-row">
+        <label for="company">Business name</label>
+        <input type="text" id="company" name="company" placeholder="Your restaurant or business" />
+      </div>
+      <div class="form-status" id="formStatus" aria-live="polite"></div>
+      <button type="submit" class="btn-primary" id="submitBtn">Notify me</button>
+    </form>
+  </div>
+</section>
+
+<section class="features" style="padding-top:0">
+  <div class="container">
+    <h2 class="section-title">What you'll unlock</h2>
+    <p class="section-sub">Free registered accounts include:</p>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F4CA;</div>
+        <h3>Score history chart</h3>
+        <p>Show visitors your full inspection track record with a sparkline chart in your widget.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F3EA;</div>
+        <h3>Multiple CVRs</h3>
+        <p>One account for all your locations. Each CVR gets its own embed code.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F4E7;</div>
+        <h3>Score-change alerts</h3>
+        <p>Get an email the moment your smiley score changes — before your customers notice.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container">
+    <p>Data provided by <a href="https://www.foedevarestyrelsen.dk" target="_blank" rel="noopener">Fødevarestyrelsen</a>
+      under Danish open data licence.</p>
+    <p>Questions? <a href="mailto:yoursmiley@gmail.com">yoursmiley@gmail.com</a></p>
+  </div>
+</footer>
+
+<script>
+document.getElementById('notifyForm').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  const btn    = document.getElementById('submitBtn');
+  const status = document.getElementById('formStatus');
+  btn.disabled    = true;
+  btn.textContent = 'Sending...';
+  status.textContent = '';
+  status.className   = 'form-status';
+
+  try {
+    const res = await fetch('/v1/leads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name:    document.getElementById('company').value || 'Business',
+        email:   document.getElementById('email').value,
+        company: document.getElementById('company').value,
+        useCase: 'Business registration interest — widget embedding'
+      })
+    });
+    if (res.ok) {
+      status.textContent = "Got it! We'll email you when registration opens.";
+      status.classList.add('form-status--success');
+      this.reset();
+    } else {
+      status.textContent = 'Something went wrong. Email us at yoursmiley@gmail.com.';
+      status.classList.add('form-status--error');
+    }
+  } catch {
+    status.textContent = 'Network error. Email us at yoursmiley@gmail.com.';
+    status.classList.add('form-status--error');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Notify me';
+  }
+});
+</script>
+</body>
+</html>

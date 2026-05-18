@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Widget Test — Smiley API Admin</title>
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    .page-header { padding: 48px 0 32px; }
+    .page-header h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; }
+    .page-header p  { color: var(--text-muted); }
+    .test-section { margin-bottom: 48px; }
+    .test-section h2 { font-size: 1.2rem; font-weight: 600; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .badge-row { display: flex; gap: 24px; align-items: flex-end; flex-wrap: wrap; }
+    .badge-item { text-align: center; }
+    .badge-item .badge-label { font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; }
+    .smiley-badge {
+      display: inline-block;
+      background: #fef3c7;
+      border: 2px solid #e9c46a;
+      border-radius: 8px;
+      padding: 8px 10px;
+      text-align: center;
+      text-decoration: none;
+      line-height: 1.2;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.10);
+    }
+    .smiley-badge img {
+      width: 64px; height: 64px;
+      object-fit: contain;
+      display: block;
+      margin: 0 auto;
+      mix-blend-mode: multiply;
+    }
+    .smiley-badge .badge-date {
+      font-size: 0.7rem;
+      color: #3a3a2a;
+      margin-top: 5px;
+      white-space: nowrap;
+      font-family: var(--font-body);
+    }
+    .live-form { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+    .live-form input[type="text"] {
+      padding: 9px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 1rem;
+      width: 220px;
+      background: var(--surface);
+      color: var(--text);
+    }
+    .live-form button { padding: 9px 20px; }
+    #jsonOut {
+      background: #1a2630;
+      color: #c9d1d9;
+      padding: 16px;
+      border-radius: var(--radius);
+      font-size: 0.85rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin-top: 16px;
+      display: none;
+    }
+    #badgeOut { margin-bottom: 8px; min-height: 32px; }
+  </style>
+</head>
+<body>
+
+<header class="hero" style="padding-bottom: 48px;">
+  <nav class="nav">
+    <a href="/admin" class="nav-logo" style="text-decoration:none">Smiley<span class="accent">API</span> <span style="color:var(--text-muted);font-weight:400;font-size:0.9rem;">Admin</span></a>
+    <a href="/admin" class="nav-link">← Admin home</a>
+  </nav>
+</header>
+
+<div class="container" style="padding-top: 0; padding-bottom: 80px;">
+  <div class="page-header">
+    <h1>Widget Test</h1>
+    <p>Visual preview of all badge variants and live CVR lookup tester.</p>
+  </div>
+
+  <!-- Section A: Static score previews -->
+  <div class="test-section">
+    <h2>Score variants</h2>
+    <div class="badge-row">
+
+      <div class="badge-item">
+        <div class="smiley-badge">
+          <img src="/Smiley_figurer/150/Sm1bg.jpg" alt="Score 1" />
+          <div class="badge-date">03.11.2024</div>
+        </div>
+        <div class="badge-label">Score 1 — Excellent</div>
+      </div>
+
+      <div class="badge-item">
+        <div class="smiley-badge">
+          <img src="/Smiley_figurer/150/Sm3bg.jpg" alt="Score 3" />
+          <div class="badge-date">03.11.2024</div>
+        </div>
+        <div class="badge-label">Score 3 — Needs improvement</div>
+      </div>
+
+      <div class="badge-item">
+        <div class="smiley-badge">
+          <img src="/Smiley_figurer/150/Sm4bg.jpg" alt="Score 4" />
+          <div class="badge-date">03.11.2024</div>
+        </div>
+        <div class="badge-label">Score 4 — Failed / Not rated</div>
+      </div>
+
+      <div class="badge-item">
+        <div class="smiley-badge">
+          <img src="/Smiley_figurer/150/Sm4bg.jpg" alt="Score ?" />
+        </div>
+        <div class="badge-label">No date (fallback)</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Section B: Live CVR tester -->
+  <div class="test-section">
+    <h2>Live CVR lookup</h2>
+    <form class="live-form" id="testForm">
+      <input type="text" id="cvrInput" placeholder="e.g. 45517624" autocomplete="off" />
+      <button type="submit" class="btn-primary">Test</button>
+    </form>
+    <div id="badgeOut"></div>
+    <pre id="jsonOut"></pre>
+  </div>
+</div>
+
+<script>
+document.getElementById('testForm').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  var cvr = document.getElementById('cvrInput').value.trim();
+  var badgeOut = document.getElementById('badgeOut');
+  var jsonOut  = document.getElementById('jsonOut');
+
+  badgeOut.innerHTML = '<span style="color:var(--text-muted);font-size:0.9rem">Loading...</span>';
+  jsonOut.style.display = 'none';
+
+  var res, data;
+  try {
+    res  = await fetch('/widget/score?cvr=' + encodeURIComponent(cvr));
+    data = await res.json();
+  } catch (err) {
+    badgeOut.innerHTML = '<p style="color:var(--red)">Network error: ' + err.message + '</p>';
+    return;
+  }
+
+  jsonOut.textContent = JSON.stringify(data, null, 2);
+  jsonOut.style.display = 'block';
+
+  if (!res.ok) {
+    badgeOut.innerHTML = '<p style="color:var(--red)">Error ' + res.status + ': ' + (data.error && data.error.message || 'unknown') + '</p>';
+    return;
+  }
+
+  var SCORES = { 1: 'Sm1bg', 2: 'Sm1bg', 3: 'Sm3bg', 4: 'Sm4bg' };
+  var imgFile = SCORES[data.score] || 'Sm4bg';
+
+  var dateStr = '';
+  if (data.lastInspectedOn) {
+    var parts = String(data.lastInspectedOn).split('-');
+    if (parts.length === 3) dateStr = parts[2] + '.' + parts[1] + '.' + parts[0];
+  }
+
+  badgeOut.innerHTML =
+    '<a href="' + escHtml(data.reportUrl || '#') + '" target="_blank" rel="noopener noreferrer"' +
+    ' style="display:inline-block;background:#fef3c7;border:2px solid #e9c46a;border-radius:8px;padding:8px 10px;text-align:center;text-decoration:none;line-height:1.2;box-shadow:0 2px 6px rgba(0,0,0,0.10)">' +
+    '<img src="/Smiley_figurer/150/' + imgFile + '.jpg" alt="Smiley"' +
+    ' style="width:64px;height:64px;object-fit:contain;display:block;margin:0 auto;mix-blend-mode:multiply" />' +
+    (dateStr ? '<div style="font-size:0.7rem;color:#3a3a2a;margin-top:5px;white-space:nowrap">' + dateStr + '</div>' : '') +
+    '</a>';
+});
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+
+</body>
+</html>

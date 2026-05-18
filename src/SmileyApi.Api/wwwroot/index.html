@@ -3,10 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="REST API for Denmark's Fødevarestyrelsen smiley inspection data. Clean endpoints, full history, geo search." />
-  <title>Smiley API — Food Inspection Data for Developers</title>
+  <meta name="description" content="Display your official Danish food inspection smiley score on your website in 30 seconds. One line of code, no account required." />
+  <title>Smiley API — Danish Food Inspection Scores</title>
   <link rel="stylesheet" href="/style.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
 </head>
 <body>
 
@@ -14,238 +13,134 @@
 <header class="hero">
   <nav class="nav">
     <span class="nav-logo">Smiley<span class="accent">API</span></span>
-    <a href="/scalar/v1" class="nav-link">API Docs</a>
+    <div class="nav-links">
+      <a href="#businesses" class="nav-link">For Businesses</a>
+      <a href="developers.html" class="nav-link">Developers</a>
+      <a href="/scalar/v1" class="nav-link">API Docs</a>
+    </div>
   </nav>
   <div class="hero-content">
-    <h1>The Smiley Scheme API<br><span class="accent">— built for developers</span></h1>
-    <p class="hero-sub">Clean REST endpoints for Denmark's official food inspection data.
-      History, geo search, and webhooks.</p>
-    <a href="#access" class="btn-primary">Request API Access</a>
+    <h1>Show your food inspection score<br><span class="accent">on your website</span></h1>
+    <p class="hero-sub">One line of code. Official data from Fødevarestyrelsen. Always up to date.</p>
+    <div class="cta-pair">
+      <a href="register.html" class="btn-primary">Register your business →</a>
+    </div>
+    <p style="margin-top:16px;font-size:0.9rem;color:rgba(255,255,255,0.55)">
+      Building an app? <a href="developers.html" style="color:rgba(255,255,255,0.85);text-decoration:underline">Developer API →</a>
+    </p>
   </div>
 </header>
 
-<!-- ─── Problem ───────────────────────────────────────────── -->
-<section class="problem">
+<!-- ─── Widget Demo ────────────────────────────────────────── -->
+<section class="widget-demo">
   <div class="container">
-    <p class="problem-text">
-      Fødevarestyrelsen publishes food inspection results for every restaurant, café, and
-      food producer in Denmark — as a raw 32 MB XML file. <strong>There is no API.</strong>
-    </p>
-    <p class="problem-text">
-      Every developer who needs this data today must download, parse, and maintain their
-      own pipeline. We did that so you don't have to.
-    </p>
-  </div>
-</section>
-
-<!-- ─── Features ──────────────────────────────────────────── -->
-<section class="features">
-  <div class="container">
-    <h2 class="section-title">Everything you need, nothing you don't</h2>
-    <p class="section-sub">Six endpoints covering the full range of what developers actually use.</p>
-    <div class="feature-grid">
-
-      <div class="feature-card">
-        <div class="feature-icon">&#x1F50D;</div>
-        <h3>Lookup by CVR, name, or GPS</h3>
-        <p>Find any establishment by company number, search by name or address, or pass lat/lng coordinates for geo-based results.</p>
+    <h2 class="section-title">Add your smiley badge in 30 seconds</h2>
+    <p class="section-sub">Paste one line into your website. The official smiley icon and last inspection date appear automatically — no account required.</p>
+    <div class="demo-layout">
+      <div style="text-align:center">
+        <p class="demo-code-label" style="text-align:center;margin-bottom:14px">Preview</p>
+        <a href="#" onclick="return false" class="static-badge" style="text-decoration:none">
+          <img src="/Smiley_figurer/300/Sm1ag.jpg" alt="Smiley 1"
+               style="width:64px;height:64px;object-fit:contain;display:block;margin:0 auto;mix-blend-mode:multiply" />
+          <div class="static-badge-date">03.11.2024</div>
+        </a>
       </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">&#x1F4DC;</div>
-        <h3>Full inspection history</h3>
-        <p>Every smiley score ever recorded — not just the current one. Track trends over months and years.</p>
+      <div>
+        <p class="demo-code-label">Embed code</p>
+        <pre style="white-space:pre-wrap;word-break:break-all"><code>&lt;script src="https://api.smiley.dk/widget.js?cvr=<strong>12345678</strong>"&gt;&lt;/script&gt;</code></pre>
+        <p class="code-note">Replace <code>12345678</code> with your company's CVR number. That's it — no account required.</p>
       </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">&#x26A1;</div>
-        <h3>Daily fresh data</h3>
-        <p>Synced automatically every day from Fødevarestyrelsen's official source. Always current, zero maintenance on your side.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">&#x1F4EC;</div>
-        <h3>Webhooks on score changes</h3>
-        <p>Subscribe to a CVR number and receive a POST to your URL the moment a smiley score changes.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">&#x1F5FA;</div>
-        <h3>Postal-code area scores</h3>
-        <p>Aggregate smiley scores by postal code. Ideal for area-level food safety analysis and maps.</p>
-        <span class="badge-soon">Coming soon</span>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">&#x1F4CA;</div>
-        <h3>Reliability trend scoring</h3>
-        <p>A composite score per establishment based on historical trajectory — not just the most recent result.</p>
-        <span class="badge-soon">Coming soon</span>
-      </div>
-
     </div>
   </div>
 </section>
 
-<!-- ─── Endpoints Reference ───────────────────────────────── -->
-<section class="endpoints">
+<!-- ─── Tier Comparison ────────────────────────────────────── -->
+<section class="tiers">
   <div class="container">
-    <h2 class="section-title">API Reference</h2>
-    <p class="section-sub">All endpoints require an <code>X-Api-Key</code> header.</p>
+    <h2 class="section-title">Simple, transparent tiers</h2>
+    <p class="section-sub">Start with zero sign-up. Unlock more features when you register.</p>
     <div class="table-wrap">
-      <table class="endpoint-table">
+      <table class="tier-table">
         <thead>
           <tr>
-            <th>Method</th>
-            <th>Path</th>
-            <th>Auth</th>
-            <th>Description</th>
+            <th></th>
+            <th>Open embed <span class="tier-price">Free</span></th>
+            <th>Registered <span class="tier-price">Free</span></th>
+            <th>Paid <span class="tier-price">Soon</span></th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td><span class="method get">GET</span></td>
-            <td><code>/v1/establishments/{cvr}</code></td>
-            <td><span class="badge-auth">Required</span></td>
-            <td>Establishment details + latest inspection</td>
+            <td>Score badge + official report link</td>
+            <td class="tier-yes">Yes</td>
+            <td class="tier-yes">Yes</td>
+            <td class="tier-yes">Yes</td>
           </tr>
           <tr>
-            <td><span class="method get">GET</span></td>
-            <td><code>/v1/establishments/search</code></td>
-            <td><span class="badge-auth">Required</span></td>
-            <td>Search by name or address (<code>?q=</code>)</td>
+            <td>Score history chart</td>
+            <td class="tier-no">—</td>
+            <td class="tier-yes">Yes</td>
+            <td class="tier-yes">Yes</td>
           </tr>
           <tr>
-            <td><span class="method get">GET</span></td>
-            <td><code>/v1/establishments/nearby</code></td>
-            <td><span class="badge-auth">Required</span></td>
-            <td>Geo search — pass <code>?lat=</code> <code>&lng=</code> <code>&radius=</code> (km)</td>
+            <td>Multiple CVRs per account</td>
+            <td class="tier-no">—</td>
+            <td class="tier-yes">Yes</td>
+            <td class="tier-yes">Yes</td>
           </tr>
           <tr>
-            <td><span class="method get">GET</span></td>
-            <td><code>/v1/establishments/{cvr}/history</code></td>
-            <td><span class="badge-auth">Required</span></td>
-            <td>Full inspection history for one establishment</td>
+            <td>Score-change notifications</td>
+            <td class="tier-no">—</td>
+            <td class="tier-yes">Email</td>
+            <td class="tier-yes">Email + webhook</td>
+          </tr>
+          <tr>
+            <td>Widget styles</td>
+            <td>Standard</td>
+            <td>Standard</td>
+            <td class="tier-yes">Multiple</td>
+          </tr>
+          <tr>
+            <td>Setup</td>
+            <td>One line of code</td>
+            <td>Email sign-up</td>
+            <td>—</td>
           </tr>
         </tbody>
       </table>
     </div>
-  </div>
-</section>
-
-<!-- ─── Example Responses ─────────────────────────────────── -->
-<section class="examples">
-  <div class="container">
-    <h2 class="section-title">Example responses</h2>
-    <p class="section-sub">Real JSON shapes — no wrappers, no surprises.</p>
-
-    <div class="example-block">
-      <div class="example-label">
-        <span class="method get">GET</span>
-        <code>/v1/establishments/12345678</code>
-      </div>
-      <pre><code class="language-json">{
-  "navnelbnr": 1001234,
-  "cvrNumber": "12345678",
-  "name": "Café Nørrebro",
-  "address": "Nørrebrogade 45",
-  "postalCode": "2200",
-  "city": "København N",
-  "industryCode": "56101",
-  "industryName": "Restauranter",
-  "geoLat": 55.6867,
-  "geoLng": 12.5545,
-  "reportUrl": "https://www.findsmiley.dk/...",
-  "latestScore": 1,
-  "latestInspection": {
-    "score": 1,
-    "inspectedOn": "2024-11-03"
-  }
-}</code></pre>
-    </div>
-
-    <div class="example-block">
-      <div class="example-label">
-        <span class="method get">GET</span>
-        <code>/v1/establishments/12345678/history</code>
-      </div>
-      <pre><code class="language-json">{
-  "cvr": "12345678",
-  "count": 3,
-  "inspections": [
-    { "score": 1, "inspectedOn": "2024-11-03" },
-    { "score": 2, "inspectedOn": "2024-03-15" },
-    { "score": 1, "inspectedOn": "2023-08-22" }
-  ]
-}</code></pre>
-    </div>
-
-  </div>
-</section>
-
-<!-- ─── Pricing ────────────────────────────────────────────── -->
-<section class="pricing">
-  <div class="container">
-    <h2 class="section-title">Simple, transparent pricing</h2>
-    <p class="section-sub">Paid plans coming soon. Request early access to lock in the free tier.</p>
-    <div class="pricing-grid">
-
-      <div class="pricing-card">
-        <div class="pricing-tier">Free</div>
-        <div class="pricing-limit">100 <span>requests / day</span></div>
-        <ul class="pricing-features">
-          <li>All 4 live endpoints</li>
-          <li>Full inspection history</li>
-          <li>No credit card required</li>
-        </ul>
-        <a href="#access" class="btn-secondary">Request Access</a>
-      </div>
-
-      <div class="pricing-card pricing-card--pro">
-        <div class="pricing-badge">Coming Soon</div>
-        <div class="pricing-tier">Pro</div>
-        <div class="pricing-limit">10,000 <span>requests / day</span></div>
-        <ul class="pricing-features">
-          <li>Everything in Free</li>
-          <li>Webhook subscriptions</li>
-          <li>Priority support</li>
-        </ul>
-        <span class="btn-disabled">Notify Me</span>
-      </div>
-
+    <div class="tiers-cta">
+      <a href="register.html" class="btn-primary">Register for free →</a>
     </div>
   </div>
 </section>
 
-<!-- ─── Request Access ─────────────────────────────────────── -->
-<section class="access" id="access">
+<!-- ─── For Businesses ─────────────────────────────────────── -->
+<section class="business-section" id="businesses">
   <div class="container">
-    <h2 class="section-title">Request API Access</h2>
+    <h2 class="section-title">Built for Danish food businesses</h2>
     <p class="section-sub">
-      Free tier keys are provisioned manually within 24 hours.
-      We'll email you your key.
+      Whether you run a single café or a chain of restaurants, showing your smiley score builds
+      customer trust — and now it takes one line of code.
     </p>
-    <form class="access-form" id="accessForm">
-      <div class="form-row">
-        <label for="name">Name <span class="required">*</span></label>
-        <input type="text" id="name" name="name" required placeholder="Your name" />
+    <div class="feature-grid" style="margin-bottom:40px">
+      <div class="feature-card">
+        <div class="feature-icon">&#x26A1;</div>
+        <h3>Always current</h3>
+        <p>Score data is synced daily from Fødevarestyrelsen. Your badge updates automatically — zero maintenance on your side.</p>
       </div>
-      <div class="form-row">
-        <label for="email">Email <span class="required">*</span></label>
-        <input type="email" id="email" name="email" required placeholder="you@company.com" />
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F4E7;</div>
+        <h3>Score-change alerts</h3>
+        <p>Register your business and get an email the moment your smiley score changes — before your customers notice.</p>
       </div>
-      <div class="form-row">
-        <label for="company">Company</label>
-        <input type="text" id="company" name="company" placeholder="Company or project name" />
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F3EA;</div>
+        <h3>Multiple locations</h3>
+        <p>One account for all your branches. Add each CVR number and get a separate embed code per location.</p>
       </div>
-      <div class="form-row">
-        <label for="useCase">Use Case <span class="required">*</span></label>
-        <textarea id="useCase" name="useCase" required rows="4"
-          placeholder="Describe what you're building..."></textarea>
-      </div>
-      <div class="form-status" id="formStatus" aria-live="polite"></div>
-      <button type="submit" class="btn-primary" id="submitBtn">Send Request</button>
-    </form>
+    </div>
+    <a href="register.html" class="btn-primary">Get started for free →</a>
   </div>
 </section>
 
@@ -254,50 +149,9 @@
   <div class="container">
     <p>Data provided by <a href="https://www.foedevarestyrelsen.dk" target="_blank" rel="noopener">Fødevarestyrelsen</a>
       under Danish open data licence.</p>
-    <p>Questions? <a href="mailto:ppkyaw@gmail.com">ppkyaw@gmail.com</a></p>
+    <p>Questions? <a href="mailto:yoursmiley@gmail.com">yoursmiley@gmail.com</a></p>
   </div>
 </footer>
 
-<script>
-document.getElementById('accessForm').addEventListener('submit', async function (e) {
-  e.preventDefault();
-  const btn    = document.getElementById('submitBtn');
-  const status = document.getElementById('formStatus');
-  btn.disabled     = true;
-  btn.textContent  = 'Sending...';
-  status.textContent = '';
-  status.className   = 'form-status';
-
-  try {
-    const res = await fetch('/v1/leads', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name:    document.getElementById('name').value,
-        email:   document.getElementById('email').value,
-        company: document.getElementById('company').value,
-        useCase: document.getElementById('useCase').value
-      })
-    });
-    if (res.ok) {
-      status.textContent = "Request received. We’ll email you within 24 hours.";
-      status.classList.add('form-status--success');
-      this.reset();
-    } else {
-      status.textContent = 'Something went wrong. Email us directly at ppkyaw@gmail.com.';
-      status.classList.add('form-status--error');
-    }
-  } catch {
-    status.textContent = 'Network error. Email us directly at ppkyaw@gmail.com.';
-    status.classList.add('form-status--error');
-  } finally {
-    btn.disabled    = false;
-    btn.textContent = 'Send Request';
-  }
-});
-</script>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
 </body>
 </html>
