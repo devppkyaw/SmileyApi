@@ -13,7 +13,7 @@
 
   var SCORES = {
     1: 'Sm1bg',
-    2: 'Sm1bg',
+    2: 'Sm3bg',
     3: 'Sm3bg',
     4: 'Sm4bg'
   };

@@ -9,6 +9,7 @@
     .page-header { padding: 48px 0 32px; }
     .page-header h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; }
     .page-header p  { color: var(--text-muted); }
+    .preview-link { font-size: 0.85rem; color: var(--text-muted); margin-top: 8px; display: block; }
     .test-section { margin-bottom: 48px; }
     .test-section h2 { font-size: 1.2rem; font-weight: 600; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
     .badge-row { display: flex; gap: 24px; align-items: flex-end; flex-wrap: wrap; }
@@ -61,7 +62,6 @@
       margin-top: 16px;
       display: none;
     }
-    #badgeOut { margin-bottom: 8px; min-height: 32px; }
   </style>
 </head>
 <body>
@@ -125,7 +125,7 @@
       <input type="text" id="cvrInput" placeholder="e.g. 45517624" autocomplete="off" />
       <button type="submit" class="btn-primary">Test</button>
     </form>
-    <div id="badgeOut"></div>
+    <a href="/widget-preview.html" target="_blank" class="preview-link">Edit CVR directly in widget-preview.html to see the real badge →</a>
     <pre id="jsonOut"></pre>
   </div>
 </div>
@@ -133,55 +133,21 @@
 <script>
 document.getElementById('testForm').addEventListener('submit', async function (e) {
   e.preventDefault();
-  var cvr = document.getElementById('cvrInput').value.trim();
-  var badgeOut = document.getElementById('badgeOut');
-  var jsonOut  = document.getElementById('jsonOut');
+  var cvr     = document.getElementById('cvrInput').value.trim();
+  var jsonOut = document.getElementById('jsonOut');
+  if (!cvr) return;
 
-  badgeOut.innerHTML = '<span style="color:var(--text-muted);font-size:0.9rem">Loading...</span>';
   jsonOut.style.display = 'none';
-
-  var res, data;
   try {
-    res  = await fetch('/widget/score?cvr=' + encodeURIComponent(cvr));
-    data = await res.json();
+    var res  = await fetch('/widget/score?cvr=' + encodeURIComponent(cvr));
+    var data = await res.json();
+    jsonOut.textContent = JSON.stringify(data, null, 2);
+    jsonOut.style.display = 'block';
   } catch (err) {
-    badgeOut.innerHTML = '<p style="color:var(--red)">Network error: ' + err.message + '</p>';
-    return;
+    jsonOut.textContent = 'Network error: ' + err.message;
+    jsonOut.style.display = 'block';
   }
-
-  jsonOut.textContent = JSON.stringify(data, null, 2);
-  jsonOut.style.display = 'block';
-
-  if (!res.ok) {
-    badgeOut.innerHTML = '<p style="color:var(--red)">Error ' + res.status + ': ' + (data.error && data.error.message || 'unknown') + '</p>';
-    return;
-  }
-
-  var SCORES = { 1: 'Sm1bg', 2: 'Sm1bg', 3: 'Sm3bg', 4: 'Sm4bg' };
-  var imgFile = SCORES[data.score] || 'Sm4bg';
-
-  var dateStr = '';
-  if (data.lastInspectedOn) {
-    var parts = String(data.lastInspectedOn).split('-');
-    if (parts.length === 3) dateStr = parts[2] + '.' + parts[1] + '.' + parts[0];
-  }
-
-  badgeOut.innerHTML =
-    '<a href="' + escHtml(data.reportUrl || '#') + '" target="_blank" rel="noopener noreferrer"' +
-    ' style="display:inline-block;background:#fef3c7;border:2px solid #e9c46a;border-radius:8px;padding:8px 10px;text-align:center;text-decoration:none;line-height:1.2;box-shadow:0 2px 6px rgba(0,0,0,0.10)">' +
-    '<img src="/Smiley_figurer/150/' + imgFile + '.jpg" alt="Smiley"' +
-    ' style="width:64px;height:64px;object-fit:contain;display:block;margin:0 auto;mix-blend-mode:multiply" />' +
-    (dateStr ? '<div style="font-size:0.7rem;color:#3a3a2a;margin-top:5px;white-space:nowrap">' + dateStr + '</div>' : '') +
-    '</a>';
 });
-
-function escHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 </script>
 
 </body>
