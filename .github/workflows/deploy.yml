@@ -54,11 +54,11 @@ jobs:
       - name: Deploy infrastructure
         env:
           SQL_ADMIN_PASSWORD: ${{ secrets.SQL_ADMIN_PASSWORD }}
+          IMAGE_NAME: ${{ needs.build-and-push.outputs.image }}
+          GHCR_USERNAME: ${{ github.repository_owner }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
           az deployment group create \
             --resource-group rg-smiley-api-prod \
             --template-file infra/main.bicep \
-            --parameters infra/parameters/prod.bicepparam \
-            --parameters imageName='${{ needs.build-and-push.outputs.image }}' \
-            --parameters ghcrUsername='${{ github.repository_owner }}' \
-            --parameters ghcrPassword='${{ secrets.GHCR_TOKEN }}'
+            --parameters infra/parameters/prod.bicepparam

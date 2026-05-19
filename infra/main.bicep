@@ -92,7 +92,6 @@ resource kvRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' =
     principalId: containerApp.outputs.principalId
     principalType: 'ServicePrincipal'
   }
-  dependsOn: [keyvault]
 }
 
 output containerAppHostname string = containerApp.outputs.hostname
