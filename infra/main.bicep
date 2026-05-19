@@ -14,6 +14,16 @@ param sqlAdminLogin string
 @description('SQL Server administrator password. Min 8 chars, must contain upper, lower, digit, special.')
 param sqlAdminPassword string
 
+@description('Full ghcr.io image reference, e.g. ghcr.io/owner/smiley-api:sha-abc1234')
+param imageName string
+
+@description('GitHub username for ghcr.io pull access.')
+param ghcrUsername string
+
+@secure()
+@description('GitHub PAT with read:packages scope for ghcr.io pull access.')
+param ghcrPassword string
+
 // A short deterministic suffix scoped to this resource group avoids global naming conflicts
 // for App Service (*.azurewebsites.net) and Key Vault (globally unique).
 var uniqueSuffix = take(uniqueString(resourceGroup().id), 6)
@@ -52,19 +62,22 @@ module keyvault 'modules/keyvault.bicep' = {
   }
 }
 
-module appservice 'modules/appservice.bicep' = {
-  name: 'appservice'
+module containerApp 'modules/containerapps.bicep' = {
+  name: 'containerapps'
   params: {
     name: suffix
     location: location
+    logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsWorkspaceId
     keyVaultUri: keyvault.outputs.vaultUri
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     environment: environment
+    imageName: imageName
+    ghcrUsername: ghcrUsername
+    ghcrPassword: ghcrPassword
   }
 }
 
-// Grant the App Service's system-assigned identity the Key Vault Secrets User role.
-// This lets the app read secrets without any stored credentials.
+// Grant the Container App's system-assigned identity the Key Vault Secrets User role.
 var kvSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e0'
 
 resource kvRef 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
@@ -76,13 +89,12 @@ resource kvRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' =
   scope: kvRef
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', kvSecretsUserRoleId)
-    principalId: appservice.outputs.principalId
+    principalId: containerApp.outputs.principalId
     principalType: 'ServicePrincipal'
   }
   dependsOn: [keyvault]
 }
 
-output appServiceHostname string = appservice.outputs.hostname
-output appServiceName string = appservice.outputs.appServiceName
+output containerAppHostname string = containerApp.outputs.hostname
 output keyVaultName string = keyvault.outputs.vaultName
 output sqlServerName string = sql.outputs.serverName
