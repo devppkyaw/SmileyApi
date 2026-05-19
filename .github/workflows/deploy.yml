@@ -55,8 +55,6 @@ jobs:
         env:
           SQL_ADMIN_PASSWORD: ${{ secrets.SQL_ADMIN_PASSWORD }}
           IMAGE_NAME: ${{ needs.build-and-push.outputs.image }}
-          GHCR_USERNAME: ${{ github.repository_owner }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
           az deployment group create \
             --resource-group rg-smiley-api-prod \

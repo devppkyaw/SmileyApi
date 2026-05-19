@@ -17,12 +17,6 @@ param sqlAdminPassword string
 @description('Full ghcr.io image reference, e.g. ghcr.io/owner/smiley-api:sha-abc1234')
 param imageName string
 
-@description('GitHub username for ghcr.io pull access.')
-param ghcrUsername string
-
-@secure()
-@description('GitHub PAT with read:packages scope for ghcr.io pull access.')
-param ghcrPassword string
 
 // A short deterministic suffix scoped to this resource group avoids global naming conflicts
 // for App Service (*.azurewebsites.net) and Key Vault (globally unique).
@@ -72,8 +66,6 @@ module containerApp 'modules/containerapps.bicep' = {
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     environment: environment
     imageName: imageName
-    ghcrUsername: ghcrUsername
-    ghcrPassword: ghcrPassword
   }
 }
 

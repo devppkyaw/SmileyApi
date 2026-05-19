@@ -5,9 +5,6 @@ param keyVaultUri string
 param appInsightsConnectionString string
 param environment string
 param imageName string
-param ghcrUsername string
-@secure()
-param ghcrPassword string
 
 resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: 'cae-${name}'
@@ -32,19 +29,6 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: containerAppsEnv.id
     configuration: {
-      registries: [
-        {
-          server: 'ghcr.io'
-          username: ghcrUsername
-          passwordSecretRef: 'ghcr-pat'
-        }
-      ]
-      secrets: [
-        {
-          name: 'ghcr-pat'
-          value: ghcrPassword
-        }
-      ]
       ingress: {
         external: true
         targetPort: 8080
