@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using SmileyApi.Infrastructure.Data;
 using SmileyApi.Infrastructure.Services;
 
 namespace SmileyApi.Api.Workers;
@@ -5,6 +7,7 @@ namespace SmileyApi.Api.Workers;
 public class XmlSyncWorker(
     IServiceScopeFactory scopeFactory,
     FodevareXmlParser parser,
+    IWebHostEnvironment env,
     ILogger<XmlSyncWorker> logger) : BackgroundService
 {
     private static readonly SemaphoreSlim Lock = new(1, 1);
@@ -35,17 +38,29 @@ public class XmlSyncWorker(
 
     private async Task RunSyncAsync(CancellationToken ct)
     {
+        using var scope = scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SmileyDbContext>();
+
+        // In non-dev, skip if data is fresh — avoids full XML download + MERGE on every container restart.
+        if (!env.IsDevelopment() && await db.Establishments.AnyAsync(ct))
+        {
+            var lastSync = await db.Establishments.MaxAsync(e => e.UpdatedAt, ct);
+            if (lastSync > DateTime.UtcNow.AddHours(-20))
+            {
+                logger.LogInformation("XmlSyncWorker: data is fresh (last synced {LastSync:u}), skipping.", lastSync);
+                return;
+            }
+        }
+
         logger.LogInformation("XmlSyncWorker: starting sync.");
 
         var rows = await parser.ParseAsync(ct);
 
-        // Map parser DTOs to the service contract
         var syncRows = rows.Select(r => new SyncRow(
             r.Navnelbnr, r.CvrNumber, r.Name, r.Address, r.PostalCode,
             r.City, r.IndustryCode, r.IndustryName, r.GeoLat, r.GeoLng,
             r.ReportUrl, r.Inspections)).ToList();
 
-        using var scope = scopeFactory.CreateScope();
         var syncService = scope.ServiceProvider.GetRequiredService<EstablishmentSyncService>();
         var scoreChanges = await syncService.SyncAsync(syncRows, ct);
 
