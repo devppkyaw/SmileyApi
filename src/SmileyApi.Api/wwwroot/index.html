@@ -47,8 +47,8 @@
       </div>
       <div>
         <p class="demo-code-label">Embed code</p>
-        <pre style="white-space:pre-wrap;word-break:break-all"><code>&lt;script src="https://api.smiley.dk/widget.js?cvr=<strong>12345678</strong>"&gt;&lt;/script&gt;</code></pre>
-        <p class="code-note">Replace <code>12345678</code> with your company's CVR number. That's it — no account required.</p>
+        <pre style="white-space:pre-wrap;word-break:break-all"><code>&lt;script src="https://api.smiley.dk/widget.js" data-navnelbnr="<strong>1234567</strong>"&gt;&lt;/script&gt;</code></pre>
+        <p class="code-note">Replace <code>1234567</code> with your location's Navnelbnr from Fødevarestyrelsen. That's it — no account required.</p>
       </div>
     </div>
   </div>
@@ -58,15 +58,14 @@
 <section class="tiers">
   <div class="container">
     <h2 class="section-title">Simple, transparent tiers</h2>
-    <p class="section-sub">Start with zero sign-up. Unlock more features when you register.</p>
+    <p class="section-sub">Start with zero sign-up. Upgrade for multi-location management and alerts.</p>
     <div class="table-wrap">
       <table class="tier-table">
         <thead>
           <tr>
             <th></th>
-            <th>Open embed <span class="tier-price">Free</span></th>
-            <th>Registered <span class="tier-price">Free</span></th>
-            <th>Paid <span class="tier-price">Soon</span></th>
+            <th>Free</th>
+            <th>Pro <span class="tier-price">Soon</span></th>
           </tr>
         </thead>
         <tbody>
@@ -74,37 +73,36 @@
             <td>Score badge + official report link</td>
             <td class="tier-yes">Yes</td>
             <td class="tier-yes">Yes</td>
+          </tr>
+          <tr>
+            <td>Score history sparkline</td>
+            <td class="tier-yes">Yes</td>
             <td class="tier-yes">Yes</td>
           </tr>
           <tr>
-            <td>Score history chart</td>
+            <td>Multiple locations (CVR bulk onboard)</td>
             <td class="tier-no">—</td>
             <td class="tier-yes">Yes</td>
-            <td class="tier-yes">Yes</td>
           </tr>
           <tr>
-            <td>Multiple CVRs per account</td>
+            <td>Score-change email alerts</td>
             <td class="tier-no">—</td>
             <td class="tier-yes">Yes</td>
+          </tr>
+          <tr>
+            <td>Webhooks</td>
+            <td class="tier-no">—</td>
             <td class="tier-yes">Yes</td>
           </tr>
           <tr>
-            <td>Score-change notifications</td>
+            <td>Developer API access</td>
             <td class="tier-no">—</td>
-            <td class="tier-yes">Email</td>
-            <td class="tier-yes">Email + webhook</td>
-          </tr>
-          <tr>
-            <td>Widget styles</td>
-            <td>Standard</td>
-            <td>Standard</td>
-            <td class="tier-yes">Multiple</td>
+            <td class="tier-yes">Yes</td>
           </tr>
           <tr>
             <td>Setup</td>
             <td>One line of code</td>
-            <td>Email sign-up</td>
-            <td>—</td>
+            <td>Account required</td>
           </tr>
         </tbody>
       </table>
@@ -132,12 +130,12 @@
       <div class="feature-card">
         <div class="feature-icon">&#x1F4E7;</div>
         <h3>Score-change alerts</h3>
-        <p>Register your business and get an email the moment your smiley score changes — before your customers notice.</p>
+        <p>Pro accounts get an email the moment any location's smiley score changes — before your customers notice.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#x1F3EA;</div>
         <h3>Multiple locations</h3>
-        <p>One account for all your branches. Add each CVR number and get a separate embed code per location.</p>
+        <p>Enter a CVR number and all associated locations are onboarded instantly — one embed code per branch.</p>
       </div>
     </div>
     <a href="register.html" class="btn-primary">Get started for free →</a>

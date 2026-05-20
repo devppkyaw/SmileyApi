@@ -8,7 +8,7 @@ public static class WidgetEndpoints
     public static void MapWidgetEndpoints(this WebApplication app)
     {
         app.MapGet("/widget/score", async (
-            string? cvr,
+            string? navnelbnr,
             SmileyDbContext db,
             IConfiguration config) =>
         {
@@ -17,36 +17,42 @@ public static class WidgetEndpoints
                     new { error = new { code = "embed_disabled", message = "Anonymous embedding is disabled." } },
                     statusCode: 403);
 
-            if (string.IsNullOrWhiteSpace(cvr))
+            if (string.IsNullOrWhiteSpace(navnelbnr) || !int.TryParse(navnelbnr.Trim(), out var navnelbnrId))
                 return Results.Json(
-                    new { error = new { code = "missing_cvr", message = "cvr query parameter is required." } },
+                    new { error = new { code = "missing_navnelbnr", message = "navnelbnr query parameter is required and must be a number." } },
                     statusCode: 400);
 
             var est = await db.Establishments
-                .Where(e => e.CvrNumber == cvr.Trim())
+                .Where(e => e.Navnelbnr == navnelbnrId)
                 .Select(e => new
                 {
-                    e.CvrNumber,
+                    e.Navnelbnr,
                     e.LatestScore,
                     e.ReportUrl,
                     LastInspectedOn = e.Inspections
                         .OrderByDescending(i => i.InspectedOn)
                         .Select(i => (DateOnly?)i.InspectedOn)
                         .FirstOrDefault()
+                    // History = e.Inspections
+                    //     .OrderByDescending(i => i.InspectedOn)
+                    //     .Take(5)
+                    //     .Select(i => new { score = i.SmileyScore, date = i.InspectedOn })
+                    //     .ToList()
                 })
                 .FirstOrDefaultAsync();
 
             if (est is null)
                 return Results.Json(
-                    new { error = new { code = "not_found", message = "No establishment found for this CVR." } },
+                    new { error = new { code = "not_found", message = "No establishment found for this Navnelbnr." } },
                     statusCode: 404);
 
             return Results.Json(new
             {
-                cvr             = est.CvrNumber,
+                navnelbnr       = est.Navnelbnr,
                 score           = est.LatestScore,
                 reportUrl       = est.ReportUrl,
                 lastInspectedOn = est.LastInspectedOn,
+                // history      = est.History,
                 tier            = "open"
             });
         })
