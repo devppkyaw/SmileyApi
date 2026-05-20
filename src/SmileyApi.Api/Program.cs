@@ -29,9 +29,20 @@ builder.Services.AddDbContext<SmileyDbContext>(options =>
 
 builder.Services.AddScoped<IEstablishmentRepository, EstablishmentRepository>();
 builder.Services.AddScoped<IApiKeyService, ApiKeyService>();
+builder.Services.AddScoped<IBusinessService, BusinessService>();
+builder.Services.AddScoped<IEmailService, DevEmailService>();
 builder.Services.AddScoped<EstablishmentSyncService>();
 builder.Services.AddScoped<WebhookService>();
 builder.Services.AddScoped<WebhookDeliveryJob>();
+
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddSession(options =>
+{
+    options.Cookie.HttpOnly  = true;
+    options.Cookie.SameSite  = SameSiteMode.Strict;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    options.IdleTimeout      = TimeSpan.FromDays(30);
+});
 
 builder.Services.AddHttpClient();
 builder.Services.AddHttpClient("webhook", client => client.Timeout = TimeSpan.FromSeconds(10));
@@ -138,6 +149,7 @@ if (!app.Environment.IsDevelopment())
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseCors();
+app.UseSession();
 
 if (!app.Environment.IsProduction())
 {
@@ -157,6 +169,7 @@ app.MapLeadsEndpoint();
 app.MapAdminEndpoints();
 app.MapWebhookEndpoints();
 app.MapWidgetEndpoints();
+app.MapBusinessEndpoints();
 
 app.Run();
 

@@ -105,6 +105,105 @@ namespace SmileyApi.Infrastructure.Migrations
                     b.ToTable("ApiKeys");
                 });
 
+            modelBuilder.Entity("SmileyApi.Core.Models.Business", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BusinessId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("CompanyName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<bool>("IsEmailVerified")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MagicLinkToken")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("MagicLinkTokenExpiry")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("MarketingConsentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("MarketingConsentGiven")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("StripeCustomerId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("StripeSubscriptionId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("TermsAcceptedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Tier")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessId")
+                        .IsUnique();
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.ToTable("Businesses");
+                });
+
+            modelBuilder.Entity("SmileyApi.Core.Models.BusinessLocation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("BusinessId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Navnelbnr")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Navnelbnr");
+
+                    b.HasIndex("BusinessId", "Navnelbnr")
+                        .IsUnique();
+
+                    b.ToTable("BusinessLocations");
+                });
+
             modelBuilder.Entity("SmileyApi.Core.Models.Establishment", b =>
                 {
                     b.Property<int>("Id")
@@ -246,6 +345,17 @@ namespace SmileyApi.Infrastructure.Migrations
                     b.Navigation("ApiKey");
                 });
 
+            modelBuilder.Entity("SmileyApi.Core.Models.BusinessLocation", b =>
+                {
+                    b.HasOne("SmileyApi.Core.Models.Business", "Business")
+                        .WithMany("Locations")
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Business");
+                });
+
             modelBuilder.Entity("SmileyApi.Core.Models.Inspection", b =>
                 {
                     b.HasOne("SmileyApi.Core.Models.Establishment", "Establishment")
@@ -274,6 +384,11 @@ namespace SmileyApi.Infrastructure.Migrations
                     b.Navigation("ApiKey");
 
                     b.Navigation("Establishment");
+                });
+
+            modelBuilder.Entity("SmileyApi.Core.Models.Business", b =>
+                {
+                    b.Navigation("Locations");
                 });
 
             modelBuilder.Entity("SmileyApi.Core.Models.Establishment", b =>

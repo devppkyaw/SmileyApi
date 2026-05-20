@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — Smiley API</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<header class="hero" style="padding-bottom:40px">
+  <nav class="nav">
+    <a href="/" class="nav-logo" style="text-decoration:none">Smiley<span class="accent">API</span></a>
+    <div class="nav-links">
+      <span id="navEmail" style="color:rgba(255,255,255,0.7);font-size:0.9rem"></span>
+      <button onclick="logout()" class="nav-link" style="background:none;border:none;cursor:pointer;color:inherit">Sign out</button>
+    </div>
+  </nav>
+  <div class="hero-content" style="padding-top:60px">
+    <h1 style="font-size:clamp(1.8rem,4vw,2.5rem)">Your dashboard<br><span class="accent" id="tierBadge"></span></h1>
+    <p class="hero-sub" id="welcomeMsg">Loading…</p>
+  </div>
+</header>
+
+<section class="access">
+  <div class="container">
+
+    <div id="authError" style="display:none;text-align:center;padding:40px 0">
+      <p style="color:#e55;margin-bottom:16px">You are not logged in.</p>
+      <a href="/login.html" class="btn-primary">Log in →</a>
+    </div>
+
+    <div id="dashContent" style="display:none">
+      <h2 class="section-title">Your locations</h2>
+      <p class="section-sub">Add a location by its Navnelbnr to get an embed code.</p>
+
+      <form id="addForm" style="display:flex;gap:10px;max-width:420px;margin-bottom:32px">
+        <input type="number" id="navnelbnrInput" placeholder="Navnelbnr" required
+               style="flex:1;padding:10px 14px;border-radius:6px;border:1px solid #ddd;font-size:1rem" />
+        <button type="submit" class="btn-primary" style="white-space:nowrap">Add location</button>
+      </form>
+      <div id="addStatus" style="margin-bottom:16px;font-size:0.9rem"></div>
+
+      <div id="locationList"></div>
+    </div>
+
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container">
+    <p>Questions? <a href="mailto:yoursmiley@gmail.com">yoursmiley@gmail.com</a></p>
+  </div>
+</footer>
+
+<script>
+(async function () {
+  const res = await fetch('/v1/business/me');
+  if (!res.ok) {
+    document.getElementById('authError').style.display = 'block';
+    return;
+  }
+
+  const me = await res.json();
+  document.getElementById('navEmail').textContent  = me.email;
+  document.getElementById('tierBadge').textContent = me.tier === 'pro' ? 'Pro account' : 'Free account';
+  document.getElementById('welcomeMsg').textContent = 'Welcome back, ' + me.companyName;
+  document.getElementById('dashContent').style.display = 'block';
+
+  loadLocations();
+})();
+
+async function loadLocations() {
+  const res  = await fetch('/v1/business/locations');
+  const list = await res.json();
+  const el   = document.getElementById('locationList');
+
+  if (!list.length) {
+    el.innerHTML = '<p style="color:#888">No locations yet. Add one above.</p>';
+    return;
+  }
+
+  el.innerHTML = list.map(function (loc) {
+    var embedCode = '&lt;script src="' + location.origin + '/widget.js" data-navnelbnr="' + loc.navnelbnr + '"&gt;&lt;/script&gt;';
+    return '<div style="border:1px solid #e9c46a;border-radius:8px;padding:16px 20px;margin-bottom:16px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">' +
+        '<div>' +
+          '<strong>' + esc(loc.name) + '</strong>' +
+          '<div style="font-size:0.85rem;color:#666;margin-top:2px">' + esc(loc.address || '') + ', ' + esc(loc.city || '') + '</div>' +
+          '<div style="font-size:0.85rem;color:#888;margin-top:2px">Score: ' + (loc.latestScore || '—') + ' &nbsp;·&nbsp; Navnelbnr: ' + loc.navnelbnr + '</div>' +
+        '</div>' +
+        '<button onclick="removeLocation(' + loc.navnelbnr + ')" style="background:none;border:1px solid #ccc;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:0.8rem;color:#666">Remove</button>' +
+      '</div>' +
+      '<div style="margin-top:12px">' +
+        '<div style="font-size:0.8rem;color:#888;margin-bottom:4px">Embed code</div>' +
+        '<pre style="background:#fef3c7;border:1px solid #e9c46a;border-radius:4px;padding:8px 12px;font-size:0.75rem;white-space:pre-wrap;word-break:break-all;margin:0">' + embedCode + '</pre>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+document.getElementById('addForm').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  const navnelbnr = parseInt(document.getElementById('navnelbnrInput').value);
+  const status    = document.getElementById('addStatus');
+  const res = await fetch('/v1/business/locations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ navnelbnr: navnelbnr })
+  });
+  const data = await res.json();
+  if (res.ok) {
+    status.style.color = 'green';
+    status.textContent = 'Location added.';
+    document.getElementById('navnelbnrInput').value = '';
+    loadLocations();
+  } else {
+    status.style.color = 'red';
+    status.textContent = data.error?.message || 'Failed to add location.';
+  }
+});
+
+async function removeLocation(navnelbnr) {
+  if (!confirm('Remove this location?')) return;
+  await fetch('/v1/business/locations/' + navnelbnr, { method: 'DELETE' });
+  loadLocations();
+}
+
+async function logout() {
+  await fetch('/v1/business/logout', { method: 'POST' });
+  location.href = '/';
+}
+
+function esc(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>

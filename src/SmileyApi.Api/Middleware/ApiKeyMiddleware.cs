@@ -5,7 +5,7 @@ namespace SmileyApi.Api.Middleware;
 
 public class ApiKeyMiddleware(RequestDelegate next, IServiceScopeFactory scopeFactory)
 {
-    private static readonly string[] PublicPaths = ["/health", "/openapi", "/scalar", "/admin", "/v1/leads", "/widget"];
+    private static readonly string[] PublicPaths = ["/health", "/openapi", "/scalar", "/admin", "/v1/leads", "/v1/business", "/v1/stripe", "/widget"];
 
     public async Task InvokeAsync(HttpContext context)
     {

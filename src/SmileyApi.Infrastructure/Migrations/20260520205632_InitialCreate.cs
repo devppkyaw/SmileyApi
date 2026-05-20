@@ -22,11 +22,38 @@ namespace SmileyApi.Infrastructure.Migrations
                     Tier = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
                     RequestsToday = table.Column<int>(type: "int", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    IsActive = table.Column<bool>(type: "bit", nullable: false)
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    LastResetAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_ApiKeys", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Businesses",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    BusinessId = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
+                    Email = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
+                    CompanyName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
+                    Tier = table.Column<string>(type: "nvarchar(16)", maxLength: 16, nullable: false),
+                    IsEmailVerified = table.Column<bool>(type: "bit", nullable: false),
+                    MagicLinkToken = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: true),
+                    MagicLinkTokenExpiry = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    StripeCustomerId = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: true),
+                    StripeSubscriptionId = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    VerifiedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    TermsAcceptedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    MarketingConsentGiven = table.Column<bool>(type: "bit", nullable: false),
+                    MarketingConsentAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Businesses", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -53,6 +80,52 @@ namespace SmileyApi.Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Establishments", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AccessRequests",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
+                    Email = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
+                    Company = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
+                    UseCase = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: false),
+                    SubmittedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    ApiKeyId = table.Column<int>(type: "int", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AccessRequests", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AccessRequests_ApiKeys_ApiKeyId",
+                        column: x => x.ApiKeyId,
+                        principalTable: "ApiKeys",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "BusinessLocations",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    BusinessId = table.Column<int>(type: "int", nullable: false),
+                    Navnelbnr = table.Column<int>(type: "int", nullable: false),
+                    AddedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_BusinessLocations", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_BusinessLocations_Businesses_BusinessId",
+                        column: x => x.BusinessId,
+                        principalTable: "Businesses",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -86,6 +159,7 @@ namespace SmileyApi.Infrastructure.Migrations
                     ApiKeyId = table.Column<int>(type: "int", nullable: false),
                     EstablishmentId = table.Column<int>(type: "int", nullable: false),
                     CallbackUrl = table.Column<string>(type: "nvarchar(1024)", maxLength: 1024, nullable: false),
+                    SecretKey = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
@@ -104,6 +178,34 @@ namespace SmileyApi.Infrastructure.Migrations
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AccessRequests_ApiKeyId",
+                table: "AccessRequests",
+                column: "ApiKeyId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Businesses_BusinessId",
+                table: "Businesses",
+                column: "BusinessId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Businesses_Email",
+                table: "Businesses",
+                column: "Email",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_BusinessLocations_BusinessId_Navnelbnr",
+                table: "BusinessLocations",
+                columns: new[] { "BusinessId", "Navnelbnr" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_BusinessLocations_Navnelbnr",
+                table: "BusinessLocations",
+                column: "Navnelbnr");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Establishments_Navnelbnr",
@@ -132,10 +234,19 @@ namespace SmileyApi.Infrastructure.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "AccessRequests");
+
+            migrationBuilder.DropTable(
+                name: "BusinessLocations");
+
+            migrationBuilder.DropTable(
                 name: "Inspections");
 
             migrationBuilder.DropTable(
                 name: "WebhookSubscriptions");
+
+            migrationBuilder.DropTable(
+                name: "Businesses");
 
             migrationBuilder.DropTable(
                 name: "ApiKeys");

@@ -10,6 +10,8 @@ public class SmileyDbContext(DbContextOptions<SmileyDbContext> options) : DbCont
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
     public DbSet<WebhookSubscription> WebhookSubscriptions => Set<WebhookSubscription>();
     public DbSet<AccessRequest> AccessRequests => Set<AccessRequest>();
+    public DbSet<Business> Businesses => Set<Business>();
+    public DbSet<BusinessLocation> BusinessLocations => Set<BusinessLocation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -60,6 +62,29 @@ public class SmileyDbContext(DbContextOptions<SmileyDbContext> options) : DbCont
              .HasForeignKey(x => x.ApiKeyId)
              .IsRequired(false)
              .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<Business>(e =>
+        {
+            e.HasIndex(x => x.BusinessId).IsUnique();
+            e.HasIndex(x => x.Email).IsUnique();
+            e.Property(x => x.BusinessId).HasMaxLength(32);
+            e.Property(x => x.Email).HasMaxLength(256);
+            e.Property(x => x.CompanyName).HasMaxLength(256);
+            e.Property(x => x.Tier).HasMaxLength(16);
+            e.Property(x => x.MagicLinkToken).HasMaxLength(64);
+            e.Property(x => x.StripeCustomerId).HasMaxLength(64);
+            e.Property(x => x.StripeSubscriptionId).HasMaxLength(64);
+        });
+
+        modelBuilder.Entity<BusinessLocation>(e =>
+        {
+            e.HasIndex(x => x.Navnelbnr);
+            e.HasIndex(x => new { x.BusinessId, x.Navnelbnr }).IsUnique();
+            e.HasOne(x => x.Business)
+             .WithMany(x => x.Locations)
+             .HasForeignKey(x => x.BusinessId)
+             .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
