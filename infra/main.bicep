@@ -44,6 +44,14 @@ module sql 'modules/sql.bicep' = {
   }
 }
 
+module acs 'modules/acs.bicep' = {
+  name: 'acs'
+  params: {
+    name: suffix
+    location: location
+  }
+}
+
 module keyvault 'modules/keyvault.bicep' = {
   name: 'keyvault'
   params: {
@@ -53,6 +61,8 @@ module keyvault 'modules/keyvault.bicep' = {
     sqlDatabaseName: sqlDatabaseName
     sqlAdminLogin: sqlAdminLogin
     sqlAdminPassword: sqlAdminPassword
+    acsConnectionString: acs.outputs.connectionString
+    acsSenderAddress: acs.outputs.senderAddress
   }
 }
 

@@ -7,6 +7,11 @@ param sqlAdminLogin string
 @secure()
 param sqlAdminPassword string
 
+@secure()
+param acsConnectionString string
+
+param acsSenderAddress string
+
 resource vault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: name
   location: location
@@ -28,6 +33,24 @@ resource connStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   name: 'ConnectionStrings--Default'
   properties: {
     value: 'Server=tcp:${sqlServerFqdn},1433;Database=${sqlDatabaseName};User Id=${sqlAdminLogin};Password=${sqlAdminPassword};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
+  }
+}
+
+// Acs--ConnectionString and Acs--SenderAddress map to Acs:ConnectionString and Acs:SenderAddress
+// in ASP.NET Core config (-- separator → : hierarchy).
+resource acsConnectionStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: vault
+  name: 'Acs--ConnectionString'
+  properties: {
+    value: acsConnectionString
+  }
+}
+
+resource acsSenderAddressSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: vault
+  name: 'Acs--SenderAddress'
+  properties: {
+    value: acsSenderAddress
   }
 }
 

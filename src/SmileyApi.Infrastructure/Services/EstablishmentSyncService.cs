@@ -1,6 +1,7 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using SmileyApi.Core.Interfaces;
 using SmileyApi.Infrastructure.Data;
 using System.Data;
 
@@ -23,7 +24,7 @@ public record SyncRow(
     List<(int Score, DateOnly Date)> Inspections
 );
 
-public class EstablishmentSyncService(SmileyDbContext db, ILogger<EstablishmentSyncService> logger)
+public class EstablishmentSyncService(SmileyDbContext db, IEmailService emailService, ILogger<EstablishmentSyncService> logger)
 {
     public async Task<IReadOnlyList<ScoreChange>> SyncAsync(IReadOnlyList<SyncRow> rows, CancellationToken ct)
     {
@@ -169,7 +170,50 @@ public class EstablishmentSyncService(SmileyDbContext db, ILogger<EstablishmentS
             "Sync complete: {New} new, {Updated} updated, {Unchanged} unchanged; {Inspections} inspection rows staged; {ScoreChanges} score change(s).",
             inserted, updated, rows.Count - inserted - updated, inspCount, scoreChanges.Count);
 
+        if (scoreChanges.Count > 0)
+            await SendScoreAlertsAsync(scoreChanges, ct);
+
         return scoreChanges;
+    }
+
+    private async Task SendScoreAlertsAsync(IReadOnlyList<ScoreChange> scoreChanges, CancellationToken ct)
+    {
+        var changedIds = scoreChanges.Select(c => c.EstablishmentId).ToHashSet();
+        var newScoreById = scoreChanges.ToDictionary(c => c.EstablishmentId, c => c.NewScore);
+
+        var establishments = await db.Establishments
+            .Where(e => changedIds.Contains(e.Id))
+            .Select(e => new { e.Id, e.Navnelbnr, e.Name })
+            .ToListAsync(ct);
+
+        var navnelbnrs = establishments.Select(e => e.Navnelbnr).ToList();
+
+        var alerts = await db.BusinessLocations
+            .Where(bl => navnelbnrs.Contains(bl.Navnelbnr))
+            .Join(db.Businesses.Where(b => b.Tier == "pro"),
+                bl => bl.BusinessId,
+                b  => b.Id,
+                (bl, b) => new { bl.Navnelbnr, b.Email })
+            .ToListAsync(ct);
+
+        if (alerts.Count == 0) return;
+
+        var estByNavnelbnr = establishments.ToDictionary(
+            e => e.Navnelbnr,
+            e => new { e.Name, NewScore = newScoreById[e.Id] });
+
+        foreach (var alert in alerts)
+        {
+            if (!estByNavnelbnr.TryGetValue(alert.Navnelbnr, out var est)) continue;
+            try
+            {
+                await emailService.SendScoreAlertEmailAsync(alert.Email, est.Name, est.NewScore, ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to send score alert to {Email} for navnelbnr {Navnelbnr}", alert.Email, alert.Navnelbnr);
+            }
+        }
     }
 
     private static DataTable BuildEstabDataTable(IReadOnlyList<SyncRow> rows)

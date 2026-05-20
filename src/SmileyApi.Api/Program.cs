@@ -30,7 +30,10 @@ builder.Services.AddDbContext<SmileyDbContext>(options =>
 builder.Services.AddScoped<IEstablishmentRepository, EstablishmentRepository>();
 builder.Services.AddScoped<IApiKeyService, ApiKeyService>();
 builder.Services.AddScoped<IBusinessService, BusinessService>();
-builder.Services.AddScoped<IEmailService, DevEmailService>();
+if (builder.Environment.IsDevelopment())
+    builder.Services.AddScoped<IEmailService, DevEmailService>();
+else
+    builder.Services.AddScoped<IEmailService, AcsEmailService>();
 builder.Services.AddScoped<EstablishmentSyncService>();
 builder.Services.AddScoped<WebhookService>();
 builder.Services.AddScoped<WebhookDeliveryJob>();
