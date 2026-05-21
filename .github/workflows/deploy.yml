@@ -58,6 +58,6 @@ jobs:
           IMAGE_NAME: ${{ needs.build-and-push.outputs.image }}
         run: |
           az deployment group create \
-            --resource-group rg-smilr-api-prod \
+            --resource-group rg-smiley-api-prod \
             --template-file infra/main.bicep \
             --parameters infra/parameters/prod.bicepparam
