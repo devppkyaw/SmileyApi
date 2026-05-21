@@ -42,6 +42,7 @@ jobs:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          provenance: false
 
   deploy:
     needs: build-and-push
