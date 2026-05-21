@@ -37,6 +37,7 @@ else
 builder.Services.AddScoped<EstablishmentSyncService>();
 builder.Services.AddScoped<WebhookService>();
 builder.Services.AddScoped<WebhookDeliveryJob>();
+builder.Services.AddScoped<IStripeService, StripeService>();
 
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
@@ -173,6 +174,7 @@ app.MapAdminEndpoints();
 app.MapWebhookEndpoints();
 app.MapWidgetEndpoints();
 app.MapBusinessEndpoints();
+app.MapStripeEndpoints();
 
 app.Run();
 

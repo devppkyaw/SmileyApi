@@ -55,6 +55,47 @@ public class WebhookService(SmileyDbContext db, IBackgroundJobClient jobs, ILogg
           .OrderByDescending(s => s.CreatedAt)
           .ToListAsync(ct);
 
+    public async Task<(WebhookSubscription subscription, string secret)> SubscribeBusinessAsync(
+        int businessId, int establishmentId, string callbackUrl, CancellationToken ct)
+    {
+        if (!await db.Establishments.AnyAsync(e => e.Id == establishmentId, ct))
+            throw new KeyNotFoundException($"Establishment {establishmentId} not found.");
+
+        bool duplicate = await db.WebhookSubscriptions.AnyAsync(
+            s => s.BusinessId == businessId && s.EstablishmentId == establishmentId && s.CallbackUrl == callbackUrl, ct);
+        if (duplicate)
+            throw new InvalidOperationException("A subscription with the same establishment and callback URL already exists.");
+
+        var secret = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        var sub = new WebhookSubscription
+        {
+            BusinessId      = businessId,
+            EstablishmentId = establishmentId,
+            CallbackUrl     = callbackUrl,
+            SecretKey       = secret,
+            CreatedAt       = DateTime.UtcNow
+        };
+        db.WebhookSubscriptions.Add(sub);
+        await db.SaveChangesAsync(ct);
+        return (sub, secret);
+    }
+
+    public async Task<bool> UnsubscribeBusinessAsync(int subscriptionId, int businessId, CancellationToken ct)
+    {
+        var sub = await db.WebhookSubscriptions.FirstOrDefaultAsync(s => s.Id == subscriptionId, ct);
+        if (sub is null || sub.BusinessId != businessId) return false;
+
+        db.WebhookSubscriptions.Remove(sub);
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public Task<List<WebhookSubscription>> GetByBusinessAsync(int businessId, CancellationToken ct) =>
+        db.WebhookSubscriptions
+          .Where(s => s.BusinessId == businessId)
+          .OrderByDescending(s => s.CreatedAt)
+          .ToListAsync(ct);
+
     public async Task EnqueueDeliveriesAsync(IReadOnlyList<WebhookScoreChange> changes, CancellationToken ct)
     {
         var establishmentIds = changes.Select(c => c.EstablishmentId).Distinct().ToList();

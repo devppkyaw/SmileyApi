@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Log in to your Smiley API business account." />
+  <title>Log in — Smiley API</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<header class="hero" style="padding-bottom:40px">
+  <nav class="nav">
+    <a href="/" class="nav-logo" style="text-decoration:none">Smiley<span class="accent">API</span></a>
+    <a href="/register.html" class="nav-link">No account? Register free →</a>
+  </nav>
+  <div class="hero-content" style="padding-top:60px">
+    <h1 style="font-size:clamp(1.8rem,4vw,2.5rem)">Log in to your<br><span class="accent">business account</span></h1>
+    <p class="hero-sub">We'll send a magic link to your email — no password needed.</p>
+  </div>
+</header>
+
+<section class="access">
+  <div class="container">
+
+    <div id="successState" style="display:none;max-width:480px">
+      <h2 class="section-title">Check your email</h2>
+      <p class="section-sub" style="margin-bottom:0">
+        We've sent a login link to <strong id="sentTo"></strong>.<br>
+        Click the link to sign in — it expires in 15 minutes.
+      </p>
+    </div>
+
+    <div id="formState">
+      <h2 class="section-title">Sign in</h2>
+      <p class="section-sub">Enter your email and we'll send you a login link.</p>
+      <form class="access-form" id="loginForm" style="max-width:420px">
+        <div class="form-row">
+          <label for="email">Email <span class="required">*</span></label>
+          <input type="email" id="email" name="email" required placeholder="you@company.com" autocomplete="email" />
+        </div>
+        <div class="form-status" id="formStatus" aria-live="polite"></div>
+        <button type="submit" class="btn-primary" id="submitBtn">Send login link →</button>
+      </form>
+      <p style="margin-top:20px;font-size:0.85rem;color:var(--text-muted)">
+        Don't have an account? <a href="/register.html">Register for free</a>
+      </p>
+    </div>
+
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container">
+    <p>Questions? <a href="mailto:yoursmiley@gmail.com">yoursmiley@gmail.com</a></p>
+  </div>
+</footer>
+
+<script>
+const params = new URLSearchParams(location.search);
+const error  = params.get('error');
+if (error === 'invalid_token' || error === 'expired_token') {
+  const s = document.getElementById('formStatus');
+  s.textContent = error === 'expired_token'
+    ? 'That login link has expired. Please request a new one.'
+    : 'That login link is invalid. Please request a new one.';
+  s.className = 'form-status form-status--error';
+}
+
+document.getElementById('loginForm').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  const btn    = document.getElementById('submitBtn');
+  const status = document.getElementById('formStatus');
+  const email  = document.getElementById('email').value.trim();
+
+  btn.disabled    = true;
+  btn.textContent = 'Sending…';
+  status.textContent = '';
+  status.className   = 'form-status';
+
+  try {
+    const res = await fetch('/v1/business/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+
+    if (res.ok) {
+      document.getElementById('formState').style.display  = 'none';
+      document.getElementById('sentTo').textContent       = email;
+      document.getElementById('successState').style.display = 'block';
+    } else {
+      const data = await res.json();
+      status.textContent = data.error?.message || 'Something went wrong. Please try again.';
+      status.className   = 'form-status form-status--error';
+      btn.disabled    = false;
+      btn.textContent = 'Send login link →';
+    }
+  } catch {
+    status.textContent = 'Network error. Please try again.';
+    status.className   = 'form-status form-status--error';
+    btn.disabled    = false;
+    btn.textContent = 'Send login link →';
+  }
+});
+</script>
+</body>
+</html>

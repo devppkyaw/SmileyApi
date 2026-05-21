@@ -47,7 +47,10 @@ public class SmileyDbContext(DbContextOptions<SmileyDbContext> options) : DbCont
         {
             e.Property(x => x.CallbackUrl).HasMaxLength(1024);
             e.Property(x => x.SecretKey).HasMaxLength(64);
-            e.HasOne(x => x.ApiKey).WithMany().HasForeignKey(x => x.ApiKeyId);
+            e.HasOne(x => x.ApiKey).WithMany().HasForeignKey(x => x.ApiKeyId)
+             .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.Business).WithMany().HasForeignKey(x => x.BusinessId)
+             .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Establishment).WithMany().HasForeignKey(x => x.EstablishmentId);
         });
 

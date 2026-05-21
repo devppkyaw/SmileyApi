@@ -9,13 +9,27 @@ public static class WidgetEndpoints
     {
         app.MapGet("/widget/score", async (
             string? navnelbnr,
+            string? businessId,
             SmileyDbContext db,
             IConfiguration config) =>
         {
-            if (!config.GetValue<bool>("Widget:AllowAnonymousEmbed"))
+            // Resolve tier from businessId if provided; otherwise anonymous free tier
+            string tier = "free";
+            if (!string.IsNullOrWhiteSpace(businessId))
+            {
+                var business = await db.Businesses
+                    .Where(b => b.BusinessId == businessId && b.IsEmailVerified)
+                    .Select(b => b.Tier)
+                    .FirstOrDefaultAsync();
+                if (business is not null)
+                    tier = business;
+            }
+            else if (!config.GetValue<bool>("Widget:AllowAnonymousEmbed"))
+            {
                 return Results.Json(
                     new { error = new { code = "embed_disabled", message = "Anonymous embedding is disabled." } },
                     statusCode: 403);
+            }
 
             if (string.IsNullOrWhiteSpace(navnelbnr) || !int.TryParse(navnelbnr.Trim(), out var navnelbnrId))
                 return Results.Json(
@@ -53,7 +67,7 @@ public static class WidgetEndpoints
                 reportUrl       = est.ReportUrl,
                 lastInspectedOn = est.LastInspectedOn,
                 // history      = est.History,
-                tier            = "open"
+                tier
             });
         })
         .RequireCors("widget")
