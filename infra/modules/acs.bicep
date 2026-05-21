@@ -20,7 +20,7 @@ resource emailService 'Microsoft.Communication/emailServices@2023-04-01' = {
 }
 
 // AzureManagedDomain gives an out-of-the-box sender domain (no custom DNS required).
-// To use a custom domain (e.g. noreply@smiley.dk), replace this with a custom domain resource
+// To use a custom domain (e.g. noreply@smilrhq.dk), replace this with a custom domain resource
 // and complete DNS verification in the Azure portal before deploying.
 resource domain 'Microsoft.Communication/emailServices/domains@2023-04-01' = {
   parent: emailService

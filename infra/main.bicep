@@ -1,4 +1,4 @@
-@description('Base name for all resources. E.g. "smiley-api"')
+@description('Base name for all resources. E.g. "smilr-api"')
 param appName string
 
 @description('Azure region for all resources.')
@@ -14,7 +14,7 @@ param sqlAdminLogin string
 @description('SQL Server administrator password. Min 8 chars, must contain upper, lower, digit, special.')
 param sqlAdminPassword string
 
-@description('Full ghcr.io image reference, e.g. ghcr.io/owner/smiley-api:sha-abc1234')
+@description('Full ghcr.io image reference, e.g. ghcr.io/owner/smilr-api:sha-abc1234')
 param imageName string
 
 
@@ -23,7 +23,7 @@ param imageName string
 var uniqueSuffix = take(uniqueString(resourceGroup().id), 6)
 var suffix = '${appName}-${environment}-${uniqueSuffix}'
 var kvName = take('kv-${suffix}', 24)
-var sqlDatabaseName = 'SmileyApi'
+var sqlDatabaseName = 'SmilrApi'
 
 module monitoring 'modules/monitoring.bicep' = {
   name: 'monitoring'

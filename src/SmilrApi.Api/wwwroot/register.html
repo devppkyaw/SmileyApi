@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Register your business to get a free Smilr score widget with score history and email alerts." />
+  <title>Register — Smilr API</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<header class="hero" style="padding-bottom:40px">
+  <nav class="nav">
+    <a href="/" class="nav-logo" style="text-decoration:none">Smilr<span class="accent">API</span></a>
+    <a href="/login.html" class="nav-link">Already registered? Log in →</a>
+  </nav>
+  <div class="hero-content" style="padding-top:60px">
+    <h1 style="font-size:clamp(1.8rem,4vw,2.5rem)">Create your<br><span class="accent">business account</span></h1>
+    <p class="hero-sub">Free to start. Get your embed code in minutes.</p>
+  </div>
+</header>
+
+<section class="access">
+  <div class="container">
+
+    <div id="successState" style="display:none;max-width:480px">
+      <h2 class="section-title">Check your email</h2>
+      <p class="section-sub" style="margin-bottom:0">
+        We've sent a verification link to <strong id="sentTo"></strong>.<br>
+        Click the link to activate your account and go to your dashboard.
+      </p>
+    </div>
+
+    <div id="formState">
+      <h2 class="section-title">Get started for free</h2>
+      <p class="section-sub">No credit card required.</p>
+      <form class="access-form" id="registerForm">
+        <div class="form-row">
+          <label for="email">Email <span class="required">*</span></label>
+          <input type="email" id="email" name="email" required placeholder="you@company.com" autocomplete="email" />
+        </div>
+        <div class="form-row">
+          <label for="companyName">Business name <span class="required">*</span></label>
+          <input type="text" id="companyName" name="companyName" required placeholder="Your restaurant or business" />
+        </div>
+        <div class="form-row" style="display:flex;gap:10px;align-items:flex-start">
+          <input type="checkbox" id="terms" name="terms" required style="width:auto;margin-top:3px;flex-shrink:0" />
+          <label for="terms" style="font-weight:400;font-size:0.9rem;color:var(--text-muted)">
+            I accept the <a href="/terms.html" target="_blank">Terms of Service</a> <span class="required">*</span>
+          </label>
+        </div>
+        <div class="form-row" style="display:flex;gap:10px;align-items:flex-start">
+          <input type="checkbox" id="marketing" name="marketing" style="width:auto;margin-top:3px;flex-shrink:0" />
+          <label for="marketing" style="font-weight:400;font-size:0.9rem;color:var(--text-muted)">
+            Keep me updated on new features (optional)
+          </label>
+        </div>
+        <div class="form-status" id="formStatus" aria-live="polite"></div>
+        <button type="submit" class="btn-primary" id="submitBtn">Create account →</button>
+      </form>
+      <p style="margin-top:20px;font-size:0.85rem;color:var(--text-muted)">
+        Already have an account? <a href="/login.html">Log in</a>
+      </p>
+    </div>
+
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container">
+    <p>Data provided by <a href="https://www.foedevarestyrelsen.dk" target="_blank" rel="noopener">Fødevarestyrelsen</a>
+      under Danish open data licence.</p>
+    <p>Questions? <a href="mailto:yourSmilr@gmail.com">yourSmilr@gmail.com</a></p>
+  </div>
+</footer>
+
+<script>
+const params = new URLSearchParams(location.search);
+if (params.get('error') === 'invalid_token') {
+  const s = document.getElementById('formStatus');
+  s.textContent = 'That verification link is invalid or has expired. Please register again.';
+  s.className = 'form-status form-status--error';
+}
+
+document.getElementById('registerForm').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  const btn    = document.getElementById('submitBtn');
+  const status = document.getElementById('formStatus');
+  const email  = document.getElementById('email').value.trim();
+
+  btn.disabled    = true;
+  btn.textContent = 'Sending…';
+  status.textContent = '';
+  status.className   = 'form-status';
+
+  try {
+    const res = await fetch('/v1/business/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email:           email,
+        companyName:     document.getElementById('companyName').value.trim(),
+        termsAccepted:   true,
+        marketingConsent: document.getElementById('marketing').checked
+      })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      document.getElementById('formState').style.display = 'none';
+      document.getElementById('sentTo').textContent      = email;
+      document.getElementById('successState').style.display = 'block';
+    } else if (res.status === 409) {
+      status.textContent = 'This email is already registered. ';
+      status.className   = 'form-status form-status--error';
+      const a = document.createElement('a');
+      a.href = '/login.html';
+      a.textContent = 'Log in instead →';
+      status.appendChild(a);
+      btn.disabled    = false;
+      btn.textContent = 'Create account →';
+    } else {
+      status.textContent = data.error?.message || 'Something went wrong. Please try again.';
+      status.className   = 'form-status form-status--error';
+      btn.disabled    = false;
+      btn.textContent = 'Create account →';
+    }
+  } catch {
+    status.textContent = 'Network error. Please try again.';
+    status.className   = 'form-status form-status--error';
+    btn.disabled    = false;
+    btn.textContent = 'Create account →';
+  }
+});
+</script>
+</body>
+</html>

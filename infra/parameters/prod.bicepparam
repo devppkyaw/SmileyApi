@@ -1,8 +1,8 @@
 using '../main.bicep'
 
-param appName = 'smiley-api'
+param appName = 'smilr-api'
 param environment = 'prod'
 param location = 'northeurope'
-param sqlAdminLogin = 'smileyadmin'
+param sqlAdminLogin = 'smilradmin'
 param sqlAdminPassword = readEnvironmentVariable('SQL_ADMIN_PASSWORD')
 param imageName = readEnvironmentVariable('IMAGE_NAME')

@@ -8,20 +8,20 @@ Instructions for Claude when working on this codebase.
 - BackgroundService for XML sync worker
 
 ## Project Structure
-- `src/SmileyApi.Api/` — API endpoints, middleware, worker, static landing page
-- `src/SmileyApi.Core/` — domain models and interfaces (no EF dependency)
-- `src/SmileyApi.Infrastructure/` — EF Core DbContext, migrations, repositories
+- `src/SmilrApi.Api/` — API endpoints, middleware, worker, static landing page
+- `src/SmilrApi.Core/` — domain models and interfaces (no EF dependency)
+- `src/SmilrApi.Infrastructure/` — EF Core DbContext, migrations, repositories
 
 ## Common Commands
 ```bash
 # Run the API locally
-dotnet run --project src/SmileyApi.Api
+dotnet run --project src/SmilrApi.Api
 
 # Add a new EF migration
-dotnet ef migrations add <Name> --project src/SmileyApi.Infrastructure --startup-project src/SmileyApi.Api
+dotnet ef migrations add <Name> --project src/SmilrApi.Infrastructure --startup-project src/SmilrApi.Api
 
 # Apply migrations
-dotnet ef database update --project src/SmileyApi.Infrastructure --startup-project src/SmileyApi.Api
+dotnet ef database update --project src/SmilrApi.Infrastructure --startup-project src/SmilrApi.Api
 
 # Run tests
 dotnet test
@@ -29,9 +29,9 @@ dotnet test
 
 ## Key Rules
 - **API keys:** always store as SHA-256 hash — never plaintext, never logged
-- **Worker:** `XmlSyncWorker` is a `BackgroundService` inside `SmileyApi.Api/Workers/`. Do not move it to a separate project yet.
+- **Worker:** `XmlSyncWorker` is a `BackgroundService` inside `SmilrApi.Api/Workers/`. Do not move it to a separate project yet.
 - **XML source URL:** `https://www.foedevarestyrelsen.dk/Media/638212360788086849/Smiley_xml.xml`
-- **DbContext in worker:** always resolve via `IServiceScopeFactory` — never inject `SmileyDbContext` directly into the worker
+- **DbContext in worker:** always resolve via `IServiceScopeFactory` — never inject `SmilrDbContext` directly into the worker
 - **Bulk inserts:** never insert XML sync rows one-by-one with EF. Use raw `MERGE` SQL via `SqlBulkCopy` + temp tables (implemented in `EstablishmentSyncService`). Do NOT use `EFCore.BulkExtensions` — v10 is a .NET 10-only meta-package; no compatible version is referenced.
 - **Natural key:** use `navnelbnr` (Fødevarestyrelsen's ID) for upsert diffing — not CVR, which can be missing
 - **Geo (MVP):** lat/lng stored as `float` columns, Haversine in raw SQL. Do not add `geography` column yet.

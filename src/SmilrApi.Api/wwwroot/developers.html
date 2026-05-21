@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Build with the Smilr API — Danish food inspection data as a clean REST API. No XML parsing required." />
+  <title>Smilr API — Developer Docs</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+</head>
+<body>
+
+<!-- ─── Nav ───────────────────────────────────────────────── -->
+<header class="hero" style="min-height:auto;padding-bottom:0">
+  <nav class="nav">
+    <a href="index.html" class="nav-logo" style="text-decoration:none;color:inherit">Smilr<span class="accent">API</span></a>
+    <div class="nav-links">
+      <a href="index.html#businesses" class="nav-link">For Businesses</a>
+      <a href="developers.html" class="nav-link" style="font-weight:600">Developers</a>
+      <a href="#endpoints" class="nav-link">API Docs</a>
+    </div>
+  </nav>
+  <div class="hero-content" style="padding-bottom:56px">
+    <h1>The Danish food inspection<br><span class="accent">REST API</span></h1>
+    <p class="hero-sub">Official data from Fødevarestyrelsen — without the 32 MB XML file.</p>
+    <div class="cta-pair">
+      <a href="#access" class="btn-primary">Request API Access →</a>
+    </div>
+    <p style="margin-top:16px;font-size:0.9rem;color:rgba(255,255,255,0.55)">
+      Embedding a badge on your site? <a href="index.html" style="color:rgba(255,255,255,0.85);text-decoration:underline">Business widget →</a>
+    </p>
+  </div>
+</header>
+
+<!-- ─── Problem ───────────────────────────────────────────── -->
+<section class="problem" id="developer">
+  <div class="container">
+    <p class="problem-text">
+      Fødevarestyrelsen publishes food inspection results for every restaurant, café, and
+      food producer in Denmark — as a raw 32 MB XML file. <strong>There is no API.</strong>
+    </p>
+    <p class="problem-text">
+      Every developer who needs this data today must download, parse, and maintain their
+      own pipeline. We did that so you don't have to.
+    </p>
+  </div>
+</section>
+
+<!-- ─── Features ──────────────────────────────────────────── -->
+<section class="features">
+  <div class="container">
+    <h2 class="section-title">Everything you need, nothing you don't</h2>
+    <p class="section-sub">Six endpoints covering the full range of what developers actually use.</p>
+    <div class="feature-grid">
+
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F50D;</div>
+        <h3>Lookup by CVR, name, or GPS</h3>
+        <p>Find any establishment by company number, search by name or address, or pass lat/lng coordinates for geo-based results.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F4DC;</div>
+        <h3>Full inspection history</h3>
+        <p>Every Smilr score ever recorded — not just the current one. Track trends over months and years.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">&#x26A1;</div>
+        <h3>Daily fresh data</h3>
+        <p>Synced automatically every day from Fødevarestyrelsen's official source. Always current, zero maintenance on your side.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F4EC;</div>
+        <h3>Webhooks on score changes</h3>
+        <p>Subscribe to a CVR number and receive a POST to your URL the moment a Smilr score changes.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F5FA;</div>
+        <h3>Postal-code area scores</h3>
+        <p>Aggregate Smilr scores by postal code. Ideal for area-level food safety analysis and maps.</p>
+        <span class="badge-soon">Coming soon</span>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F4CA;</div>
+        <h3>Reliability trend scoring</h3>
+        <p>A composite score per establishment based on historical trajectory — not just the most recent result.</p>
+        <span class="badge-soon">Coming soon</span>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ─── Endpoints Reference ───────────────────────────────── -->
+<section class="endpoints" id="endpoints">
+  <div class="container">
+    <h2 class="section-title">API Reference</h2>
+    <p class="section-sub">Developer endpoints require an <code>X-Api-Key</code> header. The widget endpoint is open.</p>
+    <div class="table-wrap">
+      <table class="endpoint-table">
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Path</th>
+            <th>Auth</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/widget/score</code></td>
+            <td><span class="badge-open">None</span></td>
+            <td>Widget data by CVR — powers the embed badge (<code>?cvr=</code>)</td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/v1/establishments/{cvr}</code></td>
+            <td><span class="badge-auth">Required</span></td>
+            <td>Establishment details + latest inspection</td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/v1/establishments/search</code></td>
+            <td><span class="badge-auth">Required</span></td>
+            <td>Search by name or address (<code>?q=</code>)</td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/v1/establishments/nearby</code></td>
+            <td><span class="badge-auth">Required</span></td>
+            <td>Geo search — pass <code>?lat=</code> <code>&amp;lng=</code> <code>&amp;radius=</code> (km)</td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/v1/establishments/{cvr}/history</code></td>
+            <td><span class="badge-auth">Required</span></td>
+            <td>Full inspection history for one establishment</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:16px;text-align:center">
+      <a href="/scalar/v1" class="nav-link" style="font-size:0.9rem">Interactive API docs (Scalar) →</a>
+    </p>
+  </div>
+</section>
+
+<!-- ─── Example Responses ─────────────────────────────────── -->
+<section class="examples">
+  <div class="container">
+    <h2 class="section-title">Example responses</h2>
+    <p class="section-sub">Real JSON shapes — no wrappers, no surprises.</p>
+
+    <div class="example-block">
+      <div class="example-label">
+        <span class="method get">GET</span>
+        <code>/widget/score?cvr=12345678</code>
+      </div>
+      <pre><code class="language-json">{
+  "cvr": "12345678",
+  "score": 1,
+  "reportUrl": "https://www.findSmilr.dk/...",
+  "lastInspectedOn": "2024-11-03",
+  "tier": "open"
+}</code></pre>
+    </div>
+
+    <div class="example-block">
+      <div class="example-label">
+        <span class="method get">GET</span>
+        <code>/v1/establishments/12345678</code>
+      </div>
+      <pre><code class="language-json">{
+  "navnelbnr": 1001234,
+  "cvrNumber": "12345678",
+  "name": "Café Nørrebro",
+  "address": "Nørrebrogade 45",
+  "postalCode": "2200",
+  "city": "København N",
+  "industryCode": "56101",
+  "industryName": "Restauranter",
+  "geoLat": 55.6867,
+  "geoLng": 12.5545,
+  "reportUrl": "https://www.findSmilr.dk/...",
+  "latestScore": 1,
+  "latestInspection": {
+    "score": 1,
+    "inspectedOn": "2024-11-03"
+  }
+}</code></pre>
+    </div>
+
+  </div>
+</section>
+
+<!-- ─── Pricing ────────────────────────────────────────────── -->
+<section class="pricing">
+  <div class="container">
+    <h2 class="section-title">Developer API pricing</h2>
+    <p class="section-sub">Paid plans coming soon. Request early access to lock in the free tier.</p>
+    <div class="pricing-grid">
+
+      <div class="pricing-card">
+        <div class="pricing-tier">Free</div>
+        <div class="pricing-limit">100 <span>requests / day</span></div>
+        <ul class="pricing-features">
+          <li>All 4 live endpoints</li>
+          <li>Full inspection history</li>
+          <li>No credit card required</li>
+        </ul>
+        <a href="#access" class="btn-secondary">Request Access</a>
+      </div>
+
+      <div class="pricing-card pricing-card--pro">
+        <div class="pricing-badge">Coming Soon</div>
+        <div class="pricing-tier">Pro</div>
+        <div class="pricing-limit">10,000 <span>requests / day</span></div>
+        <ul class="pricing-features">
+          <li>Everything in Free</li>
+          <li>Webhook subscriptions</li>
+          <li>Priority support</li>
+        </ul>
+        <span class="btn-disabled">Notify Me</span>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ─── Request Access ─────────────────────────────────────── -->
+<section class="access" id="access">
+  <div class="container">
+    <h2 class="section-title">Request API Access</h2>
+    <p class="section-sub">
+      Free tier keys are provisioned manually within 24 hours.
+      We'll email you your key.
+    </p>
+    <form class="access-form" id="accessForm">
+      <div class="form-row">
+        <label for="name">Name <span class="required">*</span></label>
+        <input type="text" id="name" name="name" required placeholder="Your name" />
+      </div>
+      <div class="form-row">
+        <label for="email">Email <span class="required">*</span></label>
+        <input type="email" id="email" name="email" required placeholder="you@company.com" />
+      </div>
+      <div class="form-row">
+        <label for="company">Company</label>
+        <input type="text" id="company" name="company" placeholder="Company or project name" />
+      </div>
+      <div class="form-row">
+        <label for="useCase">Use Case <span class="required">*</span></label>
+        <textarea id="useCase" name="useCase" required rows="4"
+          placeholder="Describe what you're building..."></textarea>
+      </div>
+      <div class="form-status" id="formStatus" aria-live="polite"></div>
+      <button type="submit" class="btn-primary" id="submitBtn">Send Request</button>
+    </form>
+  </div>
+</section>
+
+<!-- ─── Footer ────────────────────────────────────────────── -->
+<footer class="footer">
+  <div class="container">
+    <p>Data provided by <a href="https://www.foedevarestyrelsen.dk" target="_blank" rel="noopener">Fødevarestyrelsen</a>
+      under Danish open data licence.</p>
+    <p>Questions? <a href="mailto:yourSmilr@gmail.com">yourSmilr@gmail.com</a></p>
+  </div>
+</footer>
+
+<script>
+document.getElementById('accessForm').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  const btn    = document.getElementById('submitBtn');
+  const status = document.getElementById('formStatus');
+  btn.disabled     = true;
+  btn.textContent  = 'Sending...';
+  status.textContent = '';
+  status.className   = 'form-status';
+
+  try {
+    const res = await fetch('/v1/leads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name:    document.getElementById('name').value,
+        email:   document.getElementById('email').value,
+        company: document.getElementById('company').value,
+        useCase: document.getElementById('useCase').value
+      })
+    });
+    if (res.ok) {
+      status.textContent = "Request received. We'll email you within 24 hours.";
+      status.classList.add('form-status--success');
+      this.reset();
+    } else {
+      status.textContent = 'Something went wrong. Email us directly at yourSmilr@gmail.com.';
+      status.classList.add('form-status--error');
+    }
+  } catch {
+    status.textContent = 'Network error. Email us directly at yourSmilr@gmail.com.';
+    status.classList.add('form-status--error');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Send Request';
+  }
+});
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+</body>
+</html>
