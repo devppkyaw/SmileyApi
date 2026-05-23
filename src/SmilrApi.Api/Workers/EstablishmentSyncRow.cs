@@ -12,5 +12,9 @@ public record EstablishmentSyncRow(
     double? GeoLat,
     double? GeoLng,
     string? ReportUrl,
+    string? VirksomhedsType,
+    string? Pixibranche,
+    DateOnly? LatestScoreDate,
+    string? PNumber,
     List<(int Score, DateOnly Date)> Inspections
 );

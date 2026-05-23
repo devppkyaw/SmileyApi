@@ -41,17 +41,13 @@ public static class WidgetEndpoints
                 .Select(e => new
                 {
                     e.Navnelbnr,
+                    e.CvrNumber,
+                    e.Name,
                     e.LatestScore,
+                    e.LatestScoreDate,
                     e.ReportUrl,
-                    LastInspectedOn = e.Inspections
-                        .OrderByDescending(i => i.InspectedOn)
-                        .Select(i => (DateOnly?)i.InspectedOn)
-                        .FirstOrDefault()
-                    // History = e.Inspections
-                    //     .OrderByDescending(i => i.InspectedOn)
-                    //     .Take(5)
-                    //     .Select(i => new { score = i.SmileyScore, date = i.InspectedOn })
-                    //     .ToList()
+                    e.VirksomhedsType,
+                    e.Pixibranche
                 })
                 .FirstOrDefaultAsync();
 
@@ -62,11 +58,14 @@ public static class WidgetEndpoints
 
             return Results.Json(new
             {
-                navnelbnr       = est.Navnelbnr,
-                score           = est.LatestScore,
-                reportUrl       = est.ReportUrl,
-                lastInspectedOn = est.LastInspectedOn,
-                // history      = est.History,
+                navnelbnr   = est.Navnelbnr,
+                cvr         = est.CvrNumber,
+                name        = est.Name,
+                score       = est.LatestScore,
+                scoreDate   = est.LatestScoreDate,
+                reportUrl   = est.ReportUrl,
+                displayMode = est.VirksomhedsType == "Detail" ? "smiley" : "document",
+                pixibranche = est.Pixibranche,
                 tier
             });
         })

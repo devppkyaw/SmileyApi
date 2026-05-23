@@ -20,12 +20,21 @@
   fetch(origin + '/widget/score?navnelbnr=' + encodeURIComponent(navnelbnr))
     .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
     .then(function (data) {
-      var imgFile = SCORES[data.score] || 'Sm4bg';
-      var imgSrc  = origin + '/Smiley_figurer/150/' + imgFile + '.jpg';
+      var imgSrc, altText;
+      if (!data.score) {
+        imgSrc  = origin + '/Smiley_figurer/150/kontrolpaaVej.png';
+        altText = 'Kontrol på vej';
+      } else if (data.displayMode === 'document') {
+        imgSrc  = origin + '/Smiley_figurer/150/engroIcon.png';
+        altText = 'Engros kontrol';
+      } else {
+        imgSrc  = origin + '/Smiley_figurer/150/' + (SCORES[data.score] || 'Sm4bg') + '.jpg';
+        altText = 'Smilr';
+      }
 
       var dateStr = '';
-      if (data.lastInspectedOn) {
-        var parts = String(data.lastInspectedOn).split('-');
+      if (data.scoreDate && data.score) {
+        var parts = String(data.scoreDate).split('-');
         if (parts.length === 3) dateStr = parts[2] + '.' + parts[1] + '.' + parts[0];
       }
 
@@ -46,7 +55,7 @@
       ].join(';'));
 
       link.innerHTML =
-        '<img src="' + esc(imgSrc) + '" alt="Smilr"' +
+        '<img src="' + esc(imgSrc) + '" alt="' + esc(altText) + '"' +
         ' style="width:64px;height:64px;object-fit:contain;display:block;margin:0 auto;mix-blend-mode:multiply" />' +
         (dateStr
           ? '<div style="font-size:0.7rem;color:#3a3a2a;margin-top:5px;white-space:nowrap">' + dateStr + '</div>'

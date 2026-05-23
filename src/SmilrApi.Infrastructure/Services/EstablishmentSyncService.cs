@@ -21,6 +21,10 @@ public record SyncRow(
     double? GeoLat,
     double? GeoLng,
     string? ReportUrl,
+    string? VirksomhedsType,
+    string? Pixibranche,
+    DateOnly? LatestScoreDate,
+    string? PNumber,
     List<(int Score, DateOnly Date)> Inspections
 );
 
@@ -37,18 +41,22 @@ public class EstablishmentSyncService(SmilrDbContext db, IEmailService emailServ
         await ExecAsync(conn, @"
             DROP TABLE IF EXISTS #estab_staging;
             CREATE TABLE #estab_staging (
-                Navnelbnr   INT            NOT NULL,
-                CvrNumber   NVARCHAR(20)   NULL,
-                Name        NVARCHAR(512)  NOT NULL,
-                Address     NVARCHAR(512)  NULL,
-                PostalCode  NVARCHAR(10)   NULL,
-                City        NVARCHAR(256)  NULL,
-                IndustryCode NVARCHAR(32)  NULL,
-                IndustryName NVARCHAR(256) NULL,
-                GeoLat      FLOAT          NULL,
-                GeoLng      FLOAT          NULL,
-                ReportUrl   NVARCHAR(1024) NULL,
-                LatestScore INT            NULL
+                Navnelbnr       INT            NOT NULL,
+                CvrNumber       NVARCHAR(20)   NULL,
+                Name            NVARCHAR(512)  NOT NULL,
+                Address         NVARCHAR(512)  NULL,
+                PostalCode      NVARCHAR(10)   NULL,
+                City            NVARCHAR(256)  NULL,
+                IndustryCode    NVARCHAR(32)   NULL,
+                IndustryName    NVARCHAR(256)  NULL,
+                GeoLat          FLOAT          NULL,
+                GeoLng          FLOAT          NULL,
+                ReportUrl       NVARCHAR(1024) NULL,
+                LatestScore     INT            NULL,
+                VirksomhedsType NVARCHAR(32)   NULL,
+                Pixibranche     NVARCHAR(256)  NULL,
+                LatestScoreDate DATE           NULL,
+                PNumber         NVARCHAR(20)   NULL
             );", ct);
 
         await BulkCopyAsync(conn, "#estab_staging", BuildEstabDataTable(rows), ct);
@@ -72,29 +80,39 @@ public class EstablishmentSyncService(SmilrDbContext db, IEmailService emailServ
                     ISNULL(T.IndustryName,'')            <> ISNULL(S.IndustryName,'') OR
                     ISNULL(CAST(T.GeoLat AS NVARCHAR(40)),'') <> ISNULL(CAST(S.GeoLat AS NVARCHAR(40)),'') OR
                     ISNULL(CAST(T.GeoLng AS NVARCHAR(40)),'') <> ISNULL(CAST(S.GeoLng AS NVARCHAR(40)),'') OR
-                    ISNULL(T.ReportUrl,   '')            <> ISNULL(S.ReportUrl,   '') OR
-                    ISNULL(T.LatestScore, -1)            <> ISNULL(S.LatestScore, -1)
+                    ISNULL(T.ReportUrl,       '')        <> ISNULL(S.ReportUrl,       '') OR
+                    ISNULL(T.LatestScore,     -1)        <> ISNULL(S.LatestScore,     -1) OR
+                    ISNULL(T.VirksomhedsType, '')        <> ISNULL(S.VirksomhedsType, '') OR
+                    ISNULL(T.Pixibranche,     '')        <> ISNULL(S.Pixibranche,     '') OR
+                    ISNULL(CAST(T.LatestScoreDate AS NVARCHAR(10)),'') <> ISNULL(CAST(S.LatestScoreDate AS NVARCHAR(10)),'') OR
+                    ISNULL(T.PNumber,         '')        <> ISNULL(S.PNumber,         '')
                 ) THEN UPDATE SET
-                    T.CvrNumber    = S.CvrNumber,
-                    T.Name         = S.Name,
-                    T.Address      = S.Address,
-                    T.PostalCode   = S.PostalCode,
-                    T.City         = S.City,
-                    T.IndustryCode = S.IndustryCode,
-                    T.IndustryName = S.IndustryName,
-                    T.GeoLat       = S.GeoLat,
-                    T.GeoLng       = S.GeoLng,
-                    T.ReportUrl    = S.ReportUrl,
-                    T.LatestScore  = S.LatestScore,
-                    T.UpdatedAt    = GETUTCDATE()
+                    T.CvrNumber       = S.CvrNumber,
+                    T.Name            = S.Name,
+                    T.Address         = S.Address,
+                    T.PostalCode      = S.PostalCode,
+                    T.City            = S.City,
+                    T.IndustryCode    = S.IndustryCode,
+                    T.IndustryName    = S.IndustryName,
+                    T.GeoLat          = S.GeoLat,
+                    T.GeoLng          = S.GeoLng,
+                    T.ReportUrl       = S.ReportUrl,
+                    T.LatestScore     = S.LatestScore,
+                    T.VirksomhedsType = S.VirksomhedsType,
+                    T.Pixibranche     = S.Pixibranche,
+                    T.LatestScoreDate = S.LatestScoreDate,
+                    T.PNumber         = S.PNumber,
+                    T.UpdatedAt       = GETUTCDATE()
                 WHEN NOT MATCHED THEN INSERT (
                     Navnelbnr, CvrNumber, Name, Address, PostalCode, City,
                     IndustryCode, IndustryName, GeoLat, GeoLng, ReportUrl,
-                    LatestScore, FirstSeenAt, UpdatedAt
+                    LatestScore, VirksomhedsType, Pixibranche, LatestScoreDate, PNumber,
+                    FirstSeenAt, UpdatedAt
                 ) VALUES (
                     S.Navnelbnr, S.CvrNumber, S.Name, S.Address, S.PostalCode, S.City,
                     S.IndustryCode, S.IndustryName, S.GeoLat, S.GeoLng, S.ReportUrl,
-                    S.LatestScore, GETUTCDATE(), GETUTCDATE()
+                    S.LatestScore, S.VirksomhedsType, S.Pixibranche, S.LatestScoreDate, S.PNumber,
+                    GETUTCDATE(), GETUTCDATE()
                 )
                 OUTPUT $action, INSERTED.Id, DELETED.LatestScore, INSERTED.LatestScore
                 INTO @out (action, EstId, OldScore, NewScore);
@@ -231,6 +249,10 @@ public class EstablishmentSyncService(SmilrDbContext db, IEmailService emailServ
         dt.Columns.Add("GeoLng", typeof(double));
         dt.Columns.Add("ReportUrl", typeof(string));
         dt.Columns.Add("LatestScore", typeof(int));
+        dt.Columns.Add("VirksomhedsType", typeof(string));
+        dt.Columns.Add("Pixibranche", typeof(string));
+        dt.Columns.Add("LatestScoreDate", typeof(DateTime));
+        dt.Columns.Add("PNumber", typeof(string));
 
         foreach (var row in rows)
         {
@@ -246,7 +268,11 @@ public class EstablishmentSyncService(SmilrDbContext db, IEmailService emailServ
                 (object?)row.GeoLat ?? DBNull.Value,
                 (object?)row.GeoLng ?? DBNull.Value,
                 NullOr(row.ReportUrl),
-                row.Inspections.Count > 0 ? (object)row.Inspections[0].Score : DBNull.Value
+                row.Inspections.Count > 0 ? (object)row.Inspections[0].Score : DBNull.Value,
+                NullOr(row.VirksomhedsType),
+                NullOr(row.Pixibranche),
+                row.LatestScoreDate.HasValue ? (object)row.LatestScoreDate.Value.ToDateTime(TimeOnly.MinValue) : DBNull.Value,
+                NullOr(row.PNumber)
             );
         }
 

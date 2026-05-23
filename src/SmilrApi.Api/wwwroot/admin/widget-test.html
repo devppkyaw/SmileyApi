@@ -9,7 +9,6 @@
     .page-header { padding: 48px 0 32px; }
     .page-header h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; }
     .page-header p  { color: var(--text-muted); }
-    .preview-link { font-size: 0.85rem; color: var(--text-muted); margin-top: 8px; display: block; }
     .test-section { margin-bottom: 48px; }
     .test-section h2 { font-size: 1.2rem; font-weight: 600; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
     .badge-row { display: flex; gap: 24px; align-items: flex-end; flex-wrap: wrap; }
@@ -62,6 +61,7 @@
       margin-top: 16px;
       display: none;
     }
+    #widgetOut { margin-top: 24px; }
   </style>
 </head>
 <body>
@@ -76,7 +76,7 @@
 <div class="container" style="padding-top: 0; padding-bottom: 80px;">
   <div class="page-header">
     <h1>Widget Test</h1>
-    <p>Visual preview of all badge variants and live CVR lookup tester.</p>
+    <p>Visual preview of all badge variants and live navnelbnr lookup tester.</p>
   </div>
 
   <!-- Section A: Static score previews -->
@@ -115,17 +115,32 @@
         <div class="badge-label">No date (fallback)</div>
       </div>
 
+      <div class="badge-item">
+        <div class="Smilr-badge">
+          <img src="/Smiley_figurer/150/engroIcon.png" alt="Engros kontrol" />
+          <div class="badge-date">03.11.2024</div>
+        </div>
+        <div class="badge-label">Engros — document icon</div>
+      </div>
+
+      <div class="badge-item">
+        <div class="Smilr-badge">
+          <img src="/Smiley_figurer/150/kontrolpaaVej.png" alt="Kontrol på vej" />
+        </div>
+        <div class="badge-label">Not yet inspected</div>
+      </div>
+
     </div>
   </div>
 
-  <!-- Section B: Live CVR tester -->
+  <!-- Section B: Live navnelbnr tester -->
   <div class="test-section">
-    <h2>Live CVR lookup</h2>
+    <h2>Live navnelbnr lookup</h2>
     <form class="live-form" id="testForm">
-      <input type="text" id="cvrInput" placeholder="e.g. 45517624" autocomplete="off" />
+      <input type="text" id="navnelbnrInput" placeholder="e.g. 552133" autocomplete="off" />
       <button type="submit" class="btn-primary">Test</button>
     </form>
-    <a href="/widget-preview.html" target="_blank" class="preview-link">Edit CVR directly in widget-preview.html to see the real badge →</a>
+    <div id="widgetOut"></div>
     <pre id="jsonOut"></pre>
   </div>
 </div>
@@ -133,21 +148,62 @@
 <script>
 document.getElementById('testForm').addEventListener('submit', async function (e) {
   e.preventDefault();
-  var cvr     = document.getElementById('cvrInput').value.trim();
-  var jsonOut = document.getElementById('jsonOut');
-  if (!cvr) return;
+  var navnelbnr = document.getElementById('navnelbnrInput').value.trim();
+  var jsonOut   = document.getElementById('jsonOut');
+  var widgetOut = document.getElementById('widgetOut');
+  if (!navnelbnr) return;
 
   jsonOut.style.display = 'none';
+  widgetOut.innerHTML = '';
+
   try {
-    var res  = await fetch('/widget/score?cvr=' + encodeURIComponent(cvr));
+    var res  = await fetch('/widget/score?navnelbnr=' + encodeURIComponent(navnelbnr));
     var data = await res.json();
     jsonOut.textContent = JSON.stringify(data, null, 2);
     jsonOut.style.display = 'block';
+    if (res.ok) renderBadge(data);
   } catch (err) {
     jsonOut.textContent = 'Network error: ' + err.message;
     jsonOut.style.display = 'block';
   }
 });
+
+function renderBadge(data) {
+  var SCORES = { 1: 'Sm1bg', 2: 'Sm3bg', 3: 'Sm3bg', 4: 'Sm4bg' };
+  var imgSrc, altText;
+  if (!data.score) {
+    imgSrc  = '/Smiley_figurer/150/kontrolpaaVej.png';
+    altText = 'Kontrol på vej';
+  } else if (data.displayMode === 'document') {
+    imgSrc  = '/Smiley_figurer/150/engroIcon.png';
+    altText = 'Engros kontrol';
+  } else {
+    imgSrc  = '/Smiley_figurer/150/' + (SCORES[data.score] || 'Sm4bg') + '.jpg';
+    altText = 'Smilr';
+  }
+
+  var dateStr = '';
+  if (data.scoreDate && data.score) {
+    var p = String(data.scoreDate).split('-');
+    if (p.length === 3) dateStr = p[2] + '.' + p[1] + '.' + p[0];
+  }
+
+  var widgetOut = document.getElementById('widgetOut');
+  widgetOut.innerHTML =
+    '<p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:10px">Rendered widget:</p>' +
+    '<a href="' + esc(data.reportUrl || '#') + '" target="_blank" rel="noopener noreferrer" class="Smilr-badge">' +
+    '<img src="' + esc(imgSrc) + '" alt="' + esc(altText) + '" />' +
+    (dateStr ? '<div class="badge-date">' + esc(dateStr) + '</div>' : '') +
+    '</a>';
+}
+
+function esc(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 </script>
 
 </body>

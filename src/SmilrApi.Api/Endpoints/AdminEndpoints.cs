@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using SmilrApi.Api.Workers;
 using SmilrApi.Core.Interfaces;
 using SmilrApi.Infrastructure.Data;
+using SmilrApi.Infrastructure.Services;
 
 namespace SmilrApi.Api.Endpoints;
 
@@ -18,6 +20,41 @@ public static class AdminEndpoints
                 .Select(r => new { r.Id, r.Name, r.Email, r.Company, r.UseCase, r.SubmittedAt })
                 .ToListAsync(ct);
             return Results.Ok(requests);
+        });
+
+        app.MapPost("/admin/sync", async (
+            FodevareXmlParser parser,
+            IServiceScopeFactory scopeFactory,
+            CancellationToken ct) =>
+        {
+            if (!await XmlSyncWorker.Lock.WaitAsync(0, ct))
+                return Results.Json(new { status = "already_running" }, statusCode: 409);
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using var scope = scopeFactory.CreateScope();
+                    var rows = await parser.ParseAsync(CancellationToken.None);
+                    var syncRows = rows.Select(r => new SyncRow(
+                        r.Navnelbnr, r.CvrNumber, r.Name, r.Address, r.PostalCode,
+                        r.City, r.IndustryCode, r.IndustryName, r.GeoLat, r.GeoLng,
+                        r.ReportUrl, r.VirksomhedsType, r.Pixibranche, r.LatestScoreDate, r.PNumber,
+                        r.Inspections)).ToList();
+                    var syncService = scope.ServiceProvider.GetRequiredService<EstablishmentSyncService>();
+                    var scoreChanges = await syncService.SyncAsync(syncRows, CancellationToken.None);
+                    if (scoreChanges.Count > 0)
+                    {
+                        var webhookSvc = scope.ServiceProvider.GetRequiredService<WebhookService>();
+                        await webhookSvc.EnqueueDeliveriesAsync(
+                            scoreChanges.Select(c => new WebhookScoreChange(c.EstablishmentId, c.OldScore, c.NewScore)).ToList(),
+                            CancellationToken.None);
+                    }
+                }
+                finally { XmlSyncWorker.Lock.Release(); }
+            });
+
+            return Results.Json(new { status = "started" }, statusCode: 202);
         });
 
         app.MapPost("/admin/requests/{id}/approve", async (

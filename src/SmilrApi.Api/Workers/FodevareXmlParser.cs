@@ -49,11 +49,13 @@ public class FodevareXmlParser(IHttpClientFactory httpClientFactory, ILogger<Fod
         var dateNames  = new[] { "seneste_kontrol_dato",       "naestseneste_kontrol_dato",
                                  "tredjeseneste_kontrol_dato",  "fjerdeseneste_kontrol_dato" };
 
+        var latestScoreDate = TryParseDate(e.Element(dateNames[0])?.Value ?? "");
+
         var inspections = new List<(int Score, DateOnly Date)>(4);
         for (int i = 0; i < 4; i++)
         {
             var score = TryParseInt(e.Element(scoreNames[i])?.Value);
-            var date  = TryParseDate(e.Element(dateNames[i])?.Value ?? "");
+            var date  = i == 0 ? latestScoreDate : TryParseDate(e.Element(dateNames[i])?.Value ?? "");
             if (score.HasValue && date.HasValue)
                 inspections.Add((score.Value, date.Value));
         }
@@ -70,6 +72,10 @@ public class FodevareXmlParser(IHttpClientFactory httpClientFactory, ILogger<Fod
             TryParseDouble(e.Element("Geo_Lat")?.Value ?? ""),
             TryParseDouble(e.Element("Geo_Lng")?.Value ?? ""),
             NullIfEmpty(e.Element("URL")?.Value),
+            NullIfEmpty(e.Element("virksomhedstype")?.Value),
+            NullIfEmpty(e.Element("Pixibranche")?.Value),
+            latestScoreDate,
+            NullIfEmpty(e.Element("pnr")?.Value),
             inspections);
     }
 

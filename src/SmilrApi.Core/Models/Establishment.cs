@@ -15,6 +15,10 @@ public class Establishment
     public double? GeoLng { get; set; }
     public string? ReportUrl { get; set; }
     public int? LatestScore { get; set; }
+    public string? VirksomhedsType { get; set; }
+    public string? Pixibranche { get; set; }
+    public DateOnly? LatestScoreDate { get; set; }
+    public string? PNumber { get; set; }
     public DateTime FirstSeenAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

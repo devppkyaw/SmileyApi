@@ -10,7 +10,7 @@ public class XmlSyncWorker(
     IWebHostEnvironment env,
     ILogger<XmlSyncWorker> logger) : BackgroundService
 {
-    private static readonly SemaphoreSlim Lock = new(1, 1);
+    internal static readonly SemaphoreSlim Lock = new(1, 1);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -59,7 +59,8 @@ public class XmlSyncWorker(
         var syncRows = rows.Select(r => new SyncRow(
             r.Navnelbnr, r.CvrNumber, r.Name, r.Address, r.PostalCode,
             r.City, r.IndustryCode, r.IndustryName, r.GeoLat, r.GeoLng,
-            r.ReportUrl, r.Inspections)).ToList();
+            r.ReportUrl, r.VirksomhedsType, r.Pixibranche, r.LatestScoreDate, r.PNumber,
+            r.Inspections)).ToList();
 
         var syncService = scope.ServiceProvider.GetRequiredService<EstablishmentSyncService>();
         var scoreChanges = await syncService.SyncAsync(syncRows, ct);
