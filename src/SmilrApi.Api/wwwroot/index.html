@@ -12,11 +12,12 @@
 <!-- ─── Hero ──────────────────────────────────────────────── -->
 <header class="hero">
   <nav class="nav">
-    <span class="nav-logo">Smilr<span class="accent">HQ</span></span>
+    <a href="/" class="nav-logo" style="text-decoration:none">Smilr<span class="accent">HQ</span></a>
     <div class="nav-links">
       <a href="#businesses" class="nav-link">For Businesses</a>
       <a href="developers.html" class="nav-link">Developers</a>
       <a href="/scalar/v1" class="nav-link">API Docs</a>
+      <a id="navAuthLink" href="/login.html" class="nav-link">Log in</a>
     </div>
   </nav>
   <div class="hero-content">
@@ -151,5 +152,15 @@
   </div>
 </footer>
 
+<script>
+(async function () {
+  const res = await fetch('/v1/business/me');
+  if (res.ok) {
+    const link = document.getElementById('navAuthLink');
+    link.href = '/dashboard.html';
+    link.textContent = 'Dashboard →';
+  }
+})();
+</script>
 </body>
 </html>

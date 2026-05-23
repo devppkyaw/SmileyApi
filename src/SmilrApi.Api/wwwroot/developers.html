@@ -13,11 +13,12 @@
 <!-- ─── Nav ───────────────────────────────────────────────── -->
 <header class="hero" style="min-height:auto;padding-bottom:0">
   <nav class="nav">
-    <a href="index.html" class="nav-logo" style="text-decoration:none;color:inherit">Smilr<span class="accent">API</span></a>
+    <a href="index.html" class="nav-logo" style="text-decoration:none;color:inherit">Smilr<span class="accent">HQ</span></a>
     <div class="nav-links">
       <a href="index.html#businesses" class="nav-link">For Businesses</a>
       <a href="developers.html" class="nav-link" style="font-weight:600">Developers</a>
       <a href="#endpoints" class="nav-link">API Docs</a>
+      <a id="navAuthLink" href="/login.html" class="nav-link">Log in</a>
     </div>
   </nav>
   <div class="hero-content" style="padding-bottom:56px">
@@ -314,5 +315,15 @@ document.getElementById('accessForm').addEventListener('submit', async function 
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+<script>
+(async function () {
+  const res = await fetch('/v1/business/me');
+  if (res.ok) {
+    const link = document.getElementById('navAuthLink');
+    link.href = '/dashboard.html';
+    link.textContent = 'Dashboard →';
+  }
+})();
+</script>
 </body>
 </html>
