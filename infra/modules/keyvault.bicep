@@ -71,7 +71,7 @@ resource emailOverrideSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if
   }
 }
 
-resource stripeSecretKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource stripeSecretKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(stripeSecretKey)) {
   parent: vault
   name: 'Stripe--SecretKey'
   properties: {
@@ -79,7 +79,7 @@ resource stripeSecretKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = 
   }
 }
 
-resource stripeWebhookSecretSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource stripeWebhookSecretSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(stripeWebhookSecret)) {
   parent: vault
   name: 'Stripe--WebhookSecret'
   properties: {
@@ -87,7 +87,7 @@ resource stripeWebhookSecretSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01
   }
 }
 
-resource stripePriceIdSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource stripePriceIdSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(stripePriceId)) {
   parent: vault
   name: 'Stripe--PriceId'
   properties: {
