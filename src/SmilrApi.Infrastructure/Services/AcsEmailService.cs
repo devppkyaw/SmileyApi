@@ -15,38 +15,52 @@ public class AcsEmailService(IConfiguration config, ILogger<AcsEmailService> log
     private string Sender =>
         config["Acs:SenderAddress"] ?? "donotreply@smilrhq.dk";
 
+    private (string recipient, string banner) ResolveRecipient(string originalTo)
+    {
+        var overrideAddress = config["Email:OverrideAddress"];
+        if (string.IsNullOrWhiteSpace(overrideAddress))
+            return (originalTo, string.Empty);
+        return (overrideAddress, $"[REDIRECT – originally for: {originalTo}]");
+    }
+
     public async Task SendVerificationEmailAsync(string to, string verifyUrl, CancellationToken ct = default)
     {
+        var (recipient, banner) = ResolveRecipient(to);
         var message = new EmailMessage(
             senderAddress: Sender,
-            recipientAddress: to,
+            recipientAddress: recipient,
             content: new EmailContent("Verify your SmilrApi account")
             {
-                Html = $"<p>Click the link below to verify your email and activate your SmilrApi account:</p>" +
+                Html = (banner.Length > 0 ? $"<p><strong>{banner}</strong></p>" : "") +
+                       "<p>Click the link below to verify your email and activate your SmilrApi account:</p>" +
                        $"<p><a href=\"{verifyUrl}\">{verifyUrl}</a></p>" +
                        "<p>This link expires in 24 hours.</p>",
-                PlainText = $"Verify your SmilrApi account:\n{verifyUrl}\n\nThis link expires in 24 hours."
+                PlainText = (banner.Length > 0 ? $"{banner}\n\n" : "") +
+                            $"Verify your SmilrApi account:\n{verifyUrl}\n\nThis link expires in 24 hours."
             });
 
         var op = await Client.SendAsync(WaitUntil.Started, message, ct);
-        logger.LogInformation("Verification email queued to {To}, operationId={Id}", to, op.Id);
+        logger.LogInformation("Verification email queued to {To}, operationId={Id}", recipient, op.Id);
     }
 
     public async Task SendMagicLinkEmailAsync(string to, string loginUrl, CancellationToken ct = default)
     {
+        var (recipient, banner) = ResolveRecipient(to);
         var message = new EmailMessage(
             senderAddress: Sender,
-            recipientAddress: to,
+            recipientAddress: recipient,
             content: new EmailContent("Your SmilrApi login link")
             {
-                Html = $"<p>Click the link below to sign in to your SmilrApi dashboard:</p>" +
+                Html = (banner.Length > 0 ? $"<p><strong>{banner}</strong></p>" : "") +
+                       "<p>Click the link below to sign in to your SmilrApi dashboard:</p>" +
                        $"<p><a href=\"{loginUrl}\">{loginUrl}</a></p>" +
                        "<p>This link expires in 15 minutes. If you did not request this, you can ignore this email.</p>",
-                PlainText = $"Sign in to SmilrApi:\n{loginUrl}\n\nExpires in 15 minutes. Ignore if you did not request this."
+                PlainText = (banner.Length > 0 ? $"{banner}\n\n" : "") +
+                            $"Sign in to SmilrApi:\n{loginUrl}\n\nExpires in 15 minutes. Ignore if you did not request this."
             });
 
         var op = await Client.SendAsync(WaitUntil.Started, message, ct);
-        logger.LogInformation("Magic link email queued to {To}, operationId={Id}", to, op.Id);
+        logger.LogInformation("Magic link email queued to {To}, operationId={Id}", recipient, op.Id);
     }
 
     public async Task SendScoreAlertEmailAsync(string to, string establishmentName, int newScore, CancellationToken ct = default)
@@ -60,18 +74,21 @@ public class AcsEmailService(IConfiguration config, ILogger<AcsEmailService> log
             _ => $"Score {newScore}"
         };
 
+        var (recipient, banner) = ResolveRecipient(to);
         var message = new EmailMessage(
             senderAddress: Sender,
-            recipientAddress: to,
+            recipientAddress: recipient,
             content: new EmailContent($"Smilr score update: {establishmentName}")
             {
-                Html = $"<p>The Smilr score for <strong>{establishmentName}</strong> has changed.</p>" +
+                Html = (banner.Length > 0 ? $"<p><strong>{banner}</strong></p>" : "") +
+                       $"<p>The Smilr score for <strong>{establishmentName}</strong> has changed.</p>" +
                        $"<p>New score: <strong>{scoreLabel}</strong></p>" +
                        "<p>Log in to your <a href=\"https://smilrhq.dk/dashboard.html\">Smilr dashboard</a> for details.</p>",
-                PlainText = $"Smilr score update for {establishmentName}\nNew score: {scoreLabel}"
+                PlainText = (banner.Length > 0 ? $"{banner}\n\n" : "") +
+                            $"Smilr score update for {establishmentName}\nNew score: {scoreLabel}"
             });
 
         var op = await Client.SendAsync(WaitUntil.Started, message, ct);
-        logger.LogInformation("Score alert email queued to {To} for '{Name}', operationId={Id}", to, establishmentName, op.Id);
+        logger.LogInformation("Score alert email queued to {To} for '{Name}', operationId={Id}", recipient, establishmentName, op.Id);
     }
 }

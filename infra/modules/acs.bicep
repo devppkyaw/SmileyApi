@@ -7,7 +7,9 @@ resource communication 'Microsoft.Communication/communicationServices@2023-04-01
   location: 'global'
   properties: {
     dataLocation: 'Europe'
-    linkedDomains: [domain.id]
+    // TODO: once smilrhq.dk DNS records are verified in Azure Portal,
+    // change to: linkedDomains: [customDomain.id]
+    linkedDomains: [azureManagedDomain.id]
   }
 }
 
@@ -19,10 +21,7 @@ resource emailService 'Microsoft.Communication/emailServices@2023-04-01' = {
   }
 }
 
-// AzureManagedDomain gives an out-of-the-box sender domain (no custom DNS required).
-// To use a custom domain (e.g. noreply@smilrhq.dk), replace this with a custom domain resource
-// and complete DNS verification in the Azure portal before deploying.
-resource domain 'Microsoft.Communication/emailServices/domains@2023-04-01' = {
+resource azureManagedDomain 'Microsoft.Communication/emailServices/domains@2023-04-01' = {
   parent: emailService
   name: 'AzureManagedDomain'
   location: 'global'
@@ -31,8 +30,23 @@ resource domain 'Microsoft.Communication/emailServices/domains@2023-04-01' = {
   }
 }
 
+// Custom domain — created here so DNS records become visible in the Azure Portal.
+// After adding DNS records at your registrar and verifying in the portal:
+//   1. Change linkedDomains above to: [customDomain.id]
+//   2. Change senderAddress output below to: 'donotreply@smilrhq.dk'
+//   3. Redeploy (push to main).
+resource customDomain 'Microsoft.Communication/emailServices/domains@2023-04-01' = {
+  parent: emailService
+  name: 'smilrhq.dk'
+  location: 'global'
+  properties: {
+    domainManagement: 'CustomerManaged'
+  }
+}
+
 @description('ACS connection string — store in Key Vault, never in plain config.')
 @secure()
 output connectionString string = communication.listKeys().primaryConnectionString
 
-output senderAddress string = 'donotreply@${domain.properties.mailFromSenderDomain}'
+// TODO: once smilrhq.dk is verified, change to: 'donotreply@smilrhq.dk'
+output senderAddress string = 'donotreply@${azureManagedDomain.properties.mailFromSenderDomain}'

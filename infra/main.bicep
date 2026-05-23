@@ -17,6 +17,9 @@ param sqlAdminPassword string
 @description('Full ghcr.io image reference, e.g. ghcr.io/owner/smilr-api:sha-abc1234')
 param imageName string
 
+@description('When set, all outgoing emails are redirected to this address instead of the real recipient.')
+param emailOverrideAddress string = ''
+
 
 // A short deterministic suffix scoped to this resource group avoids global naming conflicts
 // for App Service (*.azurewebsites.net) and Key Vault (globally unique).
@@ -63,6 +66,7 @@ module keyvault 'modules/keyvault.bicep' = {
     sqlAdminPassword: sqlAdminPassword
     acsConnectionString: acs.outputs.connectionString
     acsSenderAddress: acs.outputs.senderAddress
+    emailOverrideAddress: emailOverrideAddress
   }
 }
 

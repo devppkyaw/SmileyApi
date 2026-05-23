@@ -11,6 +11,7 @@ param sqlAdminPassword string
 param acsConnectionString string
 
 param acsSenderAddress string
+param emailOverrideAddress string = ''
 
 resource vault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: name
@@ -51,6 +52,14 @@ resource acsSenderAddressSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' =
   name: 'Acs--SenderAddress'
   properties: {
     value: acsSenderAddress
+  }
+}
+
+resource emailOverrideSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: vault
+  name: 'Email--OverrideAddress'
+  properties: {
+    value: emailOverrideAddress
   }
 }
 
