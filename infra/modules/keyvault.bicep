@@ -13,6 +13,14 @@ param acsConnectionString string
 param acsSenderAddress string
 param emailOverrideAddress string = ''
 
+@secure()
+param stripeSecretKey string = ''
+
+@secure()
+param stripeWebhookSecret string = ''
+
+param stripePriceId string = ''
+
 resource vault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: name
   location: location
@@ -55,11 +63,35 @@ resource acsSenderAddressSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' =
   }
 }
 
-resource emailOverrideSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource emailOverrideSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(emailOverrideAddress)) {
   parent: vault
   name: 'Email--OverrideAddress'
   properties: {
     value: emailOverrideAddress
+  }
+}
+
+resource stripeSecretKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: vault
+  name: 'Stripe--SecretKey'
+  properties: {
+    value: stripeSecretKey
+  }
+}
+
+resource stripeWebhookSecretSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: vault
+  name: 'Stripe--WebhookSecret'
+  properties: {
+    value: stripeWebhookSecret
+  }
+}
+
+resource stripePriceIdSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: vault
+  name: 'Stripe--PriceId'
+  properties: {
+    value: stripePriceId
   }
 }
 

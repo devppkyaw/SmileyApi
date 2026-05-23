@@ -20,6 +20,17 @@ param imageName string
 @description('When set, all outgoing emails are redirected to this address instead of the real recipient.')
 param emailOverrideAddress string = ''
 
+@secure()
+@description('Stripe secret key (sk_test_... or sk_live_...).')
+param stripeSecretKey string = ''
+
+@secure()
+@description('Stripe webhook signing secret (whsec_...).')
+param stripeWebhookSecret string = ''
+
+@description('Stripe Price ID for the Pro subscription (price_...).')
+param stripePriceId string = ''
+
 
 // A short deterministic suffix scoped to this resource group avoids global naming conflicts
 // for App Service (*.azurewebsites.net) and Key Vault (globally unique).
@@ -67,6 +78,9 @@ module keyvault 'modules/keyvault.bicep' = {
     acsConnectionString: acs.outputs.connectionString
     acsSenderAddress: acs.outputs.senderAddress
     emailOverrideAddress: emailOverrideAddress
+    stripeSecretKey: stripeSecretKey
+    stripeWebhookSecret: stripeWebhookSecret
+    stripePriceId: stripePriceId
   }
 }
 
