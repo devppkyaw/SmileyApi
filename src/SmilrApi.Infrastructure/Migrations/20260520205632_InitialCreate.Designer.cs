@@ -11,7 +11,7 @@ using SmilrApi.Infrastructure.Data;
 
 namespace SmilrApi.Infrastructure.Migrations
 {
-    [DbContext(typeof(SmileyDbContext))]
+    [DbContext(typeof(SmilrDbContext))]
     [Migration("20260520205632_InitialCreate")]
     partial class InitialCreate
     {

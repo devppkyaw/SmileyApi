@@ -8,7 +8,7 @@ using System.Text.Json;
 
 namespace SmilrApi.Infrastructure.Jobs;
 
-public class WebhookDeliveryJob(SmileyDbContext db, IHttpClientFactory httpFactory, ILogger<WebhookDeliveryJob> logger)
+public class WebhookDeliveryJob(SmilrDbContext db, IHttpClientFactory httpFactory, ILogger<WebhookDeliveryJob> logger)
 {
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -26,7 +26,7 @@ public class WebhookDeliveryJob(SmileyDbContext db, IHttpClientFactory httpFacto
 
         var payload = new
         {
-            @event = "smiley_score_changed",
+            @event = "smilr_score_changed",
             occurredAt = DateTime.UtcNow,
             establishment = new
             {
@@ -47,8 +47,8 @@ public class WebhookDeliveryJob(SmileyDbContext db, IHttpClientFactory httpFacto
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         };
-        request.Headers.Add("X-Smiley-Signature", $"sha256={signature}");
-        request.Headers.Add("X-Smiley-Event", "smiley_score_changed");
+        request.Headers.Add("X-Smilr-Signature", $"sha256={signature}");
+        request.Headers.Add("X-Smilr-Event", "smilr_score_changed");
 
         var response = await client.SendAsync(request);
 

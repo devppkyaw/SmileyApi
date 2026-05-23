@@ -10,7 +10,7 @@ namespace SmilrApi.Infrastructure.Services;
 
 public record WebhookScoreChange(int EstablishmentId, int OldScore, int NewScore);
 
-public class WebhookService(SmileyDbContext db, IBackgroundJobClient jobs, ILogger<WebhookService> logger)
+public class WebhookService(SmilrDbContext db, IBackgroundJobClient jobs, ILogger<WebhookService> logger)
 {
     public async Task<(WebhookSubscription subscription, string secret)> SubscribeAsync(
         int apiKeyId, int establishmentId, string callbackUrl, CancellationToken ct)

@@ -110,7 +110,7 @@ public static class BusinessEndpoints
             AddLocationRequest req,
             HttpContext ctx,
             IBusinessService svc,
-            SmileyDbContext db,
+            SmilrDbContext db,
             CancellationToken ct) =>
         {
             var business = await GetSessionBusinessAsync(ctx, svc, ct);
@@ -140,7 +140,7 @@ public static class BusinessEndpoints
             AddByCvrRequest req,
             HttpContext ctx,
             IBusinessService svc,
-            SmileyDbContext db,
+            SmilrDbContext db,
             CancellationToken ct) =>
         {
             var business = await GetSessionBusinessAsync(ctx, svc, ct);
@@ -184,7 +184,7 @@ public static class BusinessEndpoints
             int navnelbnr,
             HttpContext ctx,
             IBusinessService svc,
-            SmileyDbContext db,
+            SmilrDbContext db,
             CancellationToken ct) =>
         {
             var business = await GetSessionBusinessAsync(ctx, svc, ct);
@@ -204,7 +204,7 @@ public static class BusinessEndpoints
         app.MapGet("/v1/business/locations", async (
             HttpContext ctx,
             IBusinessService svc,
-            SmileyDbContext db,
+            SmilrDbContext db,
             CancellationToken ct) =>
         {
             var business = await GetSessionBusinessAsync(ctx, svc, ct);

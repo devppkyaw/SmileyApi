@@ -24,7 +24,7 @@ var kvUri = builder.Configuration["AZURE_KEY_VAULT_URI"];
 if (!string.IsNullOrEmpty(kvUri))
     builder.Configuration.AddAzureKeyVault(new Uri(kvUri), new DefaultAzureCredential());
 
-builder.Services.AddDbContext<SmileyDbContext>(options =>
+builder.Services.AddDbContext<SmilrDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 
 builder.Services.AddScoped<IEstablishmentRepository, EstablishmentRepository>();
@@ -147,7 +147,7 @@ app.UseExceptionHandler(errorApp =>
 if (!app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
-    await scope.ServiceProvider.GetRequiredService<SmileyDbContext>().Database.MigrateAsync();
+    await scope.ServiceProvider.GetRequiredService<SmilrDbContext>().Database.MigrateAsync();
 }
 
 app.UseDefaultFiles();

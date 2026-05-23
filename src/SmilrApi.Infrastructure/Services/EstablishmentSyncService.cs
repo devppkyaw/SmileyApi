@@ -24,7 +24,7 @@ public record SyncRow(
     List<(int Score, DateOnly Date)> Inspections
 );
 
-public class EstablishmentSyncService(SmileyDbContext db, IEmailService emailService, ILogger<EstablishmentSyncService> logger)
+public class EstablishmentSyncService(SmilrDbContext db, IEmailService emailService, ILogger<EstablishmentSyncService> logger)
 {
     public async Task<IReadOnlyList<ScoreChange>> SyncAsync(IReadOnlyList<SyncRow> rows, CancellationToken ct)
     {

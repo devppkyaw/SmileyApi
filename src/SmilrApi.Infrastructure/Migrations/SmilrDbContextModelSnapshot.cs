@@ -10,8 +10,8 @@ using SmilrApi.Infrastructure.Data;
 
 namespace SmilrApi.Infrastructure.Migrations
 {
-    [DbContext(typeof(SmileyDbContext))]
-    partial class SmileyDbContextModelSnapshot : ModelSnapshot
+    [DbContext(typeof(SmilrDbContext))]
+    partial class SmilrDbContextModelSnapshot : ModelSnapshot
     {
         protected override void BuildModel(ModelBuilder modelBuilder)
         {

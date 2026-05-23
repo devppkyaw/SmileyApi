@@ -39,7 +39,7 @@ public class XmlSyncWorker(
     private async Task RunSyncAsync(CancellationToken ct)
     {
         using var scope = scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SmileyDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<SmilrDbContext>();
 
         // In non-dev, skip if data is fresh — avoids full XML download + MERGE on every container restart.
         if (!env.IsDevelopment() && await db.Establishments.AnyAsync(ct))

@@ -11,7 +11,7 @@ using SmilrApi.Infrastructure.Data;
 
 namespace SmilrApi.Infrastructure.Migrations
 {
-    [DbContext(typeof(SmileyDbContext))]
+    [DbContext(typeof(SmilrDbContext))]
     [Migration("20260521175041_AddBusinessWebhookSupport")]
     partial class AddBusinessWebhookSupport
     {

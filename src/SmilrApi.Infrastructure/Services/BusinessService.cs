@@ -6,7 +6,7 @@ using SmilrApi.Infrastructure.Data;
 
 namespace SmilrApi.Infrastructure.Services;
 
-public class BusinessService(SmileyDbContext db, IEmailService emailService) : IBusinessService
+public class BusinessService(SmilrDbContext db, IEmailService emailService) : IBusinessService
 {
     public async Task<Business?> RegisterOrResendAsync(
         string email, string companyName, bool marketingConsent, string baseUrl, CancellationToken ct = default)

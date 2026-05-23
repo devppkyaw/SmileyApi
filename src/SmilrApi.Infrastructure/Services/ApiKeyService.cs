@@ -7,7 +7,7 @@ using System.Text;
 
 namespace SmilrApi.Infrastructure.Services;
 
-public class ApiKeyService(SmileyDbContext db) : IApiKeyService
+public class ApiKeyService(SmilrDbContext db) : IApiKeyService
 {
     public async Task<ApiKey?> ValidateAsync(string rawKey, CancellationToken ct = default)
     {

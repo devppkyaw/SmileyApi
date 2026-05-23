@@ -6,7 +6,7 @@ using SmilrApi.Infrastructure.Data;
 
 namespace SmilrApi.Infrastructure.Repositories;
 
-public class EstablishmentRepository(SmileyDbContext db) : IEstablishmentRepository
+public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentRepository
 {
     public async Task<Establishment?> GetByCvrAsync(string cvr, CancellationToken ct = default)
     {

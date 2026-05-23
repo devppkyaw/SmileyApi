@@ -63,12 +63,12 @@ public class AcsEmailService(IConfiguration config, ILogger<AcsEmailService> log
         var message = new EmailMessage(
             senderAddress: Sender,
             recipientAddress: to,
-            content: new EmailContent($"Smiley score update: {establishmentName}")
+            content: new EmailContent($"Smilr score update: {establishmentName}")
             {
-                Html = $"<p>The smiley score for <strong>{establishmentName}</strong> has changed.</p>" +
+                Html = $"<p>The Smilr score for <strong>{establishmentName}</strong> has changed.</p>" +
                        $"<p>New score: <strong>{scoreLabel}</strong></p>" +
-                       "<p>Log in to your <a href=\"https://smilrhq.dk/dashboard.html\">SmilrApi dashboard</a> for details.</p>",
-                PlainText = $"Smiley score update for {establishmentName}\nNew score: {scoreLabel}"
+                       "<p>Log in to your <a href=\"https://smilrhq.dk/dashboard.html\">Smilr dashboard</a> for details.</p>",
+                PlainText = $"Smilr score update for {establishmentName}\nNew score: {scoreLabel}"
             });
 
         var op = await Client.SendAsync(WaitUntil.Started, message, ct);

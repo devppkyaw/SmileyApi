@@ -3,7 +3,7 @@ using SmilrApi.Core.Models;
 
 namespace SmilrApi.Infrastructure.Data;
 
-public class SmileyDbContext(DbContextOptions<SmileyDbContext> options) : DbContext(options)
+public class SmilrDbContext(DbContextOptions<SmilrDbContext> options) : DbContext(options)
 {
     public DbSet<Establishment> Establishments => Set<Establishment>();
     public DbSet<Inspection> Inspections => Set<Inspection>();

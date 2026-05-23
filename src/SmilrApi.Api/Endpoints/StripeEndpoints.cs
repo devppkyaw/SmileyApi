@@ -61,7 +61,7 @@ public static class StripeEndpoints
 
         app.MapPost("/v1/stripe/webhook", async (
             HttpContext ctx,
-            SmileyDbContext db,
+            SmilrDbContext db,
             IConfiguration config,
             ILogger<Program> logger,
             CancellationToken ct) =>

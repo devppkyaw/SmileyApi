@@ -10,7 +10,7 @@ public static class WidgetEndpoints
         app.MapGet("/widget/score", async (
             string? navnelbnr,
             string? businessId,
-            SmileyDbContext db,
+            SmilrDbContext db,
             IConfiguration config) =>
         {
             // Resolve tier from businessId if provided; otherwise anonymous free tier

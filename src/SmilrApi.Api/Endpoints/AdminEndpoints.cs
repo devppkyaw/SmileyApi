@@ -10,7 +10,7 @@ public static class AdminEndpoints
     {
         if (app.Environment.IsProduction()) return;
 
-        app.MapGet("/admin/requests", async (SmileyDbContext db, CancellationToken ct) =>
+        app.MapGet("/admin/requests", async (SmilrDbContext db, CancellationToken ct) =>
         {
             var requests = await db.AccessRequests
                 .Where(r => r.Status == 0)
@@ -21,7 +21,7 @@ public static class AdminEndpoints
         });
 
         app.MapPost("/admin/requests/{id}/approve", async (
-            int id, SmileyDbContext db, IApiKeyService apiKeyService, CancellationToken ct) =>
+            int id, SmilrDbContext db, IApiKeyService apiKeyService, CancellationToken ct) =>
         {
             var request = await db.AccessRequests.FindAsync([id], ct);
             if (request is null)
