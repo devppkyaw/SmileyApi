@@ -18,6 +18,7 @@ public class SmilrDbContext(DbContextOptions<SmilrDbContext> options) : DbContex
         modelBuilder.Entity<Establishment>(e =>
         {
             e.HasIndex(x => x.Navnelbnr).IsUnique();
+            e.HasIndex(x => x.VirksomhedsType);
             e.Property(x => x.Name).HasMaxLength(512);
             e.Property(x => x.CvrNumber).HasMaxLength(20);
             e.Property(x => x.Address).HasMaxLength(512);
@@ -26,6 +27,9 @@ public class SmilrDbContext(DbContextOptions<SmilrDbContext> options) : DbContex
             e.Property(x => x.IndustryCode).HasMaxLength(32);
             e.Property(x => x.IndustryName).HasMaxLength(256);
             e.Property(x => x.ReportUrl).HasMaxLength(1024);
+            e.Property(x => x.VirksomhedsType).HasMaxLength(32);
+            e.Property(x => x.Pixibranche).HasMaxLength(256);
+            e.Property(x => x.PNumber).HasMaxLength(20);
         });
 
         modelBuilder.Entity<Inspection>(e =>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dashboard — Smilr API</title>
+  <title>Dashboard — SmilrHQ</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -26,77 +26,118 @@
   <div class="container">
 
     <div id="authError" style="display:none;text-align:center;padding:40px 0">
-      <p style="color:#e55;margin-bottom:16px">You are not logged in.</p>
+      <p style="color:var(--red);margin-bottom:16px">You are not logged in.</p>
       <a href="/login.html" class="btn-primary">Log in →</a>
     </div>
 
     <div id="dashContent" style="display:none">
 
-      <div id="upgradedBanner" style="display:none;background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:14px 20px;margin-bottom:28px;color:#065f46;font-weight:500">
+      <div id="upgradedBanner" style="display:none;background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:14px 20px;margin-bottom:24px;color:#065f46;font-weight:500">
         You're now on Pro. Welcome aboard!
       </div>
 
-      <!-- Subscription actions -->
-      <div id="freeActions" style="display:none;margin-bottom:32px;padding:20px 24px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)">
-        <strong style="display:block;margin-bottom:6px">Upgrade to Pro</strong>
-        <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:14px">
-          99 kr/month — multiple locations, CVR bulk onboard, score-change email alerts.
-        </p>
+      <div id="freeActions" style="display:none;margin-bottom:24px;padding:16px 20px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)">
+        <strong style="display:block;margin-bottom:4px">Upgrade to Pro</strong>
+        <p style="font-size:0.875rem;color:var(--text-muted);margin-bottom:12px">99 kr/month — unlimited CVRs, add by Navnelbnr, score-change email alerts.</p>
         <button class="btn-primary" onclick="startCheckout()">Upgrade to Pro →</button>
         <span id="checkoutStatus" style="margin-left:12px;font-size:0.85rem;color:var(--text-muted)"></span>
       </div>
 
-      <div id="proActions" style="display:none;margin-bottom:32px">
+      <div id="proActions" style="display:none;margin-bottom:24px">
         <button class="btn-secondary" onclick="openPortal()">Manage subscription</button>
         <span id="portalStatus" style="margin-left:12px;font-size:0.85rem;color:var(--text-muted)"></span>
       </div>
 
-      <!-- Webhook management (Pro only) -->
-      <div id="webhookSection" style="display:none;margin-bottom:36px">
-        <h2 class="section-title" style="font-size:1.2rem;margin-bottom:6px">Webhooks</h2>
-        <p class="section-sub" style="margin-bottom:12px">Get notified at your URL when a score changes.</p>
-        <form id="webhookForm" style="display:grid;grid-template-columns:1fr 2fr auto;gap:10px;max-width:640px;align-items:end">
-          <div>
-            <label style="font-size:0.8rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Establishment ID</label>
-            <input type="number" id="webhookEstId" placeholder="123456" required
-                   style="width:100%;padding:10px 14px;border-radius:6px;border:1.5px solid var(--border);font-size:1rem" />
-          </div>
-          <div>
-            <label style="font-size:0.8rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Callback URL (HTTPS)</label>
-            <input type="url" id="webhookUrl" placeholder="https://yoursite.com/webhook" required
-                   style="width:100%;padding:10px 14px;border-radius:6px;border:1.5px solid var(--border);font-size:1rem" />
-          </div>
-          <button type="submit" class="btn-primary" style="white-space:nowrap">Add webhook</button>
-        </form>
-        <div id="webhookStatus" style="margin-top:10px;font-size:0.9rem"></div>
-        <div id="webhookList" style="margin-top:20px"></div>
+      <div class="dash-tabs">
+        <button class="dash-tab active" data-tab="locations">Locations</button>
+        <button class="dash-tab" data-tab="webhooks">Webhooks</button>
       </div>
 
-      <!-- CVR bulk onboard (Pro only) -->
-      <div id="cvrSection" style="display:none;margin-bottom:32px">
-        <h2 class="section-title" style="font-size:1.2rem;margin-bottom:6px">Add all locations by CVR</h2>
-        <p class="section-sub" style="margin-bottom:12px">Enter a CVR number to auto-add every associated location at once.</p>
-        <form id="cvrForm" style="display:flex;gap:10px;max-width:420px">
-          <input type="text" id="cvrInput" placeholder="CVR number" required
-                 style="flex:1;padding:10px 14px;border-radius:6px;border:1.5px solid var(--border);font-size:1rem" />
-          <button type="submit" class="btn-primary" style="white-space:nowrap">Add by CVR</button>
-        </form>
-        <div id="cvrStatus" style="margin-top:10px;font-size:0.9rem"></div>
+      <!-- ── Locations tab ── -->
+      <div id="tab-locations" class="tab-panel">
+
+        <div class="add-forms-row">
+          <div class="add-form-group">
+            <form id="cvrForm" class="add-form-inline">
+              <span class="add-label">Add by CVR</span>
+              <input type="text" id="cvrInput" placeholder="e.g. 12345678" class="input-sm" required />
+              <button type="submit" class="btn-sm-primary">Add by CVR</button>
+            </form>
+            <div id="cvrFreeNote" style="display:none;font-size:0.78rem;color:var(--text-muted);margin-top:4px">Free plan: 1 CVR limit.</div>
+            <div id="cvrStatus" class="status-sm"></div>
+          </div>
+          <div class="add-form-group">
+            <form id="addForm" class="add-form-inline" style="display:none">
+              <span class="add-label">Add by Navnelbnr</span>
+              <input type="number" id="navnelbnrInput" placeholder="e.g. 123456" class="input-sm" required />
+              <button type="submit" class="btn-sm-primary">Add</button>
+            </form>
+            <div id="navFreeHint" class="add-form-inline" style="display:none">
+              <span class="add-label">Add by Navnelbnr <span class="pro-tag">Pro</span></span>
+              <span style="font-size:0.8rem;color:var(--text-muted)">Upgrade to add individual locations.</span>
+            </div>
+            <div id="addStatus" class="status-sm"></div>
+          </div>
+        </div>
+
+        <div class="loc-table-header">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span id="locationCount" style="font-weight:600;font-size:0.95rem">Locations</span>
+            <button onclick="collapseAll()" class="cvr-toggle-btn" title="Collapse all">▶ All</button>
+            <button onclick="expandAll()" class="cvr-toggle-btn" title="Expand all">▼ All</button>
+          </div>
+          <input type="text" id="locSearch" class="search-input" placeholder="Search by name, Navnelbnr or CVR…" oninput="filterTable()" />
+        </div>
+
+        <div class="loc-table-wrap">
+          <table class="loc-table">
+            <thead>
+              <tr>
+                <th>Navnelbnr</th>
+                <th>Name / Address</th>
+                <th>Score<small style="display:block;font-weight:400;text-transform:none;letter-spacing:0;font-size:0.68rem;color:var(--text-muted)">new → old</small></th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="locationList"></tbody>
+          </table>
+        </div>
       </div>
 
-      <h2 class="section-title" style="font-size:1.2rem;margin-bottom:6px">Your locations</h2>
-      <p class="section-sub">Add a location by its Navnelbnr to get an embed code.</p>
+      <!-- ── Webhooks tab ── -->
+      <div id="tab-webhooks" class="tab-panel" style="display:none">
 
-      <form id="addForm" style="display:flex;gap:10px;max-width:420px;margin-bottom:32px">
-        <input type="number" id="navnelbnrInput" placeholder="Navnelbnr" required
-               style="flex:1;padding:10px 14px;border-radius:6px;border:1px solid #ddd;font-size:1rem" />
-        <button type="submit" class="btn-primary" style="white-space:nowrap">Add location</button>
-      </form>
-      <div id="addStatus" style="margin-bottom:16px;font-size:0.9rem"></div>
+        <div id="webhookLocked" style="display:none;padding:24px 0">
+          <div class="locked-card">
+            <div style="font-size:1.4rem;margin-bottom:10px">🔒</div>
+            <strong style="display:block;margin-bottom:6px">Webhooks are a Pro feature</strong>
+            <p style="font-size:0.875rem;color:var(--text-muted);margin-bottom:16px">Upgrade to receive score-change notifications at your URL.</p>
+            <button class="btn-primary" onclick="startCheckout()">Upgrade to Pro →</button>
+          </div>
+        </div>
 
-      <div id="locationList"></div>
+        <div id="webhookSection" style="display:none">
+          <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:16px">Get notified at your URL when a smiley score changes.</p>
+          <form id="webhookForm" style="display:grid;grid-template-columns:1fr 2fr auto;gap:10px;max-width:640px;align-items:end;margin-bottom:10px">
+            <div>
+              <label style="font-size:0.8rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Establishment ID</label>
+              <input type="number" id="webhookEstId" placeholder="123456" required
+                     style="width:100%;padding:10px 14px;border-radius:6px;border:1.5px solid var(--border);font-size:1rem" />
+            </div>
+            <div>
+              <label style="font-size:0.8rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Callback URL (HTTPS)</label>
+              <input type="url" id="webhookUrl" placeholder="https://yoursite.com/webhook" required
+                     style="width:100%;padding:10px 14px;border-radius:6px;border:1.5px solid var(--border);font-size:1rem" />
+            </div>
+            <button type="submit" class="btn-primary" style="white-space:nowrap">Add webhook</button>
+          </form>
+          <div id="webhookStatus" style="margin-bottom:16px;font-size:0.9rem"></div>
+          <div id="webhookList"></div>
+        </div>
+
+      </div>
+
     </div>
-
   </div>
 </section>
 
@@ -106,8 +147,19 @@
   </div>
 </footer>
 
+<script src="/smilr-icons.js"></script>
 <script>
 let currentTier = 'free';
+var locationData = {};
+
+document.querySelectorAll('.dash-tab').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    document.querySelectorAll('.dash-tab').forEach(function (b) { b.classList.remove('active'); });
+    document.querySelectorAll('.tab-panel').forEach(function (p) { p.style.display = 'none'; });
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).style.display = 'block';
+  });
+});
 
 (async function () {
   const res = await fetch('/v1/business/me');
@@ -125,12 +177,16 @@ let currentTier = 'free';
   document.getElementById('dashContent').style.display = 'block';
 
   if (me.tier === 'pro') {
-    document.getElementById('proActions').style.display    = 'block';
+    document.getElementById('proActions').style.display     = 'block';
+    document.getElementById('addForm').style.display        = 'flex';
+    document.getElementById('navFreeHint').style.display    = 'none';
     document.getElementById('webhookSection').style.display = 'block';
-    document.getElementById('cvrSection').style.display    = 'block';
-    loadWebhooks();
   } else {
-    document.getElementById('freeActions').style.display = 'block';
+    document.getElementById('freeActions').style.display    = 'block';
+    document.getElementById('addForm').style.display        = 'none';
+    document.getElementById('navFreeHint').style.display    = 'flex';
+    document.getElementById('cvrFreeNote').style.display    = 'block';
+    document.getElementById('webhookLocked').style.display  = 'block';
   }
 
   if (new URLSearchParams(location.search).get('upgraded') === '1') {
@@ -138,11 +194,16 @@ let currentTier = 'free';
     document.getElementById('upgradedBanner').style.display  = 'block';
     document.getElementById('freeActions').style.display     = 'none';
     document.getElementById('proActions').style.display      = 'block';
+    document.getElementById('addForm').style.display          = 'flex';
+    document.getElementById('navFreeHint').style.display      = 'none';
+    document.getElementById('cvrFreeNote').style.display      = 'none';
+    document.getElementById('webhookLocked').style.display    = 'none';
     document.getElementById('webhookSection').style.display  = 'block';
-    document.getElementById('cvrSection').style.display      = 'block';
     document.getElementById('tierBadge').textContent         = 'Pro account';
-    loadWebhooks();
     history.replaceState(null, '', '/dashboard.html');
+    loadWebhooks();
+  } else if (me.tier === 'pro') {
+    loadWebhooks();
   }
 
   loadLocations();
@@ -151,39 +212,184 @@ let currentTier = 'free';
 async function loadLocations() {
   const res  = await fetch('/v1/business/locations');
   const list = await res.json();
-  const el   = document.getElementById('locationList');
+  const tbody = document.getElementById('locationList');
+
+  document.getElementById('locationCount').textContent = 'Locations (' + list.length + ')';
 
   if (!list.length) {
-    el.innerHTML = '<p style="color:#888">No locations yet. Add one above.</p>';
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:28px;color:var(--text-muted);font-size:0.9rem">No locations yet. Add one above.</td></tr>';
     return;
   }
 
-  el.innerHTML = list.map(function (loc) {
-    var embedCode = '&lt;script src="' + location.origin + '/widget.js" data-navnelbnr="' + loc.navnelbnr + '"&gt;&lt;/script&gt;';
-    return '<div style="border:1px solid #e9c46a;border-radius:8px;padding:16px 20px;margin-bottom:16px">' +
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px">' +
-        '<div style="display:flex;gap:14px;align-items:flex-start">' +
-          '<a href="' + esc(loc.reportUrl || '#') + '" target="_blank" rel="noopener" class="static-badge" style="flex-shrink:0;text-decoration:none">' +
-            '<img src="' + scoreImg(loc.latestScore) + '" alt="Smilr ' + (loc.latestScore || '?') + '" style="width:48px;height:48px;object-fit:contain;display:block;mix-blend-mode:multiply" />' +
-          '</a>' +
-          '<div>' +
-            '<strong>' + esc(loc.name) + '</strong>' +
-            '<div style="font-size:0.85rem;color:#666;margin-top:2px">' + esc(loc.address || '') + ', ' + esc(loc.city || '') + '</div>' +
-            '<div style="font-size:0.85rem;color:#888;margin-top:2px">Score: ' + (loc.latestScore || '—') + ' &nbsp;·&nbsp; Navnelbnr: ' + loc.navnelbnr + '</div>' +
-          '</div>' +
+  locationData = {};
+  list.forEach(function (loc) { locationData[loc.navnelbnr] = loc; });
+
+  var groups = {};
+  var noCvr  = [];
+  list.forEach(function (loc) {
+    var key = loc.cvrNumber || '';
+    if (!key) { noCvr.push(loc); return; }
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(loc);
+  });
+
+  function locRow(loc) {
+    var addr = [loc.address, loc.city].filter(Boolean).join(', ');
+    return '<tr data-name="' + esc(loc.name || '').toLowerCase() + '" data-navnelbnr="' + loc.navnelbnr + '" data-cvr="' + esc(loc.cvrNumber || '') + '">' +
+      '<td class="loc-id">' + loc.navnelbnr + '</td>' +
+      '<td>' +
+        '<strong style="font-size:0.875rem">' + esc(loc.name) + '</strong>' +
+        (addr ? '<span class="loc-addr">' + esc(addr) + '</span>' : '') +
+      '</td>' +
+      '<td>' + scoreStrip(loc.scoreHistory, loc.virksomhedsType) + '</td>' +
+      '<td>' +
+        '<div class="act-row">' +
+          '<button onclick="openEmbedModal(' + loc.navnelbnr + ')" class="act-btn" title="Embed code">⎘ Embed</button>' +
+          '<button onclick="removeLocation(' + loc.navnelbnr + ')" class="act-btn act-btn--danger" title="Remove">✕</button>' +
         '</div>' +
-        '<button onclick="removeLocation(' + loc.navnelbnr + ')" style="background:none;border:1px solid #ccc;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:0.8rem;color:#666;flex-shrink:0">Remove</button>' +
-      '</div>' +
-      '<div style="margin-top:12px">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
-          '<div style="font-size:0.8rem;color:#888">Embed code</div>' +
-          '<button onclick="copyEmbed(' + loc.navnelbnr + ', this)" style="background:none;border:1px solid var(--border);border-radius:4px;padding:3px 10px;cursor:pointer;font-size:0.75rem;color:var(--accent);font-weight:600">Copy</button>' +
-        '</div>' +
-        '<pre style="background:#fef3c7;border:1px solid #e9c46a;border-radius:4px;padding:8px 12px;font-size:0.75rem;white-space:pre-wrap;word-break:break-all;margin:0">' + embedCode + '</pre>' +
-      '</div>' +
-    '</div>';
-  }).join('');
+      '</td>' +
+    '</tr>';
+  }
+
+  function groupHeader(cvr, count, showRemove) {
+    var label  = '<span class="cvr-group-label">CVR <strong>' + esc(cvr || '—') + '</strong> · ' + count + ' location' + (count !== 1 ? 's' : '') + '</span>';
+    var toggle = '<button onclick="toggleGroup(\'' + esc(cvr) + '\')" class="cvr-toggle-btn" title="Collapse/expand">▼</button>';
+    var left   = '<div style="display:flex;align-items:center;gap:6px">' + toggle + label + '</div>';
+    var btn    = showRemove
+      ? '<button onclick="removeByCvr(\'' + esc(cvr) + '\')" class="act-btn act-btn--danger" style="font-size:0.78rem">Remove CVR ✕</button>'
+      : '';
+    return '<tr class="cvr-group-header" data-group-cvr="' + esc(cvr) + '" data-collapsed="false"><td colspan="4"><div class="cvr-group-inner">' + left + btn + '</div></td></tr>';
+  }
+
+  var html = '';
+  Object.keys(groups).sort().forEach(function (cvr) {
+    var locs = groups[cvr];
+    html += groupHeader(cvr, locs.length, true);
+    html += locs.map(locRow).join('');
+  });
+  if (noCvr.length) {
+    html += groupHeader('', noCvr.length, false);
+    html += noCvr.map(locRow).join('');
+  }
+  tbody.innerHTML = html;
+
+  filterTable();
 }
+
+function scoreStrip(history, virksomhedsType) {
+  var cells = '';
+  for (var i = 0; i < 4; i++) {
+    if (history && i < history.length) {
+      var item = history[i];
+      var icon = smilrIcon(virksomhedsType, item.score, 32);
+      var title = icon.alt + (item.date ? ' · ' + formatDate(item.date) : '');
+      cells += '<img src="' + icon.src + '" alt="' + icon.alt + '" class="score-thumb" title="' + title + '" />';
+    } else if (i === 0 && (!history || history.length === 0)) {
+      var icon = smilrIcon(virksomhedsType, null, 32);
+      cells += '<img src="' + icon.src + '" alt="' + icon.alt + '" class="score-thumb" title="' + icon.alt + '" />';
+    } else {
+      cells += '<span class="score-dash">—</span>';
+    }
+  }
+  return '<div class="score-strip">' + cells + '</div>';
+}
+
+function formatDate(iso) {
+  var p = String(iso).split('-');
+  return p[2] + '.' + p[1] + '.' + p[0];
+}
+
+function collapseAll() {
+  document.querySelectorAll('#locationList tr.cvr-group-header').forEach(function (h) {
+    h.dataset.collapsed = 'true';
+    var btn = h.querySelector('.cvr-toggle-btn');
+    if (btn) btn.textContent = '▶';
+  });
+  document.querySelectorAll('#locationList tr[data-name]').forEach(function (r) {
+    r.dataset.groupCollapsed = 'true';
+  });
+  filterTable();
+}
+
+function expandAll() {
+  document.querySelectorAll('#locationList tr.cvr-group-header').forEach(function (h) {
+    h.dataset.collapsed = 'false';
+    var btn = h.querySelector('.cvr-toggle-btn');
+    if (btn) btn.textContent = '▼';
+  });
+  document.querySelectorAll('#locationList tr[data-name]').forEach(function (r) {
+    r.dataset.groupCollapsed = 'false';
+  });
+  filterTable();
+}
+
+function toggleGroup(cvr) {
+  var header;
+  document.querySelectorAll('#locationList tr.cvr-group-header').forEach(function (h) {
+    if (h.dataset.groupCvr === cvr) header = h;
+  });
+  if (!header) return;
+  var collapsing = header.dataset.collapsed !== 'true';
+  header.dataset.collapsed = collapsing ? 'true' : 'false';
+  header.querySelector('.cvr-toggle-btn').textContent = collapsing ? '▶' : '▼';
+  document.querySelectorAll('#locationList tr[data-name]').forEach(function (r) {
+    if (r.dataset.cvr === cvr) r.dataset.groupCollapsed = collapsing ? 'true' : 'false';
+  });
+  filterTable();
+}
+
+function filterTable() {
+  var q    = document.getElementById('locSearch').value.toLowerCase();
+  var rows = document.querySelectorAll('#locationList tr[data-name]');
+  var noRes = document.getElementById('noResultsRow');
+  if (noRes) noRes.remove();
+  var visible = 0;
+  rows.forEach(function (row) {
+    var match = !q ||
+      row.dataset.name.includes(q) ||
+      String(row.dataset.navnelbnr).includes(q) ||
+      (row.dataset.cvr || '').toLowerCase().includes(q);
+    var collapsed = !q && row.dataset.groupCollapsed === 'true';
+    row.style.display = (match && !collapsed) ? '' : 'none';
+    if (match && !collapsed) visible++;
+  });
+  document.querySelectorAll('#locationList .cvr-group-header').forEach(function (header) {
+    var cvr = header.dataset.groupCvr;
+    var groupRows = document.querySelectorAll('#locationList tr[data-cvr="' + cvr + '"]');
+    var anyVisible = Array.from(groupRows).some(function (r) { return r.style.display !== 'none'; });
+    var intentionallyCollapsed = header.dataset.collapsed === 'true';
+    header.style.display = (anyVisible || intentionallyCollapsed) ? '' : 'none';
+  });
+  if (visible === 0 && rows.length > 0) {
+    var tr = document.createElement('tr');
+    tr.id = 'noResultsRow';
+    tr.innerHTML = '<td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.9rem">No locations match your search.</td>';
+    document.getElementById('locationList').appendChild(tr);
+  }
+}
+
+document.getElementById('addForm').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  const navnelbnr = parseInt(document.getElementById('navnelbnrInput').value);
+  const status    = document.getElementById('addStatus');
+  status.style.color = 'inherit';
+  status.textContent = 'Adding…';
+  const res  = await fetch('/v1/business/locations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ navnelbnr })
+  });
+  const data = await res.json();
+  if (res.ok) {
+    status.style.color = 'var(--green)';
+    status.textContent = 'Added.';
+    document.getElementById('navnelbnrInput').value = '';
+    loadLocations();
+  } else {
+    status.style.color = 'var(--red)';
+    status.textContent = data.error?.message || 'Failed.';
+  }
+});
 
 document.getElementById('cvrForm').addEventListener('submit', async function (e) {
   e.preventDefault();
@@ -204,28 +410,11 @@ document.getElementById('cvrForm').addEventListener('submit', async function (e)
     loadLocations();
   } else {
     status.style.color = 'var(--red)';
-    status.textContent = data.error?.message || 'Failed to add locations.';
-  }
-});
-
-document.getElementById('addForm').addEventListener('submit', async function (e) {
-  e.preventDefault();
-  const navnelbnr = parseInt(document.getElementById('navnelbnrInput').value);
-  const status    = document.getElementById('addStatus');
-  const res = await fetch('/v1/business/locations', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ navnelbnr: navnelbnr })
-  });
-  const data = await res.json();
-  if (res.ok) {
-    status.style.color = 'green';
-    status.textContent = 'Location added.';
-    document.getElementById('navnelbnrInput').value = '';
-    loadLocations();
-  } else {
-    status.style.color = 'red';
-    status.textContent = data.error?.message || 'Failed to add location.';
+    if (data.error?.code === 'cvr_limit_reached') {
+      status.innerHTML = data.error.message + ' <a href="#" onclick="startCheckout();return false">Upgrade →</a>';
+    } else {
+      status.textContent = data.error?.message || 'Failed.';
+    }
   }
 });
 
@@ -235,21 +424,31 @@ async function removeLocation(navnelbnr) {
   loadLocations();
 }
 
+async function removeByCvr(cvr) {
+  if (!confirm('Remove all locations for CVR ' + cvr + '?')) return;
+  await fetch('/v1/business/locations/by-cvr', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cvr })
+  });
+  loadLocations();
+}
+
 async function loadWebhooks() {
   const res  = await fetch('/v1/business/webhooks');
   const list = await res.json();
   const el   = document.getElementById('webhookList');
   if (!Array.isArray(list) || !list.length) {
-    el.innerHTML = '<p style="color:#888;font-size:0.9rem">No webhooks yet.</p>';
+    el.innerHTML = '<p style="color:var(--text-muted);font-size:0.9rem">No webhooks yet.</p>';
     return;
   }
   el.innerHTML = list.map(function (w) {
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border:1px solid var(--border);border-radius:6px;margin-bottom:8px;background:var(--surface);gap:12px">' +
       '<div style="font-size:0.875rem">' +
         '<span style="font-family:var(--font-mono);color:var(--text-muted)">#' + w.establishmentId + '</span>' +
-        ' <span style="color:var(--text)">' + esc(w.callbackUrl) + '</span>' +
+        ' <span>' + esc(w.callbackUrl) + '</span>' +
       '</div>' +
-      '<button onclick="deleteWebhook(' + w.id + ')" style="background:none;border:1px solid #ccc;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:0.8rem;color:#666;white-space:nowrap">Remove</button>' +
+      '<button onclick="deleteWebhook(' + w.id + ')" style="background:none;border:1px solid var(--border);border-radius:4px;padding:4px 10px;cursor:pointer;font-size:0.8rem;color:var(--text-muted)">Remove</button>' +
     '</div>';
   }).join('');
 }
@@ -275,7 +474,7 @@ document.getElementById('webhookForm').addEventListener('submit', async function
     loadWebhooks();
   } else {
     status.style.color = 'var(--red)';
-    status.textContent = data.error?.message || 'Failed to add webhook.';
+    status.textContent = data.error?.message || 'Failed.';
   }
 });
 
@@ -287,17 +486,17 @@ async function deleteWebhook(id) {
 
 async function startCheckout() {
   const status = document.getElementById('checkoutStatus');
-  status.textContent = 'Redirecting…';
+  if (status) status.textContent = 'Redirecting…';
   try {
     const res  = await fetch('/v1/business/checkout', { method: 'POST' });
     const data = await res.json();
     if (res.ok) {
       location.href = data.url;
     } else {
-      status.textContent = data.error?.message || 'Failed to start checkout.';
+      if (status) status.textContent = data.error?.message || 'Failed to start checkout.';
     }
   } catch {
-    status.textContent = 'Network error.';
+    if (status) status.textContent = 'Network error.';
   }
 }
 
@@ -322,22 +521,68 @@ async function logout() {
   location.href = '/';
 }
 
-function esc(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function openEmbedModal(navnelbnr) {
+  var loc = locationData[navnelbnr];
+  document.getElementById('modalTitle').textContent = loc.name;
+
+  var icon    = smilrIcon(loc.virksomhedsType, loc.latestScore, 150);
+  var dateStr = loc.latestScoreDate ? formatDate(loc.latestScoreDate) : '';
+  document.getElementById('modalPreview').innerHTML =
+    '<div class="static-badge" style="display:inline-block;text-align:center">' +
+      '<img src="' + icon.src + '" alt="' + icon.alt +
+        '" style="width:64px;height:64px;object-fit:contain;display:block;mix-blend-mode:multiply" />' +
+      (dateStr ? '<div class="static-badge-date">' + dateStr + '</div>' : '') +
+    '</div>';
+
+  document.getElementById('modalCode').textContent =
+    '<script src="' + location.origin + '/widget.js" data-navnelbnr="' + navnelbnr + '"><\/script>';
+  document.getElementById('modalCopyBtn').textContent = 'Copy ⎘';
+  document.getElementById('embedModal').style.display = 'flex';
 }
 
-function scoreImg(score) {
-  var map = { 1: 'Sm1bg', 2: 'Sm3bg', 3: 'Sm3bg', 4: 'Sm4bg' };
-  return '/Smiley_figurer/150/' + (map[score] || 'Sm4bg') + '.jpg';
+function closeEmbedModal() {
+  document.getElementById('embedModal').style.display = 'none';
 }
 
-function copyEmbed(navnelbnr, btn) {
-  var code = '<script src="' + location.origin + '/widget.js" data-navnelbnr="' + navnelbnr + '"><\/script>';
+function copyModalCode() {
+  var code = document.getElementById('modalCode').textContent;
   navigator.clipboard.writeText(code).then(function () {
-    btn.textContent = 'Copied!';
-    setTimeout(function () { btn.textContent = 'Copy'; }, 2000);
+    var btn = document.getElementById('modalCopyBtn');
+    btn.textContent = 'Copied ✓';
+    setTimeout(function () { btn.textContent = 'Copy ⎘'; }, 2000);
   });
 }
+
+function esc(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+document.getElementById('embedModal').addEventListener('click', function (e) {
+  if (e.target === this) closeEmbedModal();
+});
 </script>
+
+<div id="embedModal" class="modal-overlay" style="display:none">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <span id="modalTitle" style="font-weight:600;font-size:1rem"></span>
+      <button class="modal-close" onclick="closeEmbedModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-cols">
+        <div class="modal-col">
+          <div class="modal-col-label">Preview</div>
+          <div id="modalPreview"></div>
+        </div>
+        <div class="modal-col">
+          <div class="modal-col-label">Embed code</div>
+          <pre id="modalCode" class="modal-code"></pre>
+          <button id="modalCopyBtn" onclick="copyModalCode()" class="btn-sm-primary" style="margin-top:10px">Copy ⎘</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

@@ -145,6 +145,7 @@
   </div>
 </div>
 
+<script src="/smilr-icons.js"></script>
 <script>
 document.getElementById('testForm').addEventListener('submit', async function (e) {
   e.preventDefault();
@@ -169,19 +170,7 @@ document.getElementById('testForm').addEventListener('submit', async function (e
 });
 
 function renderBadge(data) {
-  var SCORES = { 1: 'Sm1bg', 2: 'Sm3bg', 3: 'Sm3bg', 4: 'Sm4bg' };
-  var imgSrc, altText;
-  if (!data.score) {
-    imgSrc  = '/Smiley_figurer/150/kontrolpaaVej.png';
-    altText = 'Kontrol på vej';
-  } else if (data.displayMode === 'document') {
-    imgSrc  = '/Smiley_figurer/150/engroIcon.png';
-    altText = 'Engros kontrol';
-  } else {
-    imgSrc  = '/Smiley_figurer/150/' + (SCORES[data.score] || 'Sm4bg') + '.jpg';
-    altText = 'Smilr';
-  }
-
+  var icon    = smilrIcon(data.displayMode, data.score, 150);
   var dateStr = '';
   if (data.scoreDate && data.score) {
     var p = String(data.scoreDate).split('-');
@@ -192,7 +181,7 @@ function renderBadge(data) {
   widgetOut.innerHTML =
     '<p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:10px">Rendered widget:</p>' +
     '<a href="' + esc(data.reportUrl || '#') + '" target="_blank" rel="noopener noreferrer" class="Smilr-badge">' +
-    '<img src="' + esc(imgSrc) + '" alt="' + esc(altText) + '" />' +
+    '<img src="' + esc(icon.src) + '" alt="' + esc(icon.alt) + '" />' +
     (dateStr ? '<div class="badge-date">' + esc(dateStr) + '</div>' : '') +
     '</a>';
 }

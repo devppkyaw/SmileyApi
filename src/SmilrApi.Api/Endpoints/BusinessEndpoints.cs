@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmilrApi.Core.Interfaces;
 using SmilrApi.Core.Models;
@@ -116,6 +117,9 @@ public static class BusinessEndpoints
             var business = await GetSessionBusinessAsync(ctx, svc, ct);
             if (business is null) return Results.Unauthorized();
 
+            if (business.Tier != "pro")
+                return Results.Json(Error("forbidden", "Adding locations by Navnelbnr requires a Pro account."), statusCode: 403);
+
             var exists = await db.Establishments.AnyAsync(e => e.Navnelbnr == req.Navnelbnr, ct);
             if (!exists)
                 return Results.NotFound(Error("not_found", "No establishment found for this Navnelbnr."));
@@ -146,11 +150,26 @@ public static class BusinessEndpoints
             var business = await GetSessionBusinessAsync(ctx, svc, ct);
             if (business is null) return Results.Unauthorized();
 
-            if (business.Tier != "pro")
-                return Results.Json(Error("forbidden", "CVR bulk onboard requires a Pro account."), statusCode: 403);
-
             if (string.IsNullOrWhiteSpace(req.Cvr))
                 return Results.BadRequest(Error("bad_request", "'cvr' is required."));
+
+            if (business.Tier != "pro")
+            {
+                var existingCvrs = await db.BusinessLocations
+                    .Where(b => b.BusinessId == business.Id)
+                    .Join(db.Establishments,
+                        bl => bl.Navnelbnr,
+                        e  => e.Navnelbnr,
+                        (bl, e) => e.CvrNumber)
+                    .Where(cvr => cvr != null)
+                    .Distinct()
+                    .ToListAsync(ct);
+
+                if (existingCvrs.Count >= 1 && !existingCvrs.Contains(req.Cvr.Trim()))
+                    return Results.Json(
+                        Error("cvr_limit_reached", "Free accounts are limited to one CVR. Upgrade to Pro to add more."),
+                        statusCode: 403);
+            }
 
             var navnelbnrs = await db.Establishments
                 .Where(e => e.CvrNumber == req.Cvr.Trim())
@@ -201,6 +220,33 @@ public static class BusinessEndpoints
             return Results.Ok(new { message = "Location removed." });
         });
 
+        app.MapDelete("/v1/business/locations/by-cvr", async (
+            [FromBody] RemoveByCvrRequest req,
+            HttpContext ctx,
+            IBusinessService svc,
+            SmilrDbContext db,
+            CancellationToken ct) =>
+        {
+            var business = await GetSessionBusinessAsync(ctx, svc, ct);
+            if (business is null) return Results.Unauthorized();
+
+            if (string.IsNullOrWhiteSpace(req.Cvr))
+                return Results.BadRequest(Error("bad_request", "'cvr' is required."));
+
+            var navnelbnrs = await db.Establishments
+                .Where(e => e.CvrNumber == req.Cvr.Trim())
+                .Select(e => e.Navnelbnr)
+                .ToListAsync(ct);
+
+            var toRemove = await db.BusinessLocations
+                .Where(b => b.BusinessId == business.Id && navnelbnrs.Contains(b.Navnelbnr))
+                .ToListAsync(ct);
+
+            db.BusinessLocations.RemoveRange(toRemove);
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(new { removed = toRemove.Count });
+        });
+
         app.MapGet("/v1/business/locations", async (
             HttpContext ctx,
             IBusinessService svc,
@@ -217,17 +263,52 @@ public static class BusinessEndpoints
                     e  => e.Navnelbnr,
                     (bn, e) => new
                     {
-                        navnelbnr   = e.Navnelbnr,
-                        name        = e.Name,
-                        address     = e.Address,
-                        city        = e.City,
-                        latestScore = e.LatestScore,
-                        reportUrl   = e.ReportUrl,
-                        addedAt     = bn.AddedAt
+                        estId           = e.Id,
+                        navnelbnr       = e.Navnelbnr,
+                        cvrNumber       = e.CvrNumber,
+                        name            = e.Name,
+                        address         = e.Address,
+                        city            = e.City,
+                        latestScore     = e.LatestScore,
+                        latestScoreDate = e.LatestScoreDate,
+                        reportUrl       = e.ReportUrl,
+                        virksomhedsType = e.VirksomhedsType,
+                        addedAt         = bn.AddedAt
                     })
                 .ToListAsync(ct);
 
-            return Results.Ok(locations);
+            var estIds = locations.Select(l => l.estId).ToList();
+
+            var inspections = await db.Inspections
+                .Where(i => estIds.Contains(i.EstablishmentId))
+                .Select(i => new { i.EstablishmentId, i.InspectedOn, i.SmileyScore })
+                .ToListAsync(ct);
+
+            var historyMap = inspections
+                .GroupBy(i => i.EstablishmentId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderByDescending(i => i.InspectedOn)
+                          .Take(4)
+                          .Select(i => new { date = i.InspectedOn, score = i.SmileyScore })
+                          .ToList());
+
+            var result = locations.Select(l => new
+            {
+                l.navnelbnr,
+                l.cvrNumber,
+                l.name,
+                l.address,
+                l.city,
+                l.latestScore,
+                l.latestScoreDate,
+                l.reportUrl,
+                l.virksomhedsType,
+                l.addedAt,
+                scoreHistory = historyMap.GetValueOrDefault(l.estId) ?? []
+            });
+
+            return Results.Ok(result);
         });
     }
 
@@ -247,3 +328,4 @@ public record RegisterRequest(string Email, string CompanyName, bool TermsAccept
 public record LoginRequest(string Email);
 public record AddLocationRequest(int Navnelbnr);
 public record AddByCvrRequest(string Cvr);
+public record RemoveByCvrRequest(string? Cvr);
