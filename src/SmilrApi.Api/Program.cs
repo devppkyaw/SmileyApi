@@ -1,6 +1,7 @@
 using Azure.Identity;
 using Hangfire;
 using Hangfire.SqlServer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
@@ -16,6 +17,17 @@ using SmilrApi.Infrastructure.Services;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Azure Container Apps terminates TLS at the ingress and forwards requests to the container
+// over HTTP. Without this, ctx.Request.Scheme is "http", producing http:// magic link URLs.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor
+                             | ForwardedHeaders.XForwardedProto
+                             | ForwardedHeaders.XForwardedHost;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // Wire up Key Vault as a config source when running on Azure.
 // DefaultAzureCredential uses the App Service Managed Identity automatically;
@@ -44,7 +56,7 @@ builder.Services.AddSession(options =>
 {
     options.Cookie.HttpOnly  = true;
     options.Cookie.SameSite  = SameSiteMode.Strict;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
     options.IdleTimeout      = TimeSpan.FromDays(30);
 });
 
@@ -123,6 +135,8 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 app.UseExceptionHandler(errorApp =>
 {

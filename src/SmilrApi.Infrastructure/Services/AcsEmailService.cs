@@ -6,28 +6,35 @@ using SmilrApi.Core.Interfaces;
 
 namespace SmilrApi.Infrastructure.Services;
 
-public class AcsEmailService(IConfiguration config, ILogger<AcsEmailService> logger) : IEmailService
+public class AcsEmailService : IEmailService
 {
-    private EmailClient Client =>
-        new(config["Acs:ConnectionString"]
-            ?? throw new InvalidOperationException("Acs:ConnectionString is not configured."));
+    private readonly EmailClient _client;
+    private readonly string _sender;
+    private readonly string? _overrideAddress;
+    private readonly ILogger<AcsEmailService> _logger;
 
-    private string Sender =>
-        config["Acs:SenderAddress"] ?? "donotreply@smilrhq.dk";
+    public AcsEmailService(IConfiguration config, ILogger<AcsEmailService> logger)
+    {
+        _logger = logger;
+        _client = new EmailClient(
+            config["Acs:ConnectionString"]
+                ?? throw new InvalidOperationException("Acs:ConnectionString is not configured."));
+        _sender = config["Acs:SenderAddress"] ?? "donotreply@smilrhq.dk";
+        _overrideAddress = config["Email:OverrideAddress"];
+    }
 
     private (string recipient, string banner) ResolveRecipient(string originalTo)
     {
-        var overrideAddress = config["Email:OverrideAddress"];
-        if (string.IsNullOrWhiteSpace(overrideAddress))
+        if (string.IsNullOrWhiteSpace(_overrideAddress))
             return (originalTo, string.Empty);
-        return (overrideAddress, $"[REDIRECT – originally for: {originalTo}]");
+        return (_overrideAddress, $"[REDIRECT – originally for: {originalTo}]");
     }
 
     public async Task SendVerificationEmailAsync(string to, string verifyUrl, CancellationToken ct = default)
     {
         var (recipient, banner) = ResolveRecipient(to);
         var message = new EmailMessage(
-            senderAddress: Sender,
+            senderAddress: _sender,
             recipientAddress: recipient,
             content: new EmailContent("Verify your SmilrApi account")
             {
@@ -39,15 +46,15 @@ public class AcsEmailService(IConfiguration config, ILogger<AcsEmailService> log
                             $"Verify your SmilrApi account:\n{verifyUrl}\n\nThis link expires in 24 hours."
             });
 
-        var op = await Client.SendAsync(WaitUntil.Started, message, ct);
-        logger.LogInformation("Verification email queued to {To}, operationId={Id}", recipient, op.Id);
+        var op = await _client.SendAsync(WaitUntil.Started, message, ct);
+        _logger.LogInformation("Verification email queued to {To}, operationId={Id}", recipient, op.Id);
     }
 
     public async Task SendMagicLinkEmailAsync(string to, string loginUrl, CancellationToken ct = default)
     {
         var (recipient, banner) = ResolveRecipient(to);
         var message = new EmailMessage(
-            senderAddress: Sender,
+            senderAddress: _sender,
             recipientAddress: recipient,
             content: new EmailContent("Your SmilrApi login link")
             {
@@ -59,8 +66,8 @@ public class AcsEmailService(IConfiguration config, ILogger<AcsEmailService> log
                             $"Sign in to SmilrApi:\n{loginUrl}\n\nExpires in 15 minutes. Ignore if you did not request this."
             });
 
-        var op = await Client.SendAsync(WaitUntil.Started, message, ct);
-        logger.LogInformation("Magic link email queued to {To}, operationId={Id}", recipient, op.Id);
+        var op = await _client.SendAsync(WaitUntil.Started, message, ct);
+        _logger.LogInformation("Magic link email queued to {To}, operationId={Id}", recipient, op.Id);
     }
 
     public async Task SendScoreAlertEmailAsync(string to, string establishmentName, int newScore, CancellationToken ct = default)
@@ -76,7 +83,7 @@ public class AcsEmailService(IConfiguration config, ILogger<AcsEmailService> log
 
         var (recipient, banner) = ResolveRecipient(to);
         var message = new EmailMessage(
-            senderAddress: Sender,
+            senderAddress: _sender,
             recipientAddress: recipient,
             content: new EmailContent($"Smilr score update: {establishmentName}")
             {
@@ -88,7 +95,7 @@ public class AcsEmailService(IConfiguration config, ILogger<AcsEmailService> log
                             $"Smilr score update for {establishmentName}\nNew score: {scoreLabel}"
             });
 
-        var op = await Client.SendAsync(WaitUntil.Started, message, ct);
-        logger.LogInformation("Score alert email queued to {To} for '{Name}', operationId={Id}", recipient, establishmentName, op.Id);
+        var op = await _client.SendAsync(WaitUntil.Started, message, ct);
+        _logger.LogInformation("Score alert email queued to {To} for '{Name}', operationId={Id}", recipient, establishmentName, op.Id);
     }
 }
