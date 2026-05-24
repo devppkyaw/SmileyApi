@@ -61,9 +61,10 @@ public static class BusinessEndpoints
                 return Results.BadRequest(Error("bad_request", "'email' is required."));
 
             var baseUrl = $"{ctx.Request.Scheme}://{ctx.Request.Host}";
-            // Always return the same message to prevent email enumeration
-            await svc.RequestMagicLinkAsync(req.Email.Trim(), baseUrl, ct);
-            return Results.Ok(new { message = "If that email is registered, a login link has been sent." });
+            var sent = await svc.RequestMagicLinkAsync(req.Email.Trim(), baseUrl, ct);
+            if (!sent)
+                return Results.NotFound(Error("not_registered", "No account found for that email."));
+            return Results.Ok(new { message = "A login link has been sent." });
         });
 
         app.MapGet("/v1/business/login/verify", async (

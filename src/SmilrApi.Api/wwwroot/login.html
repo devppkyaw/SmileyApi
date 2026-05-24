@@ -91,7 +91,11 @@ document.getElementById('loginForm').addEventListener('submit', async function (
       document.getElementById('successState').style.display = 'block';
     } else {
       const data = await res.json();
-      status.textContent = data.error?.message || 'Something went wrong. Please try again.';
+      if (data.error?.code === 'not_registered') {
+        status.innerHTML = 'No account found. <a href="/register.html">Register first →</a>';
+      } else {
+        status.textContent = data.error?.message || 'Something went wrong. Please try again.';
+      }
       status.className   = 'form-status form-status--error';
       btn.disabled    = false;
       btn.textContent = 'Send login link →';
