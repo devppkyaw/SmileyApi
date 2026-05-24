@@ -10,23 +10,22 @@ public static class AdminEndpoints
 {
     public static void MapAdminEndpoints(this WebApplication app)
     {
-        if (app.Environment.IsProduction()) return;
-
-        app.MapGet("/admin/requests", async (SmilrDbContext db, CancellationToken ct) =>
-        {
-            var requests = await db.AccessRequests
-                .Where(r => r.Status == 0)
-                .OrderBy(r => r.SubmittedAt)
-                .Select(r => new { r.Id, r.Name, r.Email, r.Company, r.UseCase, r.SubmittedAt })
-                .ToListAsync(ct);
-            return Results.Ok(requests);
-        });
-
+        // Available in all environments — protected by Admin:Key header (skipped when key is empty/dev)
         app.MapPost("/admin/sync", async (
+            HttpContext ctx,
+            IConfiguration cfg,
             FodevareXmlParser parser,
             IServiceScopeFactory scopeFactory,
             CancellationToken ct) =>
         {
+            var adminKey = cfg["Admin:Key"];
+            if (!string.IsNullOrEmpty(adminKey))
+            {
+                var provided = ctx.Request.Headers["X-Admin-Key"].FirstOrDefault();
+                if (provided != adminKey)
+                    return Results.Json(Error("unauthorized", "Invalid admin key."), statusCode: 401);
+            }
+
             if (!await XmlSyncWorker.Lock.WaitAsync(0, ct))
                 return Results.Json(new { status = "already_running" }, statusCode: 409);
 
@@ -55,6 +54,19 @@ public static class AdminEndpoints
             });
 
             return Results.Json(new { status = "started" }, statusCode: 202);
+        });
+
+        // Dev-only endpoints
+        if (app.Environment.IsProduction()) return;
+
+        app.MapGet("/admin/requests", async (SmilrDbContext db, CancellationToken ct) =>
+        {
+            var requests = await db.AccessRequests
+                .Where(r => r.Status == 0)
+                .OrderBy(r => r.SubmittedAt)
+                .Select(r => new { r.Id, r.Name, r.Email, r.Company, r.UseCase, r.SubmittedAt })
+                .ToListAsync(ct);
+            return Results.Ok(requests);
         });
 
         app.MapPost("/admin/requests/{id}/approve", async (

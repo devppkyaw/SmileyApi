@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Force Sync — Smilr Admin</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 480px; margin: 60px auto; padding: 0 20px; color: #1a1a1a; }
+    h1 { font-size: 1.4rem; margin-bottom: 4px; }
+    p  { color: #666; font-size: 0.9rem; margin-bottom: 24px; }
+    label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; }
+    input { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.95rem; margin-bottom: 16px; }
+    button { background: #2563eb; color: #fff; border: none; border-radius: 6px; padding: 10px 20px; font-size: 0.95rem; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #status { margin-top: 20px; padding: 12px 16px; border-radius: 6px; font-size: 0.9rem; display: none; }
+    .ok  { background: #d1fae5; color: #065f46; }
+    .err { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <h1>Force XML Sync</h1>
+  <p>Triggers a full sync from Fødevarestyrelsen immediately, bypassing the 20-hour freshness check. Score-change emails will be sent if any scores changed.</p>
+
+  <label for="key">Admin Key</label>
+  <input type="password" id="key" placeholder="Leave blank if running locally" autocomplete="off" />
+
+  <button id="btn" onclick="triggerSync()">Force sync now</button>
+
+  <div id="status"></div>
+
+  <script>
+    async function triggerSync() {
+      const btn    = document.getElementById('btn');
+      const status = document.getElementById('status');
+      const key    = document.getElementById('key').value.trim();
+
+      btn.disabled    = true;
+      btn.textContent = 'Starting…';
+      status.style.display = 'none';
+
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (key) headers['X-Admin-Key'] = key;
+
+        const res  = await fetch('/admin/sync', { method: 'POST', headers });
+        const data = await res.json();
+
+        status.style.display = 'block';
+        if (res.ok) {
+          status.className   = 'ok';
+          status.textContent = 'Sync started. Score-change emails (if any) will arrive within a few minutes.';
+        } else if (res.status === 409) {
+          status.className   = 'ok';
+          status.textContent = 'A sync is already running — check back in a few minutes.';
+        } else {
+          status.className   = 'err';
+          status.textContent = data.error?.message || `Error ${res.status}`;
+        }
+      } catch (e) {
+        status.style.display = 'block';
+        status.className     = 'err';
+        status.textContent   = 'Network error. Check the console.';
+      } finally {
+        btn.disabled    = false;
+        btn.textContent = 'Force sync now';
+      }
+    }
+  </script>
+</body>
+</html>
