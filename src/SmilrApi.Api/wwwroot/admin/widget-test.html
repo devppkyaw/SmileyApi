@@ -87,7 +87,7 @@
       <div class="badge-item">
         <div class="Smilr-badge">
           <img src="/Smiley_figurer/150/Sm1bg.jpg" alt="Score 1" />
-          <div class="badge-date">03.11.2024</div>
+          <div class="badge-date">03/11/24</div>
         </div>
         <div class="badge-label">Score 1 — Excellent</div>
       </div>
@@ -95,7 +95,7 @@
       <div class="badge-item">
         <div class="Smilr-badge">
           <img src="/Smiley_figurer/150/Sm3bg.jpg" alt="Score 3" />
-          <div class="badge-date">03.11.2024</div>
+          <div class="badge-date">03/11/24</div>
         </div>
         <div class="badge-label">Score 3 — Needs improvement</div>
       </div>
@@ -103,7 +103,7 @@
       <div class="badge-item">
         <div class="Smilr-badge">
           <img src="/Smiley_figurer/150/Sm4bg.jpg" alt="Score 4" />
-          <div class="badge-date">03.11.2024</div>
+          <div class="badge-date">03/11/24</div>
         </div>
         <div class="badge-label">Score 4 — Failed / Not rated</div>
       </div>
@@ -118,7 +118,7 @@
       <div class="badge-item">
         <div class="Smilr-badge">
           <img src="/Smiley_figurer/150/engroIcon.png" alt="Engros kontrol" />
-          <div class="badge-date">03.11.2024</div>
+          <div class="badge-date">03/11/24</div>
         </div>
         <div class="badge-label">Engros — document icon</div>
       </div>
@@ -174,7 +174,7 @@ function renderBadge(data) {
   var dateStr = '';
   if (data.scoreDate && data.score) {
     var p = String(data.scoreDate).split('-');
-    if (p.length === 3) dateStr = p[2] + '.' + p[1] + '.' + p[0];
+    if (p.length === 3) dateStr = p[2] + '/' + p[1] + '/' + p[0].slice(2);
   }
 
   var widgetOut = document.getElementById('widgetOut');

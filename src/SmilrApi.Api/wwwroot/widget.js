@@ -35,7 +35,7 @@
       var dateStr = '';
       if (data.scoreDate && data.score) {
         var parts = String(data.scoreDate).split('-');
-        if (parts.length === 3) dateStr = parts[2] + '.' + parts[1] + '.' + parts[0];
+        if (parts.length === 3) dateStr = parts[2] + '/' + parts[1] + '/' + parts[0].slice(2);
       }
 
       var link = document.createElement('a');
