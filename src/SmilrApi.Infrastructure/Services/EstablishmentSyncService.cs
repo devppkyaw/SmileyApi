@@ -2,6 +2,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SmilrApi.Core.Interfaces;
+using SmilrApi.Core.Models;
 using SmilrApi.Infrastructure.Data;
 using System.Data;
 
@@ -197,11 +198,11 @@ public class EstablishmentSyncService(SmilrDbContext db, IEmailService emailServ
     private async Task SendScoreAlertsAsync(IReadOnlyList<ScoreChange> scoreChanges, CancellationToken ct)
     {
         var changedIds = scoreChanges.Select(c => c.EstablishmentId).ToHashSet();
-        var newScoreById = scoreChanges.ToDictionary(c => c.EstablishmentId, c => c.NewScore);
+        var scoreById = scoreChanges.ToDictionary(c => c.EstablishmentId, c => (c.OldScore, c.NewScore));
 
         var establishments = await db.Establishments
             .Where(e => changedIds.Contains(e.Id))
-            .Select(e => new { e.Id, e.Navnelbnr, e.Name })
+            .Select(e => new { e.Id, e.Navnelbnr, e.Name, e.Address, e.CvrNumber })
             .ToListAsync(ct);
 
         var navnelbnrs = establishments.Select(e => e.Navnelbnr).ToList();
@@ -211,27 +212,38 @@ public class EstablishmentSyncService(SmilrDbContext db, IEmailService emailServ
             .Join(db.Businesses.Where(b => b.Tier == "pro"),
                 bl => bl.BusinessId,
                 b  => b.Id,
-                (bl, b) => new { bl.Navnelbnr, b.Email })
+                (bl, b) => new { bl.Navnelbnr, b.Email, b.Id })
             .ToListAsync(ct);
 
         if (alerts.Count == 0) return;
 
         var estByNavnelbnr = establishments.ToDictionary(
             e => e.Navnelbnr,
-            e => new { e.Name, NewScore = newScoreById[e.Id] });
+            e => new { e.Name, e.Address, e.CvrNumber, Scores = scoreById[e.Id] });
 
-        foreach (var alert in alerts)
+        // Group by business so each Pro account receives one digest email
+        var alertsByBusiness = alerts
+            .GroupBy(a => (a.Email, a.Id))
+            .ToDictionary(
+                g => g.Key.Email,
+                g => g
+                    .Where(a => estByNavnelbnr.ContainsKey(a.Navnelbnr))
+                    .Select(a =>
+                    {
+                        var est = estByNavnelbnr[a.Navnelbnr];
+                        return new ScoreAlertItem(est.Name, est.Address, est.CvrNumber, est.Scores.OldScore, est.Scores.NewScore);
+                    })
+                    .ToList() as IReadOnlyList<ScoreAlertItem>);
+
+        var sem = new SemaphoreSlim(5);
+        var tasks = alertsByBusiness.Select(async kvp =>
         {
-            if (!estByNavnelbnr.TryGetValue(alert.Navnelbnr, out var est)) continue;
-            try
-            {
-                await emailService.SendScoreAlertEmailAsync(alert.Email, est.Name, est.NewScore, ct);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to send score alert to {Email} for navnelbnr {Navnelbnr}", alert.Email, alert.Navnelbnr);
-            }
-        }
+            await sem.WaitAsync(ct);
+            try   { await emailService.SendScoreAlertEmailAsync(kvp.Key, kvp.Value, ct); }
+            catch (Exception ex) { logger.LogError(ex, "Failed to send score alert to {Email}", kvp.Key); }
+            finally { sem.Release(); }
+        });
+        await Task.WhenAll(tasks);
     }
 
     private static DataTable BuildEstabDataTable(IReadOnlyList<SyncRow> rows)

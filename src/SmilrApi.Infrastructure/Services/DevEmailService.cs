@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using SmilrApi.Core.Interfaces;
+using SmilrApi.Core.Models;
 
 namespace SmilrApi.Infrastructure.Services;
 
@@ -23,9 +24,10 @@ public class DevEmailService(ILogger<DevEmailService> logger, IConfiguration con
         return Task.CompletedTask;
     }
 
-    public Task SendScoreAlertEmailAsync(string to, string establishmentName, int newScore, CancellationToken ct = default)
+    public Task SendScoreAlertEmailAsync(string to, IReadOnlyList<ScoreAlertItem> changes, CancellationToken ct = default)
     {
-        logger.LogInformation("[DEV EMAIL] Score alert → {To} | {Name} is now score {Score}", ToInfo(to), establishmentName, newScore);
+        var detail = string.Join(", ", changes.Select(c => $"{c.EstablishmentName} ({c.OldScore}→{c.NewScore})"));
+        logger.LogInformation("[DEV EMAIL] Score alert → {To} | {Count} change(s): {Detail}", ToInfo(to), changes.Count, detail);
         return Task.CompletedTask;
     }
 }
