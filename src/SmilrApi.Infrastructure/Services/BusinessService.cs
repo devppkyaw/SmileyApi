@@ -68,15 +68,24 @@ public class BusinessService(SmilrDbContext db, IEmailService emailService) : IB
     public async Task<bool> RequestMagicLinkAsync(string email, string baseUrl, CancellationToken ct = default)
     {
         var business = await db.Businesses.FirstOrDefaultAsync(
-            b => b.Email == email && b.IsEmailVerified, ct);
+            b => b.Email == email, ct);
 
         if (business is null) return false;
 
         var token = GenerateToken();
-        business.MagicLinkToken       = token;
+        business.MagicLinkToken = token;
+
+        if (!business.IsEmailVerified)
+        {
+            business.MagicLinkTokenExpiry = DateTime.UtcNow.AddHours(24);
+            await db.SaveChangesAsync(ct);
+            await emailService.SendVerificationEmailAsync(
+                business.Email, $"{baseUrl}/v1/business/verify?token={token}", ct);
+            return true;
+        }
+
         business.MagicLinkTokenExpiry = DateTime.UtcNow.AddMinutes(15);
         await db.SaveChangesAsync(ct);
-
         await emailService.SendMagicLinkEmailAsync(
             business.Email, $"{baseUrl}/v1/business/login/verify?token={token}", ct);
         return true;
