@@ -282,7 +282,7 @@ function scoreStrip(history, virksomhedsType) {
     if (history && i < history.length) {
       var item = history[i];
       var icon = smilrIcon(virksomhedsType, item.score, 32);
-      var title = icon.alt + (item.date ? ' · ' + formatDate(item.date) : '');
+      var title = 'Score ' + item.score + (item.date ? ', ' + formatDate(item.date) : '');
       cells += '<img src="' + icon.src + '" alt="' + icon.alt + '" class="score-thumb" title="' + title + '" />';
     } else if (i === 0 && (!history || history.length === 0)) {
       var icon = smilrIcon(virksomhedsType, null, 32);
@@ -296,7 +296,7 @@ function scoreStrip(history, virksomhedsType) {
 
 function formatDate(iso) {
   var p = String(iso).split('-');
-  return p[2] + '.' + p[1] + '.' + p[0];
+  return p[2] + '/' + p[1] + '/' + p[0].slice(2);
 }
 
 function collapseAll() {
