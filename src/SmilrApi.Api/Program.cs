@@ -197,6 +197,7 @@ app.MapScalarApiReference("/scalar/v1", options =>
 {
     options.OpenApiRoutePattern = "/openapi/public.json";
     options.Title = "Smilr API";
+    options.HideModels();
 });
 
 if (!app.Environment.IsProduction())
@@ -205,6 +206,7 @@ if (!app.Environment.IsProduction())
     {
         options.OpenApiRoutePattern = "/openapi/v1.json";
         options.Title = "Smilr API — Internal";
+        options.HideModels();
     });
     app.UseHangfireDashboard("/hangfire");
 }
