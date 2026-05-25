@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Smilr Terms of Service." />
+  <title>Terms of Service — SmilrHQ</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<header class="hero" style="padding-bottom:40px">
+  <nav class="nav">
+    <a href="/" class="nav-logo" style="text-decoration:none">Smilr<span class="accent">HQ</span></a>
+    <div class="nav-links">
+      <a href="/#businesses" class="nav-link">For Businesses</a>
+      <a href="/developers.html" class="nav-link">Developers</a>
+      <a id="navAuthLink" href="/login.html" class="nav-link">Log in</a>
+    </div>
+  </nav>
+  <div class="hero-content" style="padding-top:60px">
+    <h1 style="font-size:clamp(1.8rem,4vw,2.5rem)">Terms of<br><span class="accent">Service</span></h1>
+    <p class="hero-sub">Last updated: May 2026</p>
+  </div>
+</header>
+
+<section class="access">
+  <div class="container" style="max-width:720px">
+
+    <h2 class="section-title" style="text-align:left">1. Acceptance</h2>
+    <p style="margin-bottom:24px;line-height:1.7">
+      By registering for or using Smilr, you agree to these Terms of Service. If you do not agree, please do not use the service.
+    </p>
+
+    <h2 class="section-title" style="text-align:left">2. Service description</h2>
+    <p style="margin-bottom:24px;line-height:1.7">
+      Smilr provides access to Danish food inspection data sourced from Fødevarestyrelsen, including embeddable
+      badges, email alerts, and a developer API. The data is refreshed daily but we make no guarantee of
+      real-time accuracy.
+    </p>
+
+    <h2 class="section-title" style="text-align:left">3. Acceptable use</h2>
+    <p style="margin-bottom:24px;line-height:1.7">
+      You may use Smilr for lawful purposes only. You may not abuse, scrape, or resell the service, or use it
+      in any way that disrupts other users.
+    </p>
+
+    <h2 class="section-title" style="text-align:left">4. Subscriptions and billing</h2>
+    <p style="margin-bottom:24px;line-height:1.7">
+      Pro subscriptions are billed monthly via Stripe. You may cancel at any time from your dashboard.
+      Refunds are not provided for partial billing periods.
+    </p>
+
+    <h2 class="section-title" style="text-align:left">5. Limitation of liability</h2>
+    <p style="margin-bottom:24px;line-height:1.7">
+      Smilr is provided "as is". We are not liable for any damages arising from the use or inability to use the service.
+    </p>
+
+    <h2 class="section-title" style="text-align:left">6. Changes</h2>
+    <p style="margin-bottom:24px;line-height:1.7">
+      We may update these terms at any time. Continued use of the service constitutes acceptance of the revised terms.
+    </p>
+
+    <p style="margin-top:36px;font-size:0.875rem;color:var(--text-muted)">
+      Questions? <a href="mailto:yourSmilr@gmail.com">yourSmilr@gmail.com</a>
+    </p>
+
+  </div>
+</section>
+
+<site-footer></site-footer>
+
+<script src="/components/footer.js"></script>
+<script>
+(async function () {
+  const res = await fetch('/v1/business/me');
+  if (res.ok) {
+    const link = document.getElementById('navAuthLink');
+    link.href = '/dashboard.html';
+    link.textContent = 'Dashboard →';
+  }
+})();
+</script>
+</body>
+</html>

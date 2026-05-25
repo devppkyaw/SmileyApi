@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Contact the Smilr team for support or business enquiries." />
+  <title>Contact us — SmilrHQ</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<header class="hero" style="padding-bottom:40px">
+  <nav class="nav">
+    <a href="/" class="nav-logo" style="text-decoration:none">Smilr<span class="accent">HQ</span></a>
+    <div class="nav-links">
+      <a href="/#businesses" class="nav-link">For Businesses</a>
+      <a href="/developers.html" class="nav-link">Developers</a>
+      <a id="navAuthLink" href="/login.html" class="nav-link">Log in</a>
+    </div>
+  </nav>
+  <div class="hero-content" style="padding-top:60px">
+    <h1 style="font-size:clamp(1.8rem,4vw,2.5rem)">Contact<br><span class="accent">us</span></h1>
+    <p class="hero-sub">We're happy to help.</p>
+  </div>
+</header>
+
+<section class="access">
+  <div class="container" style="max-width:720px">
+    <h2 class="section-title" style="text-align:left">Get in touch</h2>
+    <p style="margin-bottom:16px;line-height:1.7">
+      For support, billing questions, or business enquiries, email us at:
+    </p>
+    <p style="margin-bottom:32px;font-size:1.1rem;font-weight:600">
+      <a href="mailto:yourSmilr@gmail.com">yourSmilr@gmail.com</a>
+    </p>
+    <p style="line-height:1.7;color:var(--text-muted)">
+      We aim to respond within one business day.
+    </p>
+  </div>
+</section>
+
+<site-footer></site-footer>
+
+<script src="/components/footer.js"></script>
+<script>
+(async function () {
+  const res = await fetch('/v1/business/me');
+  if (res.ok) {
+    const link = document.getElementById('navAuthLink');
+    link.href = '/dashboard.html';
+    link.textContent = 'Dashboard →';
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="About Smilr — display your official Danish food inspection score on your website." />
+  <title>About us — SmilrHQ</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<header class="hero" style="padding-bottom:40px">
+  <nav class="nav">
+    <a href="/" class="nav-logo" style="text-decoration:none">Smilr<span class="accent">HQ</span></a>
+    <div class="nav-links">
+      <a href="/#businesses" class="nav-link">For Businesses</a>
+      <a href="/developers.html" class="nav-link">Developers</a>
+      <a id="navAuthLink" href="/login.html" class="nav-link">Log in</a>
+    </div>
+  </nav>
+  <div class="hero-content" style="padding-top:60px">
+    <h1 style="font-size:clamp(1.8rem,4vw,2.5rem)">About<br><span class="accent">Smilr</span></h1>
+    <p class="hero-sub">Making official food inspection data easy to display.</p>
+  </div>
+</header>
+
+<section class="access">
+  <div class="container" style="max-width:720px">
+    <h2 class="section-title" style="text-align:left">What is Smilr?</h2>
+    <p style="margin-bottom:16px;line-height:1.7">
+      Smilr is a service that lets Danish food businesses embed their official
+      <a href="https://www.foedevarestyrelsen.dk" target="_blank" rel="noopener">Fødevarestyrelsen</a>
+      smiley score directly on their own website — with a single line of code.
+    </p>
+    <p style="margin-bottom:16px;line-height:1.7">
+      Every restaurant, café, and food producer in Denmark is inspected regularly and awarded an
+      official smiley score. That data is public, but displaying it has always required manual
+      effort. Smilr syncs the data daily and gives you a badge that stays up to date automatically.
+    </p>
+    <p style="margin-bottom:16px;line-height:1.7">
+      For developers, Smilr also exposes the full dataset as a clean REST API — no XML parsing,
+      no infrastructure to maintain.
+    </p>
+
+    <div style="margin-top:36px;display:flex;gap:16px;flex-wrap:wrap">
+      <a href="/register.html" class="btn-primary">Register your business →</a>
+      <a href="/developers.html" class="btn-secondary">Developer API →</a>
+    </div>
+  </div>
+</section>
+
+<site-footer></site-footer>
+
+<script src="/components/footer.js"></script>
+<script>
+(async function () {
+  const res = await fetch('/v1/business/me');
+  if (res.ok) {
+    const link = document.getElementById('navAuthLink');
+    link.href = '/dashboard.html';
+    link.textContent = 'Dashboard →';
+  }
+})();
+</script>
+</body>
+</html>

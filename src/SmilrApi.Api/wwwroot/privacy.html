@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Smilr Privacy Policy — how we handle your data." />
+  <title>Privacy Policy — SmilrHQ</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<header class="hero" style="padding-bottom:40px">
+  <nav class="nav">
+    <a href="/" class="nav-logo" style="text-decoration:none">Smilr<span class="accent">HQ</span></a>
+    <div class="nav-links">
+      <a href="/#businesses" class="nav-link">For Businesses</a>
+      <a href="/developers.html" class="nav-link">Developers</a>
+      <a id="navAuthLink" href="/login.html" class="nav-link">Log in</a>
+    </div>
+  </nav>
+  <div class="hero-content" style="padding-top:60px">
+    <h1 style="font-size:clamp(1.8rem,4vw,2.5rem)">Privacy<br><span class="accent">Policy</span></h1>
+    <p class="hero-sub">Last updated: May 2026</p>
+  </div>
+</header>
+
+<section class="access">
+  <div class="container" style="max-width:720px">
+
+    <h2 class="section-title" style="text-align:left">What data we collect</h2>
+    <p style="margin-bottom:24px;line-height:1.7">
+      When you register, we collect your email address, business name, and CVR number(s).
+      If you subscribe to Pro, your payment is processed by Stripe — we do not store card details.
+    </p>
+
+    <h2 class="section-title" style="text-align:left">How we use it</h2>
+    <p style="margin-bottom:24px;line-height:1.7">
+      Your email is used to send login links, account verification, and (for Pro accounts) score-change alerts.
+      We do not sell or share your personal data with third parties, except as required to operate the service
+      (Stripe for payments, Azure Communication Services for email delivery).
+    </p>
+
+    <h2 class="section-title" style="text-align:left">Legal basis (GDPR)</h2>
+    <p style="margin-bottom:24px;line-height:1.7">
+      Processing is based on the performance of a contract (Art. 6(1)(b) GDPR) when providing the service,
+      and on legitimate interests for transactional emails. Marketing emails are only sent with your explicit consent.
+    </p>
+
+    <h2 class="section-title" style="text-align:left">Data retention</h2>
+    <p style="margin-bottom:24px;line-height:1.7">
+      Your account data is retained for as long as your account is active. You may request deletion at any time
+      by emailing us.
+    </p>
+
+    <h2 class="section-title" style="text-align:left">Your rights</h2>
+    <p style="margin-bottom:24px;line-height:1.7">
+      Under GDPR you have the right to access, correct, or delete your personal data, and to object to or restrict
+      its processing. Contact us at <a href="mailto:yourSmilr@gmail.com">yourSmilr@gmail.com</a> to exercise these rights.
+    </p>
+
+    <h2 class="section-title" style="text-align:left">Cookies</h2>
+    <p style="margin-bottom:24px;line-height:1.7">
+      Smilr uses a session cookie to keep you logged in. No third-party tracking or advertising cookies are used.
+    </p>
+
+  </div>
+</section>
+
+<site-footer></site-footer>
+
+<script src="/components/footer.js"></script>
+<script>
+(async function () {
+  const res = await fetch('/v1/business/me');
+  if (res.ok) {
+    const link = document.getElementById('navAuthLink');
+    link.href = '/dashboard.html';
+    link.textContent = 'Dashboard →';
+  }
+})();
+</script>
+</body>
+</html>

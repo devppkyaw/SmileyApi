@@ -135,14 +135,9 @@
 </section>
 
 <!-- ─── Footer ────────────────────────────────────────────── -->
-<footer class="footer">
-  <div class="container">
-    <p>Data provided by <a href="https://www.foedevarestyrelsen.dk" target="_blank" rel="noopener">Fødevarestyrelsen</a>
-      under Danish open data licence.</p>
-    <p>Questions? <a href="mailto:yourSmilr@gmail.com">yourSmilr@gmail.com</a></p>
-  </div>
-</footer>
+<site-footer></site-footer>
 
+<script src="/components/footer.js"></script>
 <script>
 (async function () {
   const res = await fetch('/v1/business/me');

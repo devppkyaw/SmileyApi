@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Hvad betyder smiley-karaktererne? Officiel forklaring fra Fødevarestyrelsen." />
+  <title>Hvad betyder karaktererne? — SmilrHQ</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<header class="hero" style="padding-bottom:40px">
+  <nav class="nav">
+    <a href="/" class="nav-logo" style="text-decoration:none">Smilr<span class="accent">HQ</span></a>
+    <div class="nav-links">
+      <a href="/#businesses" class="nav-link">For Businesses</a>
+      <a href="/developers.html" class="nav-link">Developers</a>
+      <a id="navAuthLink" href="/login.html" class="nav-link">Log in</a>
+    </div>
+  </nav>
+  <div class="hero-content" style="padding-top:60px">
+    <h1 style="font-size:clamp(1.8rem,4vw,2.5rem)">Hvad betyder<br><span class="accent">karaktererne?</span></h1>
+    <p class="hero-sub">Officiel forklaring fra Fødevarestyrelsen.</p>
+  </div>
+</header>
+
+<section class="access">
+  <div class="container" style="max-width:800px">
+
+    <h2 class="section-title" style="text-align:left">Detailvirksomheder</h2>
+    <p style="margin-bottom:24px;line-height:1.7;color:var(--text-muted)">
+      Restauranter, caféer, butikker og andre virksomheder, der sælger direkte til forbrugere.
+    </p>
+
+    <div class="table-wrap" style="margin-bottom:40px">
+      <table class="tier-table">
+        <thead>
+          <tr>
+            <th style="width:80px">Karakter</th>
+            <th>Betegnelse</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="text-align:center;font-size:1.4rem;font-weight:700">1</td>
+            <td>Ingen anmærkninger</td>
+          </tr>
+          <tr>
+            <td style="text-align:center;font-size:1.4rem;font-weight:700">2</td>
+            <td>Indskærpelse, påbud, forbud eller daglige tvangsbøder</td>
+          </tr>
+          <tr>
+            <td style="text-align:center;font-size:1.4rem;font-weight:700">3</td>
+            <td>Bødeforlæg, politianmeldelse, karantæne, autorisation eller registrering frataget</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 class="section-title" style="text-align:left">Engrosvirksomheder</h2>
+    <p style="margin-bottom:24px;line-height:1.7;color:var(--text-muted)">
+      Producenter, grossister og andre virksomheder, der leverer til andre virksomheder.
+    </p>
+
+    <div class="table-wrap" style="margin-bottom:40px">
+      <table class="tier-table">
+        <thead>
+          <tr>
+            <th style="width:80px">Karakter</th>
+            <th>Betegnelse</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="text-align:center;font-size:1.4rem;font-weight:700">1</td>
+            <td>Ingen anmærkninger</td>
+          </tr>
+          <tr>
+            <td style="text-align:center;font-size:1.4rem;font-weight:700">2</td>
+            <td>Indskærpelse</td>
+          </tr>
+          <tr>
+            <td style="text-align:center;font-size:1.4rem;font-weight:700">3</td>
+            <td>Påbud, forbud eller tvangsbøder</td>
+          </tr>
+          <tr>
+            <td style="text-align:center;font-size:1.4rem;font-weight:700">4</td>
+            <td>Bødeforlæg, politianmeldelse, karantæne, autorisation eller registrering frataget</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="font-size:0.875rem;color:var(--text-muted);line-height:1.7">
+      Kilde: <a href="https://findsmiley.dk/Hjaelp/Symbolforklaring/" target="_blank" rel="noopener">findsmiley.dk — Symbolforklaring</a>
+    </p>
+
+  </div>
+</section>
+
+<site-footer></site-footer>
+
+<script src="/components/footer.js"></script>
+<script>
+(async function () {
+  const res = await fetch('/v1/business/me');
+  if (res.ok) {
+    const link = document.getElementById('navAuthLink');
+    link.href = '/dashboard.html';
+    link.textContent = 'Dashboard →';
+  }
+})();
+</script>
+</body>
+</html>
