@@ -56,6 +56,14 @@ public static class AdminEndpoints
             return Results.Json(new { status = "started" }, statusCode: 202);
         });
 
+        app.MapPost("/admin/verify", (HttpContext ctx, IConfiguration cfg) =>
+        {
+            var adminKey = cfg["Admin:Key"];
+            if (string.IsNullOrEmpty(adminKey)) return Results.Ok();
+            var provided = ctx.Request.Headers["X-Admin-Key"].FirstOrDefault();
+            return provided == adminKey ? Results.Ok() : Results.Unauthorized();
+        });
+
         // Dev-only endpoints
         if (app.Environment.IsProduction()) return;
 

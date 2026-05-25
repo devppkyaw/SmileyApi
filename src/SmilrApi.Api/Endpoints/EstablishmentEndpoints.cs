@@ -17,14 +17,15 @@ public static class EstablishmentEndpoints
         }
 
         var v1 = app.MapGroup("/v1/establishments")
+                    .WithTags("Public")
                     .RequireRateLimiting("api-key-tier");
 
         v1.MapGet("/{cvr}", async (string cvr, IEstablishmentRepository repo, CancellationToken ct) =>
         {
-            var e = await repo.GetByCvrAsync(cvr, ct);
-            return e is null
-                ? Error(404, "not_found", $"No establishment found for CVR '{cvr}'.")
-                : Results.Ok(ToDto(e));
+            var establishments = await repo.GetByCvrAsync(cvr, ct);
+            return establishments.Count == 0
+                ? Error(404, "not_found", $"No establishments found for CVR '{cvr}'.")
+                : Results.Ok(establishments.Select(ToDto));
         });
 
         v1.MapGet("/search", async (
@@ -53,14 +54,19 @@ public static class EstablishmentEndpoints
 
         v1.MapGet("/{cvr}/history", async (string cvr, IEstablishmentRepository repo, CancellationToken ct) =>
         {
-            var history = await repo.GetHistoryAsync(cvr, ct);
-            if (history.Count == 0)
+            var establishments = await repo.GetHistoryAsync(cvr, ct);
+            if (establishments.Count == 0)
                 return Error(404, "not_found", $"No inspection history found for CVR '{cvr}'.");
             return Results.Ok(new
             {
                 cvr,
-                count = history.Count,
-                inspections = history.Select(i => new InspectionDto(i.SmileyScore, i.InspectedOn))
+                locations = establishments.Select(e => new
+                {
+                    navnelbnr   = e.Navnelbnr,
+                    name        = e.Name,
+                    address     = e.Address,
+                    inspections = e.Inspections.Select(i => new InspectionDto(i.SmileyScore, i.InspectedOn))
+                })
             });
         });
     }

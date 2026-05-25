@@ -9,6 +9,7 @@ public static class WebhookEndpoints
     public static void MapWebhookEndpoints(this WebApplication app)
     {
         var v1 = app.MapGroup("/v1/webhooks")
+                    .WithTags("Public")
                     .RequireRateLimiting("api-key-tier");
 
         v1.MapPost("/", async (WebhookSubscribeRequest req, HttpContext ctx, WebhookService svc, CancellationToken ct) =>

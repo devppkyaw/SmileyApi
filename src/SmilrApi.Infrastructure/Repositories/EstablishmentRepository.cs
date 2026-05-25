@@ -8,13 +8,14 @@ namespace SmilrApi.Infrastructure.Repositories;
 
 public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentRepository
 {
-    public async Task<Establishment?> GetByCvrAsync(string cvr, CancellationToken ct = default)
+    public async Task<IReadOnlyList<Establishment>> GetByCvrAsync(string cvr, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(cvr)) return null;
+        if (string.IsNullOrWhiteSpace(cvr)) return [];
         return await db.Establishments
+            .Where(e => e.CvrNumber == cvr)
             .Include(e => e.Inspections.OrderByDescending(i => i.InspectedOn).Take(1))
             .AsNoTracking()
-            .FirstOrDefaultAsync(e => e.CvrNumber == cvr, ct);
+            .ToListAsync(ct);
     }
 
     public async Task<IReadOnlyList<Establishment>> SearchAsync(
@@ -72,13 +73,13 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
             .ToListAsync(ct);
     }
 
-    public async Task<IReadOnlyList<Inspection>> GetHistoryAsync(
+    public async Task<IReadOnlyList<Establishment>> GetHistoryAsync(
         string cvr, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(cvr)) return [];
-        return await db.Inspections
-            .Where(i => i.Establishment.CvrNumber == cvr)
-            .OrderByDescending(i => i.InspectedOn)
+        return await db.Establishments
+            .Where(e => e.CvrNumber == cvr)
+            .Include(e => e.Inspections.OrderByDescending(i => i.InspectedOn))
             .AsNoTracking()
             .ToListAsync(ct);
     }

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smilr API — Internal Docs</title>
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    .page-header { padding: 48px 0 0; }
+    .page-header h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; }
+    .page-header p  { color: var(--text-muted); }
+
+    .lock-screen {
+      max-width: 400px;
+      margin: 80px auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 40px 36px;
+      text-align: center;
+    }
+    .lock-screen h2 { font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; }
+    .lock-screen p  { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 24px; }
+    .lock-screen input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.95rem;
+      margin-bottom: 12px;
+      box-sizing: border-box;
+    }
+    .lock-screen input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+    .lock-error { color: #e05050; font-size: 0.88rem; margin-top: 8px; min-height: 20px; }
+
+    .api-group { margin-top: 40px; }
+    .api-group h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 6px; }
+    .api-group p  { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+
+<header class="hero" style="padding-bottom: 48px;">
+  <nav class="nav">
+    <span class="nav-logo">Smilr<span class="accent">API</span> <span style="color:var(--text-muted);font-weight:400;font-size:0.9rem;">Admin</span></span>
+    <a href="/admin/" class="nav-link">← Admin</a>
+  </nav>
+</header>
+
+<div class="container" style="padding-top:0;padding-bottom:80px;">
+
+  <!-- Lock screen -->
+  <div id="lock" class="lock-screen">
+    <h2>Internal API Docs</h2>
+    <p>Enter the Admin key to view internal and session-based endpoints.</p>
+    <input id="keyInput" type="password" placeholder="X-Admin-Key" autocomplete="off" />
+    <button class="btn-primary" style="width:100%" onclick="unlock()">Unlock</button>
+    <div id="lockError" class="lock-error"></div>
+  </div>
+
+  <!-- Docs (hidden until unlocked) -->
+  <div id="docs" style="display:none">
+    <div class="page-header">
+      <h1>Internal API Docs</h1>
+      <p>Session-based and admin endpoints. Not exposed to external developers.</p>
+    </div>
+
+    <!-- Auth -->
+    <div class="api-group">
+      <h3>Authentication (magic link, session)</h3>
+      <p>Used by the dashboard frontend. All session endpoints read <code>business_id</code> from the server-side session.</p>
+      <div class="table-wrap">
+        <table class="endpoint-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><span class="method post">POST</span></td><td><code>/v1/business/register</code></td><td>Register new business — sends verification email</td></tr>
+            <tr><td><span class="method get">GET</span></td><td><code>/v1/business/verify</code></td><td>Email verification redirect — sets session cookie</td></tr>
+            <tr><td><span class="method post">POST</span></td><td><code>/v1/business/login</code></td><td>Request magic login link</td></tr>
+            <tr><td><span class="method get">GET</span></td><td><code>/v1/business/login/verify</code></td><td>Magic link verification — sets session cookie</td></tr>
+            <tr><td><span class="method post">POST</span></td><td><code>/v1/business/logout</code></td><td>Clear session</td></tr>
+            <tr><td><span class="method get">GET</span></td><td><code>/v1/business/me</code></td><td>Return logged-in business profile</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- API Key management -->
+    <div class="api-group">
+      <h3>API Key management (session)</h3>
+      <p>Lets a logged-in business generate, view, and revoke their own <code>X-Api-Key</code>.</p>
+      <div class="table-wrap">
+        <table class="endpoint-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><span class="method post">POST</span></td><td><code>/v1/business/apikey/generate</code></td><td>Generate a new API key (rotates existing)</td></tr>
+            <tr><td><span class="method get">GET</span></td><td><code>/v1/business/apikey</code></td><td>Get current key status — tier, createdAt (key not retrievable)</td></tr>
+            <tr><td><span class="method delete">DELETE</span></td><td><code>/v1/business/apikey</code></td><td>Revoke active API key — returns revokedAt timestamp</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Locations -->
+    <div class="api-group">
+      <h3>Location management (session)</h3>
+      <p>Free tier: limited to one CVR. Pro: unlimited CVRs and individual Navnelbnr lookups.</p>
+      <div class="table-wrap">
+        <table class="endpoint-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><span class="method get">GET</span></td><td><code>/v1/business/locations</code></td><td>List all locations with last 4 inspection scores</td></tr>
+            <tr><td><span class="method post">POST</span></td><td><code>/v1/business/locations</code></td><td>Add single location by Navnelbnr (Pro only)</td></tr>
+            <tr><td><span class="method post">POST</span></td><td><code>/v1/business/locations/by-cvr</code></td><td>Add all locations for a CVR (free: 1 CVR limit)</td></tr>
+            <tr><td><span class="method delete">DELETE</span></td><td><code>/v1/business/locations/{navnelbnr}</code></td><td>Remove a single location</td></tr>
+            <tr><td><span class="method delete">DELETE</span></td><td><code>/v1/business/locations/by-cvr</code></td><td>Remove all locations for a CVR</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Webhooks (session) -->
+    <div class="api-group">
+      <h3>Webhooks (session, Pro only)</h3>
+      <p>Session-based alternative to the API key webhook endpoints — for dashboard users.</p>
+      <div class="table-wrap">
+        <table class="endpoint-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><span class="method post">POST</span></td><td><code>/v1/business/webhooks/</code></td><td>Subscribe to score-change notifications</td></tr>
+            <tr><td><span class="method get">GET</span></td><td><code>/v1/business/webhooks/</code></td><td>List active subscriptions</td></tr>
+            <tr><td><span class="method delete">DELETE</span></td><td><code>/v1/business/webhooks/{id}</code></td><td>Unsubscribe</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Stripe -->
+    <div class="api-group">
+      <h3>Stripe (session + webhook)</h3>
+      <p>Checkout and portal require session. The webhook validates via <code>Stripe-Signature</code> header.</p>
+      <div class="table-wrap">
+        <table class="endpoint-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><span class="method post">POST</span></td><td><code>/v1/business/checkout</code></td><td>Initiate Stripe checkout for Pro upgrade</td></tr>
+            <tr><td><span class="method post">POST</span></td><td><code>/v1/business/portal</code></td><td>Redirect to Stripe customer portal</td></tr>
+            <tr><td><span class="method post">POST</span></td><td><code>/v1/stripe/webhook</code></td><td>Stripe event handler — signature-validated, no session</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Admin -->
+    <div class="api-group">
+      <h3>Admin (X-Admin-Key header)</h3>
+      <p>Requires <code>X-Admin-Key</code> header matching the <code>Admin:Key</code> config value.</p>
+      <div class="table-wrap">
+        <table class="endpoint-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><span class="method post">POST</span></td><td><code>/admin/sync</code></td><td>Trigger XML sync from Fødevarestyrelsen — runs background job</td></tr>
+            <tr><td><span class="method post">POST</span></td><td><code>/admin/verify</code></td><td>Validate an Admin key — returns 200 or 401</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- /docs -->
+
+</div>
+
+<script>
+  (function () {
+    if (sessionStorage.getItem('admin_unlocked') === '1') showDocs();
+  })();
+
+  function showDocs() {
+    document.getElementById('lock').style.display = 'none';
+    document.getElementById('docs').style.display = 'block';
+  }
+
+  async function unlock() {
+    const key = document.getElementById('keyInput').value.trim();
+    const err = document.getElementById('lockError');
+    err.textContent = '';
+    if (!key) { err.textContent = 'Enter the Admin key.'; return; }
+    try {
+      const res = await fetch('/admin/verify', {
+        method: 'POST',
+        headers: { 'X-Admin-Key': key }
+      });
+      if (res.ok) {
+        sessionStorage.setItem('admin_unlocked', '1');
+        showDocs();
+      } else {
+        err.textContent = 'Invalid key.';
+      }
+    } catch {
+      err.textContent = 'Could not reach the server.';
+    }
+  }
+
+  document.getElementById('keyInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') unlock();
+  });
+</script>
+</body>
+</html>

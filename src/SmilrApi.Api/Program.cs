@@ -86,6 +86,21 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddOpenApi();
 
+builder.Services.AddOpenApi("public", options =>
+{
+    options.AddDocumentTransformer((doc, ctx, ct) =>
+    {
+        var toRemove = doc.Paths
+            .Where(p => p.Value.Operations.Values
+                .All(op => op.Tags == null || !op.Tags.Any(t => t.Name == "Public")))
+            .Select(p => p.Key)
+            .ToList();
+        foreach (var path in toRemove)
+            doc.Paths.Remove(path);
+        return Task.CompletedTask;
+    });
+});
+
 var aiConnectionString = builder.Configuration["ApplicationInsights:ConnectionString"]
     ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
 if (!string.IsNullOrEmpty(aiConnectionString))
@@ -176,10 +191,21 @@ app.UseStaticFiles(new StaticFileOptions
 app.UseCors();
 app.UseSession();
 
+app.MapOpenApi();
+
+app.MapScalarApiReference("/scalar/v1", options =>
+{
+    options.OpenApiRoutePattern = "/openapi/public.json";
+    options.Title = "Smilr API";
+});
+
 if (!app.Environment.IsProduction())
 {
-    app.MapOpenApi();
-    app.MapScalarApiReference();
+    app.MapScalarApiReference("/scalar/internal", options =>
+    {
+        options.OpenApiRoutePattern = "/openapi/v1.json";
+        options.Title = "Smilr API — Internal";
+    });
     app.UseHangfireDashboard("/hangfire");
 }
 
