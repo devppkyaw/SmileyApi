@@ -57,7 +57,10 @@ public class ApiKeyService(SmilrDbContext db) : IApiKeyService
         var existing = await db.ApiKeys.FirstOrDefaultAsync(
             k => k.BusinessId == business.Id && k.IsActive, ct);
         if (existing is not null)
+        {
             existing.IsActive = false;
+            existing.RevokedAt = DateTimeOffset.UtcNow;
+        }
 
         var rawBytes  = RandomNumberGenerator.GetBytes(32);
         var plaintext = Convert.ToBase64String(rawBytes)
@@ -83,15 +86,16 @@ public class ApiKeyService(SmilrDbContext db) : IApiKeyService
     public async Task<ApiKey?> GetForBusinessAsync(int businessId, CancellationToken ct = default) =>
         await db.ApiKeys.FirstOrDefaultAsync(k => k.BusinessId == businessId && k.IsActive, ct);
 
-    public async Task<bool> RevokeForBusinessAsync(int businessId, CancellationToken ct = default)
+    public async Task<ApiKey?> RevokeForBusinessAsync(int businessId, CancellationToken ct = default)
     {
         var apiKey = await db.ApiKeys.FirstOrDefaultAsync(
             k => k.BusinessId == businessId && k.IsActive, ct);
-        if (apiKey is null) return false;
+        if (apiKey is null) return null;
 
         apiKey.IsActive = false;
+        apiKey.RevokedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
-        return true;
+        return apiKey;
     }
 
     private static string HashKey(string rawKey) =>

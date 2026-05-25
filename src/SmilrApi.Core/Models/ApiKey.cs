@@ -9,6 +9,7 @@ public class ApiKey
     public int RequestsToday { get; set; }
     public DateTime CreatedAt { get; set; }
     public bool IsActive { get; set; }
+    public DateTimeOffset? RevokedAt { get; set; }
     public DateTime LastResetAt { get; set; }
     public int? BusinessId { get; set; }
     public Business? Business { get; set; }

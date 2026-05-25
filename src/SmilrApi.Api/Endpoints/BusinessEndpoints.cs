@@ -146,9 +146,9 @@ public static class BusinessEndpoints
             var business = await GetSessionBusinessAsync(ctx, svc, ct);
             if (business is null) return Results.Unauthorized();
 
-            var revoked = await apiKeySvc.RevokeForBusinessAsync(business.Id, ct);
-            if (!revoked) return Results.NotFound(Error("not_found", "No active API key found."));
-            return Results.Ok(new { message = "API key revoked." });
+            var revokedKey = await apiKeySvc.RevokeForBusinessAsync(business.Id, ct);
+            if (revokedKey is null) return Results.NotFound(Error("not_found", "No active API key found."));
+            return Results.Ok(new { message = "API key revoked.", revokedAt = revokedKey.RevokedAt });
         });
 
         app.MapPost("/v1/business/locations", async (
