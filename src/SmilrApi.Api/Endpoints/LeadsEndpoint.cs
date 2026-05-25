@@ -7,6 +7,8 @@ public static class LeadsEndpoint
 {
     public static void MapLeadsEndpoint(this WebApplication app)
     {
+        if (app.Environment.IsProduction()) return;
+
         app.MapPost("/v1/leads", async (LeadRequest req, SmilrDbContext db, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Name))

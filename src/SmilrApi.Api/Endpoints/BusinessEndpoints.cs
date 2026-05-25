@@ -108,6 +108,49 @@ public static class BusinessEndpoints
             });
         });
 
+        app.MapPost("/v1/business/apikey/generate", async (
+            HttpContext ctx,
+            IBusinessService svc,
+            IApiKeyService apiKeySvc,
+            CancellationToken ct) =>
+        {
+            var business = await GetSessionBusinessAsync(ctx, svc, ct);
+            if (business is null || !business.IsEmailVerified) return Results.Unauthorized();
+
+            var (plaintext, _) = await apiKeySvc.GenerateForBusinessAsync(business, ct);
+            return Results.Ok(new { key = plaintext, tier = business.Tier });
+        });
+
+        app.MapGet("/v1/business/apikey", async (
+            HttpContext ctx,
+            IBusinessService svc,
+            IApiKeyService apiKeySvc,
+            CancellationToken ct) =>
+        {
+            var business = await GetSessionBusinessAsync(ctx, svc, ct);
+            if (business is null) return Results.Unauthorized();
+
+            var apiKey = await apiKeySvc.GetForBusinessAsync(business.Id, ct);
+            if (apiKey is null)
+                return Results.Ok(new { hasKey = false });
+
+            return Results.Ok(new { hasKey = true, tier = apiKey.Tier, createdAt = apiKey.CreatedAt });
+        });
+
+        app.MapDelete("/v1/business/apikey", async (
+            HttpContext ctx,
+            IBusinessService svc,
+            IApiKeyService apiKeySvc,
+            CancellationToken ct) =>
+        {
+            var business = await GetSessionBusinessAsync(ctx, svc, ct);
+            if (business is null) return Results.Unauthorized();
+
+            var revoked = await apiKeySvc.RevokeForBusinessAsync(business.Id, ct);
+            if (!revoked) return Results.NotFound(Error("not_found", "No active API key found."));
+            return Results.Ok(new { message = "API key revoked." });
+        });
+
         app.MapPost("/v1/business/locations", async (
             AddLocationRequest req,
             HttpContext ctx,

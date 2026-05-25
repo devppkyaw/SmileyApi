@@ -98,6 +98,8 @@ public static class StripeEndpoints
                     business.Tier                 = "pro";
                     business.StripeCustomerId     = session.CustomerId;
                     business.StripeSubscriptionId = session.SubscriptionId;
+                    var proKey = await db.ApiKeys.FirstOrDefaultAsync(k => k.BusinessId == business.Id && k.IsActive, ct);
+                    if (proKey is not null) proKey.Tier = "pro";
                     await db.SaveChangesAsync(ct);
                     logger.LogInformation("Business {Id} upgraded to Pro via Stripe", business.BusinessId);
                     break;
@@ -117,6 +119,8 @@ public static class StripeEndpoints
 
                     business.Tier                 = "free";
                     business.StripeSubscriptionId = null;
+                    var freeKey = await db.ApiKeys.FirstOrDefaultAsync(k => k.BusinessId == business.Id && k.IsActive, ct);
+                    if (freeKey is not null) freeKey.Tier = "free";
                     await db.SaveChangesAsync(ct);
                     logger.LogInformation("Business {Id} reverted to Free (subscription cancelled)", business.BusinessId);
                     break;

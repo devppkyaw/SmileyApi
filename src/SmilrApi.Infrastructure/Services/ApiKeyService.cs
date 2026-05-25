@@ -52,6 +52,48 @@ public class ApiKeyService(SmilrDbContext db) : IApiKeyService
         return (plaintext, apiKey);
     }
 
+    public async Task<(string Plaintext, ApiKey Key)> GenerateForBusinessAsync(Business business, CancellationToken ct = default)
+    {
+        var existing = await db.ApiKeys.FirstOrDefaultAsync(
+            k => k.BusinessId == business.Id && k.IsActive, ct);
+        if (existing is not null)
+            existing.IsActive = false;
+
+        var rawBytes  = RandomNumberGenerator.GetBytes(32);
+        var plaintext = Convert.ToBase64String(rawBytes)
+                               .Replace('+', '-').Replace('/', '_').TrimEnd('=');
+
+        var apiKey = new ApiKey
+        {
+            KeyHash       = HashKey(plaintext),
+            OwnerEmail    = business.Email,
+            Tier          = business.Tier,
+            BusinessId    = business.Id,
+            RequestsToday = 0,
+            CreatedAt     = DateTime.UtcNow,
+            LastResetAt   = DateTime.UtcNow,
+            IsActive      = true
+        };
+        db.ApiKeys.Add(apiKey);
+        await db.SaveChangesAsync(ct);
+
+        return (plaintext, apiKey);
+    }
+
+    public async Task<ApiKey?> GetForBusinessAsync(int businessId, CancellationToken ct = default) =>
+        await db.ApiKeys.FirstOrDefaultAsync(k => k.BusinessId == businessId && k.IsActive, ct);
+
+    public async Task<bool> RevokeForBusinessAsync(int businessId, CancellationToken ct = default)
+    {
+        var apiKey = await db.ApiKeys.FirstOrDefaultAsync(
+            k => k.BusinessId == businessId && k.IsActive, ct);
+        if (apiKey is null) return false;
+
+        apiKey.IsActive = false;
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
     private static string HashKey(string rawKey) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawKey))).ToLowerInvariant();
 }

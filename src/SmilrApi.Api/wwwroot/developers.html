@@ -25,7 +25,7 @@
     <h1>The Danish food inspection<br><span class="accent">REST API</span></h1>
     <p class="hero-sub">Official data from Fødevarestyrelsen — without the 32 MB XML file.</p>
     <div class="cta-pair">
-      <a href="#access" class="btn-primary">Request API Access →</a>
+      <a href="#get-started" class="btn-primary">Get API Access →</a>
     </div>
     <p style="margin-top:16px;font-size:0.9rem;color:rgba(255,255,255,0.55)">
       Embedding a badge on your site? <a href="index.html" style="color:rgba(255,255,255,0.85);text-decoration:underline">Business widget →</a>
@@ -214,7 +214,7 @@
           <li>Full inspection history</li>
           <li>No credit card required</li>
         </ul>
-        <a href="#access" class="btn-secondary">Request Access</a>
+        <a href="/register.html" class="btn-secondary">Create free account</a>
       </div>
 
       <div class="pricing-card pricing-card--pro">
@@ -233,35 +233,21 @@
   </div>
 </section>
 
-<!-- ─── Request Access ─────────────────────────────────────── -->
-<section class="access" id="access">
-  <div class="container">
-    <h2 class="section-title">Request API Access</h2>
-    <p class="section-sub">
-      Free tier keys are provisioned manually within 24 hours.
-      We'll email you your key.
+<!-- ─── Get Started ────────────────────────────────────────── -->
+<section class="access" id="get-started">
+  <div class="container" style="text-align:center;padding:60px 20px">
+    <h2 class="section-title">Get API Access</h2>
+    <p class="section-sub" style="max-width:480px;margin:0 auto 28px">
+      Register a free business account and generate your API key instantly from your dashboard.
+      No waiting, no approval process.
     </p>
-    <form class="access-form" id="accessForm">
-      <div class="form-row">
-        <label for="name">Name <span class="required">*</span></label>
-        <input type="text" id="name" name="name" required placeholder="Your name" />
-      </div>
-      <div class="form-row">
-        <label for="email">Email <span class="required">*</span></label>
-        <input type="email" id="email" name="email" required placeholder="you@company.com" />
-      </div>
-      <div class="form-row">
-        <label for="company">Company</label>
-        <input type="text" id="company" name="company" placeholder="Company or project name" />
-      </div>
-      <div class="form-row">
-        <label for="useCase">Use Case <span class="required">*</span></label>
-        <textarea id="useCase" name="useCase" required rows="4"
-          placeholder="Describe what you're building..."></textarea>
-      </div>
-      <div class="form-status" id="formStatus" aria-live="polite"></div>
-      <button type="submit" class="btn-primary" id="submitBtn">Send Request</button>
-    </form>
+    <div id="devCta">
+      <a href="/register.html" class="btn-primary" style="margin-right:12px">Create free account →</a>
+      <a href="/login.html" class="btn-secondary">Log in</a>
+    </div>
+    <div id="devCtaLoggedIn" style="display:none">
+      <a href="/dashboard.html" class="btn-primary">Go to dashboard →</a>
+    </div>
   </div>
 </section>
 
@@ -269,45 +255,6 @@
 <site-footer></site-footer>
 
 <script src="/components/footer.js"></script>
-<script>
-document.getElementById('accessForm').addEventListener('submit', async function (e) {
-  e.preventDefault();
-  const btn    = document.getElementById('submitBtn');
-  const status = document.getElementById('formStatus');
-  btn.disabled     = true;
-  btn.textContent  = 'Sending...';
-  status.textContent = '';
-  status.className   = 'form-status';
-
-  try {
-    const res = await fetch('/v1/leads', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name:    document.getElementById('name').value,
-        email:   document.getElementById('email').value,
-        company: document.getElementById('company').value,
-        useCase: document.getElementById('useCase').value
-      })
-    });
-    if (res.ok) {
-      status.textContent = "Request received. We'll email you within 24 hours.";
-      status.classList.add('form-status--success');
-      this.reset();
-    } else {
-      status.textContent = 'Something went wrong. Email us directly at yourSmilr@gmail.com.';
-      status.classList.add('form-status--error');
-    }
-  } catch {
-    status.textContent = 'Network error. Email us directly at yourSmilr@gmail.com.';
-    status.classList.add('form-status--error');
-  } finally {
-    btn.disabled    = false;
-    btn.textContent = 'Send Request';
-  }
-});
-</script>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
 <script>
@@ -317,6 +264,8 @@ document.getElementById('accessForm').addEventListener('submit', async function 
     const link = document.getElementById('navAuthLink');
     link.href = '/dashboard.html';
     link.textContent = 'Dashboard →';
+    document.getElementById('devCta').style.display         = 'none';
+    document.getElementById('devCtaLoggedIn').style.display = 'block';
   }
 })();
 </script>

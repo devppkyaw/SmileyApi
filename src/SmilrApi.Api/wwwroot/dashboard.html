@@ -51,6 +51,7 @@
       <div class="dash-tabs">
         <button class="dash-tab active" data-tab="locations">Locations</button>
         <button class="dash-tab" data-tab="webhooks">Webhooks</button>
+        <button class="dash-tab" data-tab="apikey">Developer API</button>
       </div>
 
       <!-- ── Locations tab ── -->
@@ -137,6 +138,28 @@
 
       </div>
 
+      <!-- ── Developer API tab ── -->
+      <div id="tab-apikey" class="tab-panel" style="display:none">
+        <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:16px">
+          Use your API key with the <code>X-Api-Key</code> header to access the REST API.
+          <a href="/developers.html" target="_blank" rel="noopener">API docs →</a>
+        </p>
+        <div id="apikeyStatus" style="margin-bottom:12px;font-size:0.9rem"></div>
+        <div id="apikeyInfo" style="display:none;margin-bottom:16px;padding:14px 16px;border:1px solid var(--border);border-radius:6px;background:var(--surface)">
+          <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px">Active key · tier: <strong><span id="apikeyTier"></span></strong></div>
+          <div style="font-size:0.8rem;color:var(--text-muted)">Created: <span id="apikeyCreatedAt"></span></div>
+        </div>
+        <div id="apikeyNoKey" style="display:none;margin-bottom:16px;font-size:0.875rem;color:var(--text-muted)">No active API key.</div>
+        <div id="apikeyNewKey" style="display:none;margin-bottom:16px;padding:14px 16px;border:1px solid #6ee7b7;border-radius:6px;background:#d1fae5;color:#065f46">
+          <strong>New key — save this, it won't be shown again:</strong><br>
+          <code id="apikeyPlaintext" style="font-family:var(--font-mono);word-break:break-all;font-size:0.9rem"></code>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn-primary" onclick="generateApiKey()">Generate new key</button>
+          <button class="btn-secondary" id="revokeBtn" style="display:none" onclick="revokeApiKey()">Revoke key</button>
+        </div>
+      </div>
+
     </div>
   </div>
 </section>
@@ -204,7 +227,48 @@ document.querySelectorAll('.dash-tab').forEach(function (btn) {
   }
 
   loadLocations();
+  loadApiKey();
 })();
+
+async function loadApiKey() {
+  const res  = await fetch('/v1/business/apikey');
+  const data = await res.json();
+  if (data.hasKey) {
+    document.getElementById('apikeyInfo').style.display  = 'block';
+    document.getElementById('apikeyNoKey').style.display = 'none';
+    document.getElementById('revokeBtn').style.display   = 'inline-block';
+    document.getElementById('apikeyTier').textContent    = data.tier;
+    document.getElementById('apikeyCreatedAt').textContent = formatDate(data.createdAt.slice(0, 10).replace(/-/g, '-'));
+  } else {
+    document.getElementById('apikeyInfo').style.display  = 'none';
+    document.getElementById('apikeyNoKey').style.display = 'block';
+    document.getElementById('revokeBtn').style.display   = 'none';
+  }
+}
+
+async function generateApiKey() {
+  const hasKey = document.getElementById('revokeBtn').style.display !== 'none';
+  if (hasKey && !confirm('This will invalidate your existing key. Continue?')) return;
+  document.getElementById('apikeyNewKey').style.display = 'none';
+  const status = document.getElementById('apikeyStatus');
+  status.textContent = '';
+  const res  = await fetch('/v1/business/apikey/generate', { method: 'POST' });
+  const data = await res.json();
+  if (res.ok) {
+    document.getElementById('apikeyPlaintext').textContent = data.key;
+    document.getElementById('apikeyNewKey').style.display  = 'block';
+    loadApiKey();
+  } else {
+    status.style.color = 'var(--red)';
+    status.textContent = data.error?.message || 'Failed.';
+  }
+}
+
+async function revokeApiKey() {
+  if (!confirm('Revoke your API key? All requests using it will stop working immediately.')) return;
+  const res = await fetch('/v1/business/apikey', { method: 'DELETE' });
+  if (res.ok) loadApiKey();
+}
 
 async function loadLocations() {
   const res  = await fetch('/v1/business/locations');

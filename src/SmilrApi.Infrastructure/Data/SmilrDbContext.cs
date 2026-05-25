@@ -45,6 +45,11 @@ public class SmilrDbContext(DbContextOptions<SmilrDbContext> options) : DbContex
             e.Property(x => x.KeyHash).HasMaxLength(64);
             e.Property(x => x.OwnerEmail).HasMaxLength(256);
             e.Property(x => x.Tier).HasMaxLength(32);
+            e.HasOne(x => x.Business)
+             .WithMany()
+             .HasForeignKey(x => x.BusinessId)
+             .IsRequired(false)
+             .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<WebhookSubscription>(e =>

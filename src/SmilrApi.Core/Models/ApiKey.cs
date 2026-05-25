@@ -10,4 +10,6 @@ public class ApiKey
     public DateTime CreatedAt { get; set; }
     public bool IsActive { get; set; }
     public DateTime LastResetAt { get; set; }
+    public int? BusinessId { get; set; }
+    public Business? Business { get; set; }
 }
