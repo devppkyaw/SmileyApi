@@ -141,12 +141,9 @@
   </div>
 </section>
 
-<footer class="footer">
-  <div class="container">
-    <p>Questions? <a href="mailto:yourSmilr@gmail.com">yourSmilr@gmail.com</a></p>
-  </div>
-</footer>
+<site-footer></site-footer>
 
+<script src="/components/footer.js"></script>
 <script src="/smilr-icons.js"></script>
 <script>
 let currentTier = 'free';
@@ -244,6 +241,7 @@ async function loadLocations() {
       '<td>' + scoreStrip(loc.scoreHistory, loc.virksomhedsType) + '</td>' +
       '<td>' +
         '<div class="act-row">' +
+          (loc.reportUrl ? '<a href="' + esc(loc.reportUrl) + '" target="_blank" rel="noopener" class="act-btn" title="View inspection report">&#x1F4CB; Report</a>' : '') +
           '<button onclick="openEmbedModal(' + loc.navnelbnr + ')" class="act-btn" title="Embed code">⎘ Embed</button>' +
           '<button onclick="removeLocation(' + loc.navnelbnr + ')" class="act-btn act-btn--danger" title="Remove">✕</button>' +
         '</div>' +
