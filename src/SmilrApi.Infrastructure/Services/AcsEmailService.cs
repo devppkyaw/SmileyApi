@@ -84,11 +84,11 @@ public class AcsEmailService : IEmailService
             $"<td>{c.CvrNumber ?? "—"}</td>" +
             $"<td>{c.EstablishmentName}</td>" +
             $"<td>{c.Address ?? "—"}</td>" +
-            $"<td>{ScoreLabel(c.OldScore)} → {ScoreLabel(c.NewScore)}</td>" +
+            $"<td>{c.OldScore} → {c.NewScore}</td>" +
             $"</tr>"));
 
         var plainLines = string.Join("\n", changes.Select(c =>
-            $"{c.CvrNumber ?? "—"} | {c.EstablishmentName} | {c.Address ?? "—"} | {ScoreLabel(c.OldScore)} → {ScoreLabel(c.NewScore)}"));
+            $"{c.CvrNumber ?? "—"} | {c.EstablishmentName} | {c.Address ?? "—"} | {c.OldScore} → {c.NewScore}"));
 
         var message = new EmailMessage(
             senderAddress: _sender,
@@ -109,12 +109,5 @@ public class AcsEmailService : IEmailService
         _logger.LogInformation("Score alert email queued to {To} ({Count} changes), operationId={Id}", recipient, changes.Count, op.Id);
     }
 
-    private static string ScoreLabel(int score) => score switch
-    {
-        1 => "Elite",
-        2 => "Good",
-        3 => "Needs improvement",
-        4 => "Not approved",
-        _ => $"Score {score}"
-    };
+
 }
