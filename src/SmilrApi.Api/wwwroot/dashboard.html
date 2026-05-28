@@ -36,9 +36,11 @@
         You're now on Pro. Welcome aboard!
       </div>
 
+
+
       <div id="freeActions" style="display:none;margin-bottom:24px;padding:16px 20px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)">
         <strong style="display:block;margin-bottom:4px">Upgrade to Pro</strong>
-        <p style="font-size:0.875rem;color:var(--text-muted);margin-bottom:12px">99 kr/month — unlimited CVRs, add by Navnelbnr, score-change email alerts.</p>
+        <p style="font-size:0.875rem;color:var(--text-muted);margin-bottom:12px">199 kr/month — up to 20 CVRs, add by Navnelbnr, webhooks, Developer API.</p>
         <button class="btn-primary" onclick="startCheckout()">Upgrade to Pro →</button>
         <span id="checkoutStatus" style="margin-left:12px;font-size:0.85rem;color:var(--text-muted)"></span>
       </div>
@@ -272,10 +274,12 @@ async function revokeApiKey() {
 
 async function loadLocations() {
   const res  = await fetch('/v1/business/locations');
-  const list = await res.json();
+  const data = await res.json();
+  const list = data.locations;
   const tbody = document.getElementById('locationList');
 
-  document.getElementById('locationCount').textContent = 'Locations (' + list.length + ')';
+  document.getElementById('locationCount').textContent = 'Locations (' + data.locationCount + ')';
+
 
   if (!list.length) {
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:28px;color:var(--text-muted);font-size:0.9rem">No locations yet. Add one above.</td></tr>';
@@ -553,6 +557,7 @@ async function startCheckout() {
     const res  = await fetch('/v1/business/checkout', { method: 'POST' });
     const data = await res.json();
     if (res.ok) {
+      if (status) status.textContent = '';
       location.href = data.url;
     } else {
       if (status) status.textContent = data.error?.message || 'Failed to start checkout.';
@@ -569,6 +574,7 @@ async function openPortal() {
     const res  = await fetch('/v1/business/portal', { method: 'POST' });
     const data = await res.json();
     if (res.ok) {
+      status.textContent = '';
       location.href = data.url;
     } else {
       status.textContent = data.error?.message || 'Failed to open portal.';
@@ -621,6 +627,11 @@ function esc(str) {
 
 document.getElementById('embedModal').addEventListener('click', function (e) {
   if (e.target === this) closeEmbedModal();
+});
+
+window.addEventListener('pageshow', function () {
+  document.getElementById('portalStatus').textContent   = '';
+  document.getElementById('checkoutStatus').textContent = '';
 });
 </script>
 

@@ -209,7 +209,7 @@ public class EstablishmentSyncService(SmilrDbContext db, IEmailService emailServ
 
         var alerts = await db.BusinessLocations
             .Where(bl => navnelbnrs.Contains(bl.Navnelbnr))
-            .Join(db.Businesses.Where(b => b.Tier == "pro"),
+            .Join(db.Businesses,
                 bl => bl.BusinessId,
                 b  => b.Id,
                 (bl, b) => new { bl.Navnelbnr, b.Email, b.Id })
@@ -221,7 +221,7 @@ public class EstablishmentSyncService(SmilrDbContext db, IEmailService emailServ
             e => e.Navnelbnr,
             e => new { e.Name, e.Address, e.CvrNumber, Scores = scoreById[e.Id] });
 
-        // Group by business so each Pro account receives one digest email
+        // Group by business so each account receives one digest email
         var alertsByBusiness = alerts
             .GroupBy(a => (a.Email, a.Id))
             .ToDictionary(

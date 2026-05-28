@@ -156,6 +156,7 @@ public static class BusinessEndpoints
             HttpContext ctx,
             IBusinessService svc,
             SmilrDbContext db,
+            IConfiguration config,
             CancellationToken ct) =>
         {
             var business = await GetSessionBusinessAsync(ctx, svc, ct);
@@ -163,6 +164,35 @@ public static class BusinessEndpoints
 
             if (business.Tier != "pro")
                 return Results.Json(Error("forbidden", "Adding locations by Navnelbnr requires a Pro account."), statusCode: 403);
+
+            var proCvrCap = config.GetValue<int>("Tiers:ProCvrCap", 20);
+            var estCvr = await db.Establishments
+                .Where(e => e.Navnelbnr == req.Navnelbnr)
+                .Select(e => e.CvrNumber)
+                .FirstOrDefaultAsync(ct);
+
+            if (estCvr != null)
+            {
+                var cvrAlreadyInPortfolio = await db.BusinessLocations
+                    .Where(bl => bl.BusinessId == business.Id)
+                    .Join(db.Establishments, bl => bl.Navnelbnr, e => e.Navnelbnr, (bl, e) => e.CvrNumber)
+                    .AnyAsync(cvr => cvr == estCvr, ct);
+
+                if (!cvrAlreadyInPortfolio)
+                {
+                    var cvrCount = await db.BusinessLocations
+                        .Where(bl => bl.BusinessId == business.Id)
+                        .Join(db.Establishments, bl => bl.Navnelbnr, e => e.Navnelbnr, (bl, e) => e.CvrNumber)
+                        .Where(cvr => cvr != null)
+                        .Distinct()
+                        .CountAsync(ct);
+
+                    if (cvrCount >= proCvrCap)
+                        return Results.Json(
+                            Error("cvr_limit_reached", $"Pro accounts support up to {proCvrCap} CVRs. Contact us at hello@smilrhq.dk for Enterprise."),
+                            statusCode: 402);
+                }
+            }
 
             var exists = await db.Establishments.AnyAsync(e => e.Navnelbnr == req.Navnelbnr, ct);
             if (!exists)
@@ -189,6 +219,7 @@ public static class BusinessEndpoints
             HttpContext ctx,
             IBusinessService svc,
             SmilrDbContext db,
+            IConfiguration config,
             CancellationToken ct) =>
         {
             var business = await GetSessionBusinessAsync(ctx, svc, ct);
@@ -213,6 +244,21 @@ public static class BusinessEndpoints
                     return Results.Json(
                         Error("cvr_limit_reached", "Free accounts are limited to one CVR. Upgrade to Pro to add more."),
                         statusCode: 403);
+            }
+            else
+            {
+                var proCvrCap    = config.GetValue<int>("Tiers:ProCvrCap", 20);
+                var existingCvrs = await db.BusinessLocations
+                    .Where(bl => bl.BusinessId == business.Id)
+                    .Join(db.Establishments, bl => bl.Navnelbnr, e => e.Navnelbnr, (bl, e) => e.CvrNumber)
+                    .Where(cvr => cvr != null)
+                    .Distinct()
+                    .ToListAsync(ct);
+
+                if (!existingCvrs.Contains(req.Cvr.Trim()) && existingCvrs.Count >= proCvrCap)
+                    return Results.Json(
+                        Error("cvr_limit_reached", $"Pro accounts support up to {proCvrCap} CVRs. Contact us at hello@smilrhq.dk for Enterprise."),
+                        statusCode: 402);
             }
 
             var navnelbnrs = await db.Establishments
@@ -337,7 +383,7 @@ public static class BusinessEndpoints
                           .Select(i => new { date = i.InspectedOn, score = i.SmileyScore })
                           .ToList());
 
-            var result = locations.Select(l => new
+            var locationItems = locations.Select(l => new
             {
                 l.navnelbnr,
                 l.cvrNumber,
@@ -350,9 +396,15 @@ public static class BusinessEndpoints
                 l.virksomhedsType,
                 l.addedAt,
                 scoreHistory = historyMap.GetValueOrDefault(l.estId) ?? []
-            });
+            }).ToList();
 
-            return Results.Ok(result);
+            var cvrCount = locationItems.Select(l => l.cvrNumber).Where(c => c != null).Distinct().Count();
+            return Results.Ok(new
+            {
+                locations     = locationItems,
+                locationCount = locationItems.Count,
+                cvrCount
+            });
         });
     }
 

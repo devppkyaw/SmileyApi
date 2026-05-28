@@ -58,15 +58,16 @@
 <!-- ─── Tier Comparison ────────────────────────────────────── -->
 <section class="tiers">
   <div class="container">
-    <h2 class="section-title">Simple, transparent tiers</h2>
-    <p class="section-sub">Register for free. Upgrade for multi-location management and alerts.</p>
+    <h2 class="section-title">Simple, transparent pricing</h2>
+    <p class="section-sub">Register for free. Upgrade when you need more locations.</p>
     <div class="table-wrap">
       <table class="tier-table">
         <thead>
           <tr>
             <th></th>
-            <th>Free</th>
-            <th>Pro</th>
+            <th>Free<br><small style="font-weight:400;font-size:0.8rem">0 kr/mo</small></th>
+            <th>Pro<br><small style="font-weight:400;font-size:0.8rem">199 kr/mo</small></th>
+            <th>Enterprise<br><small style="font-weight:400;font-size:0.8rem">Contact us</small></th>
           </tr>
         </thead>
         <tbody>
@@ -74,33 +75,38 @@
             <td>Score badge + official report link</td>
             <td class="tier-yes">Yes</td>
             <td class="tier-yes">Yes</td>
-          </tr>
-          <tr>
-            <td>Multiple locations (CVR bulk onboard)</td>
-            <td class="tier-no">—</td>
             <td class="tier-yes">Yes</td>
           </tr>
           <tr>
+            <td>Locations (CVR bulk onboard)</td>
+            <td>1 CVR</td>
+            <td>Up to 20 CVRs</td>
+            <td class="tier-yes">Unlimited</td>
+          </tr>
+          <tr>
             <td>Score-change email alerts</td>
-            <td class="tier-no">—</td>
+            <td class="tier-yes">Yes</td>
+            <td class="tier-yes">Yes</td>
             <td class="tier-yes">Yes</td>
           </tr>
           <tr>
             <td>Webhooks</td>
             <td class="tier-no">—</td>
             <td class="tier-yes">Yes</td>
+            <td class="tier-yes">Yes</td>
           </tr>
           <tr>
             <td>Developer API access</td>
             <td class="tier-no">—</td>
-            <td class="tier-yes">Yes</td>
+            <td>Yes (10k req/day)</td>
+            <td>Yes (custom)</td>
           </tr>
-
         </tbody>
       </table>
     </div>
-    <div class="tiers-cta">
+    <div class="tiers-cta" style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;align-items:center">
       <a href="register.html" class="btn-primary">Register for free →</a>
+      <a href="mailto:hello@smilrhq.dk" class="btn-secondary">Enterprise — contact us →</a>
     </div>
   </div>
 </section>
@@ -122,7 +128,7 @@
       <div class="feature-card">
         <div class="feature-icon">&#x1F4E7;</div>
         <h3>Score-change alerts</h3>
-        <p>Pro accounts get an email the moment any location's Smilr score changes — before your customers notice.</p>
+        <p>Get an email the moment your Smilr score changes — before your customers notice. Included on all plans.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#x1F3EA;</div>
@@ -145,6 +151,11 @@
     const link = document.getElementById('navAuthLink');
     link.href = '/dashboard.html';
     link.textContent = 'Dashboard →';
+
+    document.querySelectorAll('a[href="register.html"]').forEach(function (btn) {
+      btn.href = '/dashboard.html';
+      btn.textContent = 'Go to Dashboard →';
+    });
   }
 })();
 </script>
