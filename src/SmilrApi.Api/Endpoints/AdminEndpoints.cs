@@ -64,11 +64,16 @@ public static class AdminEndpoints
             return provided == adminKey ? Results.Ok() : Results.Unauthorized();
         });
 
-        // Dev-only endpoints
-        if (app.Environment.IsProduction()) return;
-
-        app.MapGet("/admin/requests", async (SmilrDbContext db, CancellationToken ct) =>
+        app.MapGet("/admin/requests", async (HttpContext ctx, IConfiguration cfg, SmilrDbContext db, CancellationToken ct) =>
         {
+            var adminKey = cfg["Admin:Key"];
+            if (!string.IsNullOrEmpty(adminKey))
+            {
+                var provided = ctx.Request.Headers["X-Admin-Key"].FirstOrDefault();
+                if (provided != adminKey)
+                    return Results.Json(Error("unauthorized", "Invalid admin key."), statusCode: 401);
+            }
+
             var requests = await db.AccessRequests
                 .Where(r => r.Status == 0)
                 .OrderBy(r => r.SubmittedAt)
@@ -78,8 +83,16 @@ public static class AdminEndpoints
         });
 
         app.MapPost("/admin/requests/{id}/approve", async (
-            int id, SmilrDbContext db, IApiKeyService apiKeyService, CancellationToken ct) =>
+            int id, HttpContext ctx, IConfiguration cfg, SmilrDbContext db, IApiKeyService apiKeyService, CancellationToken ct) =>
         {
+            var adminKey = cfg["Admin:Key"];
+            if (!string.IsNullOrEmpty(adminKey))
+            {
+                var provided = ctx.Request.Headers["X-Admin-Key"].FirstOrDefault();
+                if (provided != adminKey)
+                    return Results.Json(Error("unauthorized", "Invalid admin key."), statusCode: 401);
+            }
+
             var request = await db.AccessRequests.FindAsync([id], ct);
             if (request is null)
                 return Results.NotFound(Error("not_found", $"No access request with id {id}."));

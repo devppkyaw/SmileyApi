@@ -123,6 +123,12 @@
     <p>Pending API access requests awaiting approval.</p>
   </div>
 
+  <div style="max-width:320px;margin-bottom:24px;">
+    <label for="admin-key" style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;">Admin Key</label>
+    <input type="password" id="admin-key" placeholder="Leave blank if running locally" autocomplete="off"
+      style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:0.95rem;" />
+  </div>
+
   <div id="error-container"></div>
   <div id="content"><div class="loading">Loading requests...</div></div>
 </div>
@@ -132,9 +138,15 @@
   const content = document.getElementById('content');
   const errorContainer = document.getElementById('error-container');
 
+  function authHeaders() {
+    const key = document.getElementById('admin-key').value.trim();
+    return key ? { 'X-Admin-Key': key } : {};
+  }
+
   async function loadRequests() {
     try {
-      const res = await fetch('/admin/requests');
+      const res = await fetch('/admin/requests', { headers: authHeaders() });
+      if (res.status === 401) throw new Error('Invalid or missing admin key');
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const requests = await res.json();
       render(requests);
@@ -186,7 +198,7 @@
     btn.disabled = true;
     btn.textContent = 'Approving...';
     try {
-      const res = await fetch(`/admin/requests/${id}/approve`, { method: 'POST' });
+      const res = await fetch(`/admin/requests/${id}/approve`, { method: 'POST', headers: authHeaders() });
       const data = await res.json();
       const actionCell = document.querySelector(`#row-${id} .action-cell`);
       if (res.ok) {
@@ -199,8 +211,9 @@
       } else {
         btn.disabled = false;
         btn.textContent = 'Approve';
+        const message = res.status === 401 ? 'Invalid or missing admin key' : (data.error?.message ?? 'Approval failed.');
         actionCell.insertAdjacentHTML('beforebegin',
-          `<div class="error-banner" style="margin-bottom:8px;">${escHtml(data.error?.message ?? 'Approval failed.')}</div>`);
+          `<div class="error-banner" style="margin-bottom:8px;">${escHtml(message)}</div>`);
       }
     } catch (err) {
       btn.disabled = false;

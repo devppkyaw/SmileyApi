@@ -21,6 +21,9 @@ param stripeWebhookSecret string = ''
 
 param stripePriceId string = ''
 
+@secure()
+param adminKey string = ''
+
 resource vault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: name
   location: location
@@ -92,6 +95,17 @@ resource stripePriceIdSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if
   name: 'Stripe--PriceId'
   properties: {
     value: stripePriceId
+  }
+}
+
+// Admin--Key maps to Admin:Key in ASP.NET Core config, checked against the
+// X-Admin-Key header on /admin/sync, /admin/verify, /admin/requests, and
+// /admin/requests/{id}/approve. Left unset (empty), those endpoints run unauthenticated.
+resource adminKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(adminKey)) {
+  parent: vault
+  name: 'Admin--Key'
+  properties: {
+    value: adminKey
   }
 }
 

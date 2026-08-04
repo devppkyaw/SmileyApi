@@ -31,6 +31,10 @@ param stripeWebhookSecret string = ''
 @description('Stripe Price ID for the Pro subscription (price_...).')
 param stripePriceId string = ''
 
+@secure()
+@description('Admin key required via X-Admin-Key header on /admin/* endpoints. Leave empty to run those endpoints unauthenticated.')
+param adminKey string = ''
+
 
 // A short deterministic suffix scoped to this resource group avoids global naming conflicts
 // for App Service (*.azurewebsites.net) and Key Vault (globally unique).
@@ -81,6 +85,7 @@ module keyvault 'modules/keyvault.bicep' = {
     stripeSecretKey: stripeSecretKey
     stripeWebhookSecret: stripeWebhookSecret
     stripePriceId: stripePriceId
+    adminKey: adminKey
   }
 }
 
