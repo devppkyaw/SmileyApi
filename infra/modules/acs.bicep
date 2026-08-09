@@ -7,9 +7,7 @@ resource communication 'Microsoft.Communication/communicationServices@2023-04-01
   location: 'global'
   properties: {
     dataLocation: 'Europe'
-    // TODO: once notify.smilrhq.dk DNS records are verified in Azure Portal,
-    // change to: linkedDomains: [customDomain.id]
-    linkedDomains: [azureManagedDomain.id]
+    linkedDomains: [customDomain.id]
   }
 }
 
@@ -32,10 +30,7 @@ resource azureManagedDomain 'Microsoft.Communication/emailServices/domains@2023-
 
 // Custom domain — using a subdomain (not the apex smilrhq.dk) so ACS's SPF record
 // never has to coexist with the apex domain's Google Workspace SPF record.
-// After adding DNS records at your registrar and verifying in the portal:
-//   1. Change linkedDomains above to: [customDomain.id]
-//   2. Change senderAddress output below to: 'donotreply@notify.smilrhq.dk'
-//   3. Redeploy (push to main).
+// DNS records added and Domain/SPF/DKIM/DKIM2 verified 2026-08-09.
 resource customDomain 'Microsoft.Communication/emailServices/domains@2023-04-01' = {
   parent: emailService
   name: 'notify.smilrhq.dk'
@@ -49,5 +44,4 @@ resource customDomain 'Microsoft.Communication/emailServices/domains@2023-04-01'
 @secure()
 output connectionString string = communication.listKeys().primaryConnectionString
 
-// TODO: once notify.smilrhq.dk is verified, change to: 'donotreply@notify.smilrhq.dk'
-output senderAddress string = 'donotreply@${azureManagedDomain.properties.mailFromSenderDomain}'
+output senderAddress string = 'donotreply@notify.smilrhq.dk'
