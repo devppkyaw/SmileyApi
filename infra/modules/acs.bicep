@@ -7,9 +7,7 @@ resource communication 'Microsoft.Communication/communicationServices@2023-04-01
   location: 'global'
   properties: {
     dataLocation: 'Europe'
-    // TODO: once smilrhq.dk DNS records are verified in Azure Portal,
-    // change to: linkedDomains: [customDomain.id]
-    linkedDomains: [azureManagedDomain.id]
+    linkedDomains: [customDomain.id]
   }
 }
 
@@ -30,11 +28,7 @@ resource azureManagedDomain 'Microsoft.Communication/emailServices/domains@2023-
   }
 }
 
-// Custom domain — created here so DNS records become visible in the Azure Portal.
-// After adding DNS records at your registrar and verifying in the portal:
-//   1. Change linkedDomains above to: [customDomain.id]
-//   2. Change senderAddress output below to: 'donotreply@smilrhq.dk'
-//   3. Redeploy (push to main).
+// Custom domain — DNS records added and Domain/DKIM/DKIM2 verified 2026-08-09.
 resource customDomain 'Microsoft.Communication/emailServices/domains@2023-04-01' = {
   parent: emailService
   name: 'smilrhq.dk'
@@ -48,5 +42,4 @@ resource customDomain 'Microsoft.Communication/emailServices/domains@2023-04-01'
 @secure()
 output connectionString string = communication.listKeys().primaryConnectionString
 
-// TODO: once smilrhq.dk is verified, change to: 'donotreply@smilrhq.dk'
-output senderAddress string = 'donotreply@${azureManagedDomain.properties.mailFromSenderDomain}'
+output senderAddress string = 'donotreply@smilrhq.dk'
