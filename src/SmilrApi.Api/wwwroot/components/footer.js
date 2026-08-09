@@ -4,7 +4,7 @@ class SiteFooter extends HTMLElement {
       <footer class="footer">
         <div class="container">
           <p>Data provided by <a href="https://www.foedevarestyrelsen.dk" target="_blank" rel="noopener">Fødevarestyrelsen</a> under Danish open data licence.</p>
-          <p>Questions? <a href="mailto:yourSmilr@gmail.com">yourSmilr@gmail.com</a></p>
+          <p>Questions? <a href="mailto:info@smilrhq.dk">info@smilrhq.dk</a></p>
           <p>
             <a href="/about.html">About us</a> &nbsp;·&nbsp;
             <a href="/contact.html">Contact us</a> &nbsp;·&nbsp;
