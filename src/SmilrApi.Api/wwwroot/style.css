@@ -916,6 +916,33 @@ pre:not([class*="language-"]) strong {
   flex-shrink: 0;
 }
 
+.history-link {
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 4px;
+  color: var(--accent);
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.history-table th {
+  text-align: left;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.history-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+  vertical-align: middle;
+}
+
 /* ─── Row action buttons ──────────────────────────────────── */
 
 .act-row {

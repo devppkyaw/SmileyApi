@@ -15,9 +15,10 @@ Smilr is a SaaS API and embeddable widget platform that surfaces Danish food ins
 ## Data Source
 
 - **Provider:** Fødevarestyrelsen (Danish Veterinary and Food Administration)
-- **Format:** ZIP-packaged XML, downloaded and parsed every 24 hours
+- **Format:** Plain XML, downloaded and parsed every 24 hours (streamed via `HttpClient` + `XmlReader`, no ZIP step)
 - **Sync method:** Background worker using streaming XML parser; upserts ~30k+ establishment records via bulk SQL MERGE
 - **Score skip:** Sync is skipped on restart if data is less than 20 hours old (production only)
+- **Manual override:** `POST /admin/sync` (requires `X-Admin-Key`) forces an immediate full resync, bypassing the 20-hour skip — see `docs/ProjectNotes.md`
 
 ---
 

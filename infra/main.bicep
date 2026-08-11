@@ -17,6 +17,12 @@ param sqlAdminPassword string
 @description('Full ghcr.io image reference, e.g. ghcr.io/owner/smilr-api:sha-abc1234')
 param imageName string
 
+// Not set in infra/parameters/{dev,prod}.bicepparam, so this defaults to '' on every deploy.
+// The live prod value is set out-of-band via `az keyvault secret set --vault-name kv-smilr-api-prod-4lubrf
+// --name Email--OverrideAddress --value ...` and is NOT tracked as IaC — this template has no record of it.
+// Because the secret resource in keyvault.bicep is conditional on a non-empty value, a normal deploy won't
+// actively overwrite a manually-set secret, but don't rely on that: verify with `az keyvault secret show`
+// after any deploy, since this file will never tell you the real current value.
 @description('When set, all outgoing emails are redirected to this address instead of the real recipient.')
 param emailOverrideAddress string = ''
 

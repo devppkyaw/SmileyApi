@@ -62,6 +62,8 @@ builder.Services.AddSession(options =>
 
 builder.Services.AddHttpClient();
 builder.Services.AddHttpClient("webhook", client => client.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddHttpClient("fodevarestyrelsen", client =>
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Smilr/1.0 (+https://smilrhq.dk)"));
 builder.Services.AddSingleton<FodevareXmlParser>();
 builder.Services.AddHostedService<XmlSyncWorker>();
 

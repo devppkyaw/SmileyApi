@@ -374,28 +374,28 @@ public static class BusinessEndpoints
                 .Select(i => new { i.EstablishmentId, i.InspectedOn, i.SmileyScore })
                 .ToListAsync(ct);
 
-            var historyMap = inspections
+            var inspectionsByEst = inspections
                 .GroupBy(i => i.EstablishmentId)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.OrderByDescending(i => i.InspectedOn)
-                          .Take(4)
-                          .Select(i => new { date = i.InspectedOn, score = i.SmileyScore })
-                          .ToList());
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(i => i.InspectedOn).ToList());
 
-            var locationItems = locations.Select(l => new
+            var locationItems = locations.Select(l =>
             {
-                l.navnelbnr,
-                l.cvrNumber,
-                l.name,
-                l.address,
-                l.city,
-                l.latestScore,
-                l.latestScoreDate,
-                l.reportUrl,
-                l.virksomhedsType,
-                l.addedAt,
-                scoreHistory = historyMap.GetValueOrDefault(l.estId) ?? []
+                var all = inspectionsByEst.GetValueOrDefault(l.estId) ?? [];
+                return new
+                {
+                    l.navnelbnr,
+                    l.cvrNumber,
+                    l.name,
+                    l.address,
+                    l.city,
+                    l.latestScore,
+                    l.latestScoreDate,
+                    l.reportUrl,
+                    l.virksomhedsType,
+                    l.addedAt,
+                    scoreHistory = all.Take(4).Select(i => new { date = i.InspectedOn, score = i.SmileyScore }).ToList(),
+                    inspectionCount = all.Count
+                };
             }).ToList();
 
             var cvrCount = locationItems.Select(l => l.cvrNumber).Where(c => c != null).Distinct().Count();
@@ -405,6 +405,35 @@ public static class BusinessEndpoints
                 locationCount = locationItems.Count,
                 cvrCount
             });
+        });
+
+        app.MapGet("/v1/business/locations/{navnelbnr:int}/history", async (
+            int navnelbnr,
+            HttpContext ctx,
+            IBusinessService svc,
+            SmilrDbContext db,
+            CancellationToken ct) =>
+        {
+            var business = await GetSessionBusinessAsync(ctx, svc, ct);
+            if (business is null) return Results.Unauthorized();
+
+            var owns = await db.BusinessLocations
+                .AnyAsync(bl => bl.BusinessId == business.Id && bl.Navnelbnr == navnelbnr, ct);
+            if (!owns) return Results.NotFound();
+
+            var est = await db.Establishments
+                .Where(e => e.Navnelbnr == navnelbnr)
+                .Select(e => new { e.Id, e.Name })
+                .FirstOrDefaultAsync(ct);
+            if (est is null) return Results.NotFound();
+
+            var history = await db.Inspections
+                .Where(i => i.EstablishmentId == est.Id)
+                .OrderByDescending(i => i.InspectedOn)
+                .Select(i => new { date = i.InspectedOn, score = i.SmileyScore })
+                .ToListAsync(ct);
+
+            return Results.Ok(new { navnelbnr, name = est.Name, history });
         });
     }
 

@@ -306,7 +306,11 @@ async function loadLocations() {
         '<strong style="font-size:0.875rem">' + esc(loc.name) + '</strong>' +
         (addr ? '<span class="loc-addr">' + esc(addr) + '</span>' : '') +
       '</td>' +
-      '<td>' + scoreStrip(loc.scoreHistory, loc.virksomhedsType) + '</td>' +
+      '<td>' + scoreStrip(loc.scoreHistory, loc.virksomhedsType) +
+        (loc.inspectionCount > 4
+          ? '<a href="javascript:void(0)" class="history-link" onclick="openHistoryModal(' + loc.navnelbnr + ')">View full history (' + loc.inspectionCount + ')</a>'
+          : '') +
+      '</td>' +
       '<td>' +
         '<div class="act-row">' +
           (loc.reportUrl ? '<a href="' + esc(loc.reportUrl) + '" target="_blank" rel="noopener" class="act-btn" title="View inspection report">&#x1F4CB; Report</a>' : '') +
@@ -612,6 +616,42 @@ function closeEmbedModal() {
   document.getElementById('embedModal').style.display = 'none';
 }
 
+async function openHistoryModal(navnelbnr) {
+  var loc = locationData[navnelbnr];
+  document.getElementById('historyModalTitle').textContent = loc.name;
+  var body = document.getElementById('historyModalBody');
+  body.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem">Loading…</p>';
+  document.getElementById('historyModal').style.display = 'flex';
+
+  var res = await fetch('/v1/business/locations/' + navnelbnr + '/history');
+  if (!res.ok) {
+    body.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem">Could not load history.</p>';
+    return;
+  }
+  var data = await res.json();
+  if (!data.history.length) {
+    body.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem">No inspection history yet.</p>';
+    return;
+  }
+  var rows = data.history.map(function (item) {
+    var icon = smilrIcon(loc.virksomhedsType, item.score, 28);
+    return '<tr>' +
+      '<td><img src="' + icon.src + '" alt="' + icon.alt + '" class="score-thumb" /></td>' +
+      '<td>' + item.score + '</td>' +
+      '<td>' + formatDate(item.date) + '</td>' +
+    '</tr>';
+  }).join('');
+  body.innerHTML =
+    '<table class="history-table">' +
+      '<thead><tr><th></th><th>Score</th><th>Date</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody>' +
+    '</table>';
+}
+
+function closeHistoryModal() {
+  document.getElementById('historyModal').style.display = 'none';
+}
+
 function copyModalCode() {
   var code = document.getElementById('modalCode').textContent;
   navigator.clipboard.writeText(code).then(function () {
@@ -627,6 +667,10 @@ function esc(str) {
 
 document.getElementById('embedModal').addEventListener('click', function (e) {
   if (e.target === this) closeEmbedModal();
+});
+
+document.getElementById('historyModal').addEventListener('click', function (e) {
+  if (e.target === this) closeHistoryModal();
 });
 
 window.addEventListener('pageshow', function () {
@@ -653,6 +697,18 @@ window.addEventListener('pageshow', function () {
           <button id="modalCopyBtn" onclick="copyModalCode()" class="btn-sm-primary" style="margin-top:10px">Copy ⎘</button>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<div id="historyModal" class="modal-overlay" style="display:none">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <span id="historyModalTitle" style="font-weight:600;font-size:1rem"></span>
+      <button class="modal-close" onclick="closeHistoryModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="historyModalBody"></div>
     </div>
   </div>
 </div>

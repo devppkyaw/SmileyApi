@@ -66,6 +66,10 @@ resource acsSenderAddressSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' =
   }
 }
 
+// CAVEAT: emailOverrideAddress isn't set in any checked-in parameters file, so this condition is
+// false on every normal deploy and this resource is skipped — the live value is maintained manually
+// via `az keyvault secret set` and is NOT managed by Bicep. Don't trust this template as the source
+// of truth for what's actually in Key Vault; check with `az keyvault secret show` instead.
 resource emailOverrideSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(emailOverrideAddress)) {
   parent: vault
   name: 'Email--OverrideAddress'

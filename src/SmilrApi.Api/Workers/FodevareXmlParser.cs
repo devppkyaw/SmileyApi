@@ -11,7 +11,7 @@ public class FodevareXmlParser(IHttpClientFactory httpClientFactory, ILogger<Fod
     {
         logger.LogInformation("Downloading Smiley XML from Fødevarestyrelsen...");
 
-        var client = httpClientFactory.CreateClient();
+        var client = httpClientFactory.CreateClient("fodevarestyrelsen");
         await using var xmlStream = await client.GetStreamAsync(XmlUrl, ct);
 
         var rows = new List<EstablishmentSyncRow>(57_000);
