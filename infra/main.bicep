@@ -26,6 +26,9 @@ param imageName string
 @description('When set, all outgoing emails are redirected to this address instead of the real recipient.')
 param emailOverrideAddress string = ''
 
+@description('Permanent ops recipient for the system-wide score-change digest (all nationwide changes, not redirected/bannered). Unlike emailOverrideAddress, this IS set in infra/parameters/prod.bicepparam and is meant to survive redeploys.')
+param emailSystemMonitorAddress string = ''
+
 @secure()
 @description('Stripe secret key (sk_test_... or sk_live_...).')
 param stripeSecretKey string = ''
@@ -88,6 +91,7 @@ module keyvault 'modules/keyvault.bicep' = {
     acsConnectionString: acs.outputs.connectionString
     acsSenderAddress: acs.outputs.senderAddress
     emailOverrideAddress: emailOverrideAddress
+    emailSystemMonitorAddress: emailSystemMonitorAddress
     stripeSecretKey: stripeSecretKey
     stripeWebhookSecret: stripeWebhookSecret
     stripePriceId: stripePriceId

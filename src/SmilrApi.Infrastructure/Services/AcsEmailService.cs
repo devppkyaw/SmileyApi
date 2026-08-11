@@ -12,6 +12,7 @@ public class AcsEmailService : IEmailService
     private readonly EmailClient _client;
     private readonly string _sender;
     private readonly string? _overrideAddress;
+    private readonly string? _systemMonitorAddress;
     private readonly ILogger<AcsEmailService> _logger;
 
     public AcsEmailService(IConfiguration config, ILogger<AcsEmailService> logger)
@@ -22,6 +23,7 @@ public class AcsEmailService : IEmailService
                 ?? throw new InvalidOperationException("Acs:ConnectionString is not configured."));
         _sender = config["Acs:SenderAddress"] ?? "donotreply@smilrhq.dk";
         _overrideAddress = config["Email:OverrideAddress"];
+        _systemMonitorAddress = config["Email:SystemMonitorAddress"];
     }
 
     private (string recipient, string banner) ResolveRecipient(string originalTo)
@@ -109,5 +111,40 @@ public class AcsEmailService : IEmailService
         _logger.LogInformation("Score alert email queued to {To} ({Count} changes), operationId={Id}", recipient, changes.Count, op.Id);
     }
 
+    public async Task SendSystemScoreDigestAsync(IReadOnlyList<ScoreAlertItem> changes, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_systemMonitorAddress))
+        {
+            _logger.LogDebug("Email:SystemMonitorAddress is not configured; skipping system score digest ({Count} change(s)).", changes.Count);
+            return;
+        }
 
+        var subject = $"Smilr system digest: {changes.Count} score change(s) nationwide";
+
+        var rows = string.Concat(changes.Select(c =>
+            $"<tr>" +
+            $"<td>{c.CvrNumber ?? "—"}</td>" +
+            $"<td>{c.EstablishmentName}</td>" +
+            $"<td>{c.Address ?? "—"}</td>" +
+            $"<td>{c.OldScore} → {c.NewScore}</td>" +
+            $"</tr>"));
+
+        var plainLines = string.Join("\n", changes.Select(c =>
+            $"{c.CvrNumber ?? "—"} | {c.EstablishmentName} | {c.Address ?? "—"} | {c.OldScore} → {c.NewScore}"));
+
+        var message = new EmailMessage(
+            senderAddress: _sender,
+            recipientAddress: _systemMonitorAddress,
+            content: new EmailContent(subject)
+            {
+                Html = "<p>Every establishment nationwide whose Smiley score changed in this sync (not limited to establishments tracked by a business account):</p>" +
+                       "<table border=\"1\" cellpadding=\"6\" cellspacing=\"0\" style=\"border-collapse:collapse\">" +
+                       "<thead><tr><th>CVR</th><th>Name</th><th>Address</th><th>Score change</th></tr></thead>" +
+                       $"<tbody>{rows}</tbody></table>",
+                PlainText = $"Smilr system-wide score digest ({changes.Count} change(s)):\n\n{plainLines}"
+            });
+
+        var op = await _client.SendAsync(WaitUntil.Started, message, ct);
+        _logger.LogInformation("System score digest email queued to {To} ({Count} changes), operationId={Id}", _systemMonitorAddress, changes.Count, op.Id);
+    }
 }

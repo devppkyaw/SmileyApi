@@ -773,6 +773,11 @@ pre:not([class*="language-"]) strong {
 
 .input-sm:focus { border-color: var(--accent); }
 
+.sort-select {
+  width: 175px;
+  cursor: pointer;
+}
+
 .btn-sm-primary {
   padding: 6px 14px;
   background: var(--accent);

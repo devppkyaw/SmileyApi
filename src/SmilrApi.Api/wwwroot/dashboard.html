@@ -86,10 +86,19 @@
         <div class="loc-table-header">
           <div style="display:flex;align-items:center;gap:8px">
             <span id="locationCount" style="font-weight:600;font-size:0.95rem">Locations</span>
-            <button onclick="collapseAll()" class="cvr-toggle-btn" title="Collapse all">▶ All</button>
-            <button onclick="expandAll()" class="cvr-toggle-btn" title="Expand all">▼ All</button>
+            <span id="collapseExpandBtns">
+              <button onclick="collapseAll()" class="cvr-toggle-btn" title="Collapse all">▶ All</button>
+              <button onclick="expandAll()" class="cvr-toggle-btn" title="Expand all">▼ All</button>
+            </span>
           </div>
-          <input type="text" id="locSearch" class="search-input" placeholder="Search by name, Navnelbnr or CVR…" oninput="filterTable()" />
+          <div style="display:flex;align-items:center;gap:8px">
+            <select id="sortSelect" class="input-sm sort-select" onchange="renderLocations()" title="Sort locations">
+              <option value="cvr">Group by CVR</option>
+              <option value="score-asc">Score: Worst first</option>
+              <option value="score-desc">Score: Best first</option>
+            </select>
+            <input type="text" id="locSearch" class="search-input" placeholder="Search by name, Navnelbnr or CVR…" oninput="filterTable()" />
+          </div>
         </div>
 
         <div class="loc-table-wrap">
@@ -272,77 +281,100 @@ async function revokeApiKey() {
   if (res.ok) loadApiKey();
 }
 
+var allLocations = [];
+
 async function loadLocations() {
   const res  = await fetch('/v1/business/locations');
   const data = await res.json();
-  const list = data.locations;
-  const tbody = document.getElementById('locationList');
+  allLocations = data.locations;
 
   document.getElementById('locationCount').textContent = 'Locations (' + data.locationCount + ')';
 
+  locationData = {};
+  allLocations.forEach(function (loc) { locationData[loc.navnelbnr] = loc; });
 
-  if (!list.length) {
+  renderLocations();
+}
+
+function locRow(loc, showCvr) {
+  var addr = [loc.address, loc.city].filter(Boolean).join(', ');
+  return '<tr data-name="' + esc(loc.name || '').toLowerCase() + '" data-navnelbnr="' + loc.navnelbnr + '" data-cvr="' + esc(loc.cvrNumber || '') + '">' +
+    '<td class="loc-id">' + loc.navnelbnr + '</td>' +
+    '<td>' +
+      '<strong style="font-size:0.875rem">' + esc(loc.name) + '</strong>' +
+      (addr ? '<span class="loc-addr">' + esc(addr) + '</span>' : '') +
+      (showCvr && loc.cvrNumber ? '<span class="loc-cvr">CVR ' + esc(loc.cvrNumber) + '</span>' : '') +
+    '</td>' +
+    '<td>' + scoreStrip(loc.scoreHistory, loc.virksomhedsType) +
+      (loc.inspectionCount > 4
+        ? '<a href="javascript:void(0)" class="history-link" onclick="openHistoryModal(' + loc.navnelbnr + ')">View full history (' + loc.inspectionCount + ')</a>'
+        : '') +
+    '</td>' +
+    '<td>' +
+      '<div class="act-row">' +
+        (loc.reportUrl ? '<a href="' + esc(loc.reportUrl) + '" target="_blank" rel="noopener" class="act-btn" title="View inspection report">&#x1F4CB; Report</a>' : '') +
+        '<button onclick="openEmbedModal(' + loc.navnelbnr + ')" class="act-btn" title="Embed code">⎘ Embed</button>' +
+        '<button onclick="removeLocation(' + loc.navnelbnr + ')" class="act-btn act-btn--danger" title="Remove">✕</button>' +
+      '</div>' +
+    '</td>' +
+  '</tr>';
+}
+
+function groupHeader(cvr, count, showRemove) {
+  var label  = '<span class="cvr-group-label">CVR <strong>' + esc(cvr || '—') + '</strong> · ' + count + ' location' + (count !== 1 ? 's' : '') + '</span>';
+  var toggle = '<button onclick="toggleGroup(\'' + esc(cvr) + '\')" class="cvr-toggle-btn" title="Collapse/expand">▼</button>';
+  var left   = '<div style="display:flex;align-items:center;gap:6px">' + toggle + label + '</div>';
+  var btn    = showRemove
+    ? '<button onclick="removeByCvr(\'' + esc(cvr) + '\')" class="act-btn act-btn--danger" style="font-size:0.78rem">Remove CVR ✕</button>'
+    : '';
+  return '<tr class="cvr-group-header" data-group-cvr="' + esc(cvr) + '" data-collapsed="false"><td colspan="4"><div class="cvr-group-inner">' + left + btn + '</div></td></tr>';
+}
+
+function renderLocations() {
+  var tbody         = document.getElementById('locationList');
+  var sortMode      = document.getElementById('sortSelect').value;
+  var collapseBtns  = document.getElementById('collapseExpandBtns');
+
+  if (!allLocations.length) {
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:28px;color:var(--text-muted);font-size:0.9rem">No locations yet. Add one above.</td></tr>';
+    if (collapseBtns) collapseBtns.style.display = 'none';
     return;
   }
 
-  locationData = {};
-  list.forEach(function (loc) { locationData[loc.navnelbnr] = loc; });
-
-  var groups = {};
-  var noCvr  = [];
-  list.forEach(function (loc) {
-    var key = loc.cvrNumber || '';
-    if (!key) { noCvr.push(loc); return; }
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(loc);
-  });
-
-  function locRow(loc) {
-    var addr = [loc.address, loc.city].filter(Boolean).join(', ');
-    return '<tr data-name="' + esc(loc.name || '').toLowerCase() + '" data-navnelbnr="' + loc.navnelbnr + '" data-cvr="' + esc(loc.cvrNumber || '') + '">' +
-      '<td class="loc-id">' + loc.navnelbnr + '</td>' +
-      '<td>' +
-        '<strong style="font-size:0.875rem">' + esc(loc.name) + '</strong>' +
-        (addr ? '<span class="loc-addr">' + esc(addr) + '</span>' : '') +
-      '</td>' +
-      '<td>' + scoreStrip(loc.scoreHistory, loc.virksomhedsType) +
-        (loc.inspectionCount > 4
-          ? '<a href="javascript:void(0)" class="history-link" onclick="openHistoryModal(' + loc.navnelbnr + ')">View full history (' + loc.inspectionCount + ')</a>'
-          : '') +
-      '</td>' +
-      '<td>' +
-        '<div class="act-row">' +
-          (loc.reportUrl ? '<a href="' + esc(loc.reportUrl) + '" target="_blank" rel="noopener" class="act-btn" title="View inspection report">&#x1F4CB; Report</a>' : '') +
-          '<button onclick="openEmbedModal(' + loc.navnelbnr + ')" class="act-btn" title="Embed code">⎘ Embed</button>' +
-          '<button onclick="removeLocation(' + loc.navnelbnr + ')" class="act-btn act-btn--danger" title="Remove">✕</button>' +
-        '</div>' +
-      '</td>' +
-    '</tr>';
-  }
-
-  function groupHeader(cvr, count, showRemove) {
-    var label  = '<span class="cvr-group-label">CVR <strong>' + esc(cvr || '—') + '</strong> · ' + count + ' location' + (count !== 1 ? 's' : '') + '</span>';
-    var toggle = '<button onclick="toggleGroup(\'' + esc(cvr) + '\')" class="cvr-toggle-btn" title="Collapse/expand">▼</button>';
-    var left   = '<div style="display:flex;align-items:center;gap:6px">' + toggle + label + '</div>';
-    var btn    = showRemove
-      ? '<button onclick="removeByCvr(\'' + esc(cvr) + '\')" class="act-btn act-btn--danger" style="font-size:0.78rem">Remove CVR ✕</button>'
-      : '';
-    return '<tr class="cvr-group-header" data-group-cvr="' + esc(cvr) + '" data-collapsed="false"><td colspan="4"><div class="cvr-group-inner">' + left + btn + '</div></td></tr>';
-  }
-
   var html = '';
-  Object.keys(groups).sort().forEach(function (cvr) {
-    var locs = groups[cvr];
-    html += groupHeader(cvr, locs.length, true);
-    html += locs.map(locRow).join('');
-  });
-  if (noCvr.length) {
-    html += groupHeader('', noCvr.length, false);
-    html += noCvr.map(locRow).join('');
-  }
-  tbody.innerHTML = html;
 
+  if (sortMode === 'score-asc' || sortMode === 'score-desc') {
+    if (collapseBtns) collapseBtns.style.display = 'none';
+    var sorted = allLocations.slice().sort(function (a, b) {
+      var aNull = a.latestScore == null, bNull = b.latestScore == null;
+      if (aNull && bNull) return 0;
+      if (aNull) return 1;
+      if (bNull) return -1;
+      return sortMode === 'score-asc' ? a.latestScore - b.latestScore : b.latestScore - a.latestScore;
+    });
+    html = sorted.map(function (loc) { return locRow(loc, true); }).join('');
+  } else {
+    if (collapseBtns) collapseBtns.style.display = '';
+    var groups = {};
+    var noCvr  = [];
+    allLocations.forEach(function (loc) {
+      var key = loc.cvrNumber || '';
+      if (!key) { noCvr.push(loc); return; }
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(loc);
+    });
+    Object.keys(groups).sort().forEach(function (cvr) {
+      var locs = groups[cvr];
+      html += groupHeader(cvr, locs.length, true);
+      html += locs.map(function (loc) { return locRow(loc, false); }).join('');
+    });
+    if (noCvr.length) {
+      html += groupHeader('', noCvr.length, false);
+      html += noCvr.map(function (loc) { return locRow(loc, false); }).join('');
+    }
+  }
+
+  tbody.innerHTML = html;
   filterTable();
 }
 

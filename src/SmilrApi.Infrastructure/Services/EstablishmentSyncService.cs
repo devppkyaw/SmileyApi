@@ -205,6 +205,25 @@ public class EstablishmentSyncService(SmilrDbContext db, IEmailService emailServ
             .Select(e => new { e.Id, e.Navnelbnr, e.Name, e.Address, e.CvrNumber })
             .ToListAsync(ct);
 
+        var estByNavnelbnr = establishments.ToDictionary(
+            e => e.Navnelbnr,
+            e => new { e.Name, e.Address, e.CvrNumber, Scores = scoreById[e.Id] });
+
+        // System-wide digest: every changed establishment nationwide, regardless of whether
+        // any business tracks it. Sent unconditionally (the email service itself no-ops if
+        // Email:SystemMonitorAddress isn't configured), so this must run before the
+        // business-alert early-return below.
+        var allItems = establishments
+            .Select(e =>
+            {
+                var scores = scoreById[e.Id];
+                return new ScoreAlertItem(e.Name, e.Address, e.CvrNumber, scores.OldScore, scores.NewScore);
+            })
+            .ToList();
+
+        try   { await emailService.SendSystemScoreDigestAsync(allItems, ct); }
+        catch (Exception ex) { logger.LogError(ex, "Failed to send system score digest."); }
+
         var navnelbnrs = establishments.Select(e => e.Navnelbnr).ToList();
 
         var alerts = await db.BusinessLocations
@@ -216,10 +235,6 @@ public class EstablishmentSyncService(SmilrDbContext db, IEmailService emailServ
             .ToListAsync(ct);
 
         if (alerts.Count == 0) return;
-
-        var estByNavnelbnr = establishments.ToDictionary(
-            e => e.Navnelbnr,
-            e => new { e.Name, e.Address, e.CvrNumber, Scores = scoreById[e.Id] });
 
         // Group by business so each account receives one digest email
         var alertsByBusiness = alerts

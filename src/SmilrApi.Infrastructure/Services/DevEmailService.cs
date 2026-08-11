@@ -30,4 +30,18 @@ public class DevEmailService(ILogger<DevEmailService> logger, IConfiguration con
         logger.LogInformation("[DEV EMAIL] Score alert → {To} | {Count} change(s): {Detail}", ToInfo(to), changes.Count, detail);
         return Task.CompletedTask;
     }
+
+    public Task SendSystemScoreDigestAsync(IReadOnlyList<ScoreAlertItem> changes, CancellationToken ct = default)
+    {
+        var systemAddress = config["Email:SystemMonitorAddress"] is { Length: > 0 } v ? v : null;
+        if (systemAddress is null)
+        {
+            logger.LogInformation("[DEV EMAIL] Email:SystemMonitorAddress not configured; skipping system score digest ({Count} change(s)).", changes.Count);
+            return Task.CompletedTask;
+        }
+
+        var detail = string.Join(", ", changes.Select(c => $"{c.EstablishmentName} ({c.OldScore}→{c.NewScore})"));
+        logger.LogInformation("[DEV EMAIL] System score digest → {To} | {Count} change(s): {Detail}", systemAddress, changes.Count, detail);
+        return Task.CompletedTask;
+    }
 }

@@ -12,6 +12,7 @@ param acsConnectionString string
 
 param acsSenderAddress string
 param emailOverrideAddress string = ''
+param emailSystemMonitorAddress string = ''
 
 @secure()
 param stripeSecretKey string = ''
@@ -75,6 +76,16 @@ resource emailOverrideSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if
   name: 'Email--OverrideAddress'
   properties: {
     value: emailOverrideAddress
+  }
+}
+
+// Unlike emailOverrideSecret above (a manually-managed test knob), this one IS set via
+// infra/parameters/prod.bicepparam and is meant to stay populated across redeploys.
+resource emailSystemMonitorSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(emailSystemMonitorAddress)) {
+  parent: vault
+  name: 'Email--SystemMonitorAddress'
+  properties: {
+    value: emailSystemMonitorAddress
   }
 }
 
