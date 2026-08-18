@@ -189,7 +189,7 @@ public static class BusinessEndpoints
 
                     if (cvrCount >= proCvrCap)
                         return Results.Json(
-                            Error("cvr_limit_reached", $"Pro accounts support up to {proCvrCap} CVRs. Contact us at hello@smilrhq.dk for Enterprise."),
+                            Error("cvr_limit_reached", $"Pro accounts support up to {proCvrCap} CVRs. Contact us at info@smilrhq.dk for Enterprise."),
                             statusCode: 402);
                 }
             }
@@ -257,7 +257,7 @@ public static class BusinessEndpoints
 
                 if (!existingCvrs.Contains(req.Cvr.Trim()) && existingCvrs.Count >= proCvrCap)
                     return Results.Json(
-                        Error("cvr_limit_reached", $"Pro accounts support up to {proCvrCap} CVRs. Contact us at hello@smilrhq.dk for Enterprise."),
+                        Error("cvr_limit_reached", $"Pro accounts support up to {proCvrCap} CVRs. Contact us at info@smilrhq.dk for Enterprise."),
                         statusCode: 402);
             }
 
