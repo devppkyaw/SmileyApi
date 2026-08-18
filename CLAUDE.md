@@ -42,5 +42,4 @@ dotnet test
 - Postal-code neighbourhood scores
 - Reliability trend scoring
 - CVR enrichment
-- Stripe billing
 - Splitting the worker into a separate project
