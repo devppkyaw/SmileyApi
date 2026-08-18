@@ -43,3 +43,6 @@ dotnet test
 - Reliability trend scoring
 - CVR enrichment
 - Splitting the worker into a separate project
+
+## Roadmap Note (2026-08-18)
+Priority after MVP: a public, no-login directory site ("Smilr Finder") as a top-of-funnel for Business subscriptions — reuses existing `/search`, `/nearby`, `/{cvr}/history` logic behind a new anonymous/cached route group, with a "Claim this listing" CTA into the registration flow. Depends on Phase H static pages shipping first. Full plan in `docs/business-opportunities.md`. API marketplace listing (RapidAPI-style) is a separate, lower-priority idea — do not build unless explicitly asked.

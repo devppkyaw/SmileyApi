@@ -1099,3 +1099,82 @@ pre:not([class*="language-"]) strong {
   background: var(--surface);
   text-align: center;
 }
+
+/* ─── Find directory (/find) ──────────────────────────────── */
+
+.find-search-form {
+  display: flex;
+  gap: 12px;
+  max-width: 480px;
+  margin: 24px 0 32px;
+}
+
+.find-search-form input[type="text"] {
+  flex: 1;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.find-results {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.find-result-row {
+  display: grid;
+  grid-template-columns: 2fr 2fr 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.find-result-row:hover { border-color: var(--accent); text-decoration: none; }
+
+.find-result-name { font-weight: 600; }
+.find-result-address, .find-result-score { color: var(--text-muted); font-size: 0.9rem; }
+
+.find-pager {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+
+.find-detail {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.find-detail-badge { flex-shrink: 0; }
+
+.find-detail-info h1 { margin-bottom: 6px; }
+
+.find-history {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.find-history th, .find-history td {
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.find-history th {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+}

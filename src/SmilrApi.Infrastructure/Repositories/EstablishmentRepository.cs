@@ -83,4 +83,31 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
             .AsNoTracking()
             .ToListAsync(ct);
     }
+
+    public async Task<Establishment?> GetByNavnelbnrAsync(int navnelbnr, CancellationToken ct = default)
+    {
+        return await db.Establishments
+            .Where(e => e.Navnelbnr == navnelbnr)
+            .Include(e => e.Inspections.OrderByDescending(i => i.InspectedOn).Take(1))
+            .AsNoTracking()
+            .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<Establishment?> GetHistoryByNavnelbnrAsync(int navnelbnr, CancellationToken ct = default)
+    {
+        return await db.Establishments
+            .Where(e => e.Navnelbnr == navnelbnr)
+            .Include(e => e.Inspections.OrderByDescending(i => i.InspectedOn))
+            .AsNoTracking()
+            .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<SitemapEntry>> GetAllForSitemapAsync(CancellationToken ct = default)
+    {
+        return await db.Establishments
+            .Where(e => e.CvrNumber != null)
+            .Select(e => new SitemapEntry(e.CvrNumber!, e.Navnelbnr, e.UpdatedAt))
+            .AsNoTracking()
+            .ToListAsync(ct);
+    }
 }

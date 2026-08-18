@@ -4,6 +4,7 @@ using Hangfire.SqlServer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Scalar.AspNetCore;
 using SmilrApi.Api.Endpoints;
 using SmilrApi.Api.Middleware;
@@ -52,6 +53,13 @@ builder.Services.AddScoped<WebhookDeliveryJob>();
 builder.Services.AddScoped<IStripeService, StripeService>();
 
 builder.Services.AddDistributedMemoryCache();
+
+// General-purpose in-process cache for the /find directory pages (protects Azure SQL Basic from
+// repeated crawler traffic). Distinct from AddDistributedMemoryCache above, which only backs session
+// state. In-process is sufficient at the current scale — the Container App runs a single replica
+// (minReplicas = maxReplicas = 1), so there's no multi-instance cache-coherency concern.
+builder.Services.AddMemoryCache();
+
 builder.Services.AddSession(options =>
 {
     options.Cookie.HttpOnly  = true;
@@ -142,6 +150,22 @@ builder.Services.AddRateLimiter(options =>
             });
     });
 
+    // More generous than widget-ip: /find serves legitimate search-engine crawlers in addition to
+    // human browsing, and most requests are served from cache rather than hitting the DB.
+    options.AddPolicy("find-ip", httpContext =>
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ip,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit          = 120,
+                Window               = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit           = 0
+            });
+    });
+
     options.OnRejected = async (ctx, ct) =>
     {
         ctx.HttpContext.Response.StatusCode = 429;
@@ -226,6 +250,7 @@ app.MapWebhookEndpoints();
 app.MapWidgetEndpoints();
 app.MapBusinessEndpoints();
 app.MapStripeEndpoints();
+app.MapFindEndpoints();
 
 app.Run();
 
