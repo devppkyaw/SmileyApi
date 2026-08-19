@@ -31,6 +31,26 @@ public interface IEstablishmentRepository
 
     /// <summary>Total establishment count across the given raw City values, for hub-page pagination.</summary>
     Task<int> CountByCitiesAsync(IReadOnlyList<string> cityValues, CancellationToken ct = default);
+
+    /// <summary>Distinct raw Pixibranche values (with counts, most-common first) among establishments that
+    /// have a CVR and a non-empty, non-placeholder Pixibranche — source data for the /find category-slug
+    /// index. Unlike City, Pixibranche is a controlled vocabulary, so callers map 1:1 to a category-slug
+    /// with no raw-spelling grouping needed.</summary>
+    Task<IReadOnlyList<(string Category, int Count)>> GetCategoryCountsAsync(CancellationToken ct = default);
+
+    /// <summary>Paginated establishments in the given raw City values AND the given raw Pixibranche value —
+    /// feeds the /find/{area-slug}/{category-slug} hub page.</summary>
+    Task<IReadOnlyList<Establishment>> GetByCitiesAndCategoryAsync(IReadOnlyList<string> cityValues, string category, int page, int limit, CancellationToken ct = default);
+
+    /// <summary>Total establishment count for the given raw City values AND raw Pixibranche value — feeds
+    /// hub-page pagination and the minimum-establishment-count indexing guard.</summary>
+    Task<int> CountByCitiesAndCategoryAsync(IReadOnlyList<string> cityValues, string category, CancellationToken ct = default);
+
+    /// <summary>(City, Category, Count) triples across the whole dataset (CVR/City/Pixibranche all
+    /// non-null, Pixibranche not a placeholder) — feeds the sitemap's area×category entries and the area
+    /// hub page's "Browse by category" list without looping every category × every area as separate
+    /// queries.</summary>
+    Task<IReadOnlyList<(string City, string Category, int Count)>> GetCityCategoryCountsAsync(CancellationToken ct = default);
 }
 
 public record SitemapEntry(string Name, string? City, int Navnelbnr, DateTime UpdatedAt);

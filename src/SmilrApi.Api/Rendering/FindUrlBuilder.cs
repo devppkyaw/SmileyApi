@@ -31,4 +31,11 @@ public static class FindUrlBuilder
     }
 
     public static string DetailPath(Establishment est) => DetailPath(est.Name, est.City, est.Navnelbnr);
+
+    public static string CategorySlug(string pixibranche) => Slugifier.Slugify(pixibranche);
+
+    /// <summary>Category hub page path, e.g. "/find/kobenhavn/bagere-og-bagerafdelinger". No trailing slash
+    /// (unlike HubPath) — matches the existing detail-page path style.</summary>
+    public static string CategoryHubPath(string city, string pixibranche) =>
+        $"/find/{AreaSlug(city)}/{CategorySlug(pixibranche)}";
 }

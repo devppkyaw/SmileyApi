@@ -1,7 +1,9 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using SmilrApi.Core.Interfaces;
 using SmilrApi.Core.Models;
+using SmilrApi.Core.Utils;
 
 namespace SmilrApi.Api.Rendering;
 
@@ -83,7 +85,8 @@ public static class FindPageRenderer
     }
 
     public static string AreaHubPage(
-        string displaySpelling, int page, int pageSize, int totalCount, IReadOnlyList<Establishment> establishments)
+        string displaySpelling, int page, int pageSize, int totalCount, IReadOnlyList<Establishment> establishments,
+        IReadOnlyList<(string Category, string CategorySlug, int Count)> categoriesInArea)
     {
         var rowsHtml = establishments.Count == 0
             ? "<p>No establishments found for this area yet.</p>"
@@ -92,10 +95,12 @@ public static class FindPageRenderer
         var hasMore = (long)page * pageSize < totalCount;
         var hubPath = FindUrlBuilder.HubPath(displaySpelling);
         var pagerHtml = BuildPager($"{hubPath}?", page, hasMore);
+        var categoryNavHtml = CategoryNavHtml(displaySpelling, categoriesInArea);
 
         var body = $"""
             <h1>Restaurants &amp; food businesses in {E(displaySpelling)}</h1>
             <p class="section-sub">{totalCount} registered establishment{(totalCount == 1 ? "" : "s")} with official Fødevarestyrelsen inspection scores.</p>
+            {categoryNavHtml}
             <div class="find-results">
             {rowsHtml}
             </div>
@@ -107,6 +112,54 @@ public static class FindPageRenderer
             description: $"Browse official Fødevarestyrelsen food inspection (smiley) scores for restaurants and food businesses in {displaySpelling}.",
             canonicalPath: hubPath,
             bodyHtml: body);
+    }
+
+    public static string CategoryHubPage(
+        string displayCity, string displayCategory, string areaSlug, string categorySlug,
+        int page, int pageSize, int totalCount, bool noindex, IReadOnlyList<Establishment> establishments)
+    {
+        var rowsHtml = establishments.Count == 0
+            ? "<p>No establishments found for this category in this area yet.</p>"
+            : string.Join("\n", establishments.Select(ResultRowHtml));
+
+        var hasMore = (long)page * pageSize < totalCount;
+        var categoryPath = FindUrlBuilder.CategoryHubPath(displayCity, displayCategory);
+        var pagerHtml = BuildPager($"{categoryPath}?", page, hasMore);
+
+        var body = $"""
+            <nav aria-label="breadcrumb" style="margin-bottom:16px;font-size:0.9rem">
+              <a href="/find">Find</a> › <a href="{FindUrlBuilder.HubPath(displayCity)}">{E(displayCity)}</a> › {E(displayCategory)}
+            </nav>
+            <h1>{E(displayCategory)} in {E(displayCity)}</h1>
+            <p class="section-sub">{totalCount} registered establishment{(totalCount == 1 ? "" : "s")} with official Fødevarestyrelsen inspection scores.</p>
+            <div class="find-results">
+            {rowsHtml}
+            </div>
+            {pagerHtml}
+            """;
+
+        return Layout(
+            title: $"{displayCategory} in {displayCity} — SmilrHQ",
+            description: $"Browse official Fødevarestyrelsen food inspection (smiley) scores for {displayCategory.ToLowerInvariant()} in {displayCity}.",
+            canonicalPath: categoryPath,
+            bodyHtml: body,
+            noindex: noindex);
+    }
+
+    private static string CategoryNavHtml(
+        string displayCity, IReadOnlyList<(string Category, string CategorySlug, int Count)> categoriesInArea)
+    {
+        if (categoriesInArea.Count == 0) return "";
+
+        var links = categoriesInArea.Select(c =>
+            $"""<a href="{FindUrlBuilder.CategoryHubPath(displayCity, c.Category)}">{E(c.Category)} ({c.Count})</a>""");
+
+        return $"""
+            <div class="find-category-nav">
+              <span class="find-category-nav-label">Browse by category:</span>
+              {string.Join("\n  ", links)}
+            </div>
+            """;
     }
 
     public static string DetailPage(Establishment est)
@@ -131,13 +184,28 @@ public static class FindPageRenderer
             ? ""
             : $"""<p><a href="{E(est.ReportUrl)}" target="_blank" rel="noopener noreferrer">View official inspection report →</a></p>""";
 
+        var hasCategory = !string.IsNullOrWhiteSpace(est.City) && !string.IsNullOrWhiteSpace(est.Pixibranche)
+            && !PixibrancheCategories.IsPlaceholder(est.Pixibranche);
+
         var cityCrumb = string.IsNullOrWhiteSpace(est.City)
             ? ""
             : $"""<a href="{FindUrlBuilder.HubPath(est.City)}">{E(est.City)}</a> › """;
+        var categoryCrumb = hasCategory
+            ? $"""<a href="{FindUrlBuilder.CategoryHubPath(est.City!, est.Pixibranche!)}">{E(est.Pixibranche)}</a> › """
+            : "";
+
+        // Same Area/Category presence rules as the visible breadcrumb above, so the two never disagree.
+        var jsonLdCrumbs = new List<(string Name, string Path)> { ("Find", "/find") };
+        if (!string.IsNullOrWhiteSpace(est.City))
+            jsonLdCrumbs.Add((est.City, FindUrlBuilder.HubPath(est.City)));
+        if (hasCategory)
+            jsonLdCrumbs.Add((est.Pixibranche!, FindUrlBuilder.CategoryHubPath(est.City!, est.Pixibranche!)));
+        jsonLdCrumbs.Add((est.Name, FindUrlBuilder.DetailPath(est)));
+        var breadcrumbJsonLd = BreadcrumbJsonLd(jsonLdCrumbs);
 
         var body = $"""
             <nav aria-label="breadcrumb" style="margin-bottom:16px;font-size:0.9rem">
-              <a href="/find">Find</a> › {cityCrumb}{E(est.Name)}
+              <a href="/find">Find</a> › {cityCrumb}{categoryCrumb}{E(est.Name)}
             </nav>
             <div class="find-detail">
               <div class="find-detail-badge">{badge}</div>
@@ -161,7 +229,33 @@ public static class FindPageRenderer
             title: $"{est.Name} — Smilr score — SmilrHQ",
             description: description,
             canonicalPath: FindUrlBuilder.DetailPath(est),
-            bodyHtml: body);
+            bodyHtml: body,
+            extraHeadHtml: breadcrumbJsonLd);
+    }
+
+    /// <summary>Renders a schema.org BreadcrumbList JSON-LD block for search-engine rich snippets — kept
+    /// in sync with whatever breadcrumb trail the caller builds for the visible &lt;nav&gt; above the page
+    /// body, so the two never disagree.</summary>
+    private static string BreadcrumbJsonLd(IReadOnlyList<(string Name, string Path)> crumbs)
+    {
+        var itemListElement = crumbs.Select((c, i) => new Dictionary<string, object?>
+        {
+            ["@type"] = "ListItem",
+            ["position"] = i + 1,
+            ["name"] = c.Name,
+            ["item"] = SiteOrigin + c.Path
+        });
+
+        var schema = new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "BreadcrumbList",
+            ["itemListElement"] = itemListElement
+        };
+
+        // Default JsonSerializer escaping is HTML-safe (escapes <, >, &), so this is safe to embed
+        // directly inside a <script> tag even if a business name contains those characters.
+        return $"""<script type="application/ld+json">{JsonSerializer.Serialize(schema)}</script>""";
     }
 
     public static string NotFoundPage(string message)
@@ -174,7 +268,10 @@ public static class FindPageRenderer
         return Layout("Not found — SmilrHQ", "The requested page could not be found.", "/find", body);
     }
 
-    public static string SitemapXml(IReadOnlyList<SitemapEntry> entries)
+    public static string SitemapXml(
+        IReadOnlyList<SitemapEntry> entries,
+        IReadOnlyList<(string City, string Category, int Count)> categoryCounts,
+        int categorySlugThreshold)
     {
         var sb = new StringBuilder();
         sb.Append("""<?xml version="1.0" encoding="UTF-8"?>""").Append('\n');
@@ -193,17 +290,44 @@ public static class FindPageRenderer
         // One hub-page entry per area, derived from the same projection — no extra repository call needed.
         var hubGroups = entries
             .Where(e => !string.IsNullOrWhiteSpace(e.City))
-            .GroupBy(e => FindUrlBuilder.AreaSlug(e.City!));
+            .GroupBy(e => FindUrlBuilder.AreaSlug(e.City!))
+            .ToList();
 
+        var areaLastmod = new Dictionary<string, DateTime>();
         foreach (var group in hubGroups)
         {
             var displaySpelling = group.First().City!;
             var lastmod = group.Max(e => e.UpdatedAt);
+            areaLastmod[group.Key] = lastmod;
             sb.Append("  <url><loc>")
               .Append(SiteOrigin).Append(FindUrlBuilder.HubPath(displaySpelling))
               .Append("</loc><lastmod>")
               .Append(lastmod.ToString("yyyy-MM-dd"))
               .Append("</lastmod></url>\n");
+        }
+
+        // Area x category entries, only for combinations meeting the minimum-establishment-count indexing
+        // threshold (see CategorySlugThreshold in FindEndpoints.cs). categoryCounts carries no per-entry
+        // timestamp of its own, so this borrows the containing area's lastmod as an approximation — the
+        // area-slug set here is always a subset of hubGroups' (both ultimately filter on CvrNumber/City
+        // non-null; category adds a stricter Pixibranche filter on top), so the lookup below shouldn't
+        // ever miss, but falls through safely if it somehow does.
+        var categoryGroups = categoryCounts
+            .Where(t => t.Count >= categorySlugThreshold)
+            .GroupBy(t => FindUrlBuilder.AreaSlug(t.City));
+
+        foreach (var areaGroup in categoryGroups)
+        {
+            if (!areaLastmod.TryGetValue(areaGroup.Key, out var lastmod)) continue;
+            var displayCity = areaGroup.First().City;
+            foreach (var t in areaGroup)
+            {
+                sb.Append("  <url><loc>")
+                  .Append(SiteOrigin).Append(FindUrlBuilder.CategoryHubPath(displayCity, t.Category))
+                  .Append("</loc><lastmod>")
+                  .Append(lastmod.ToString("yyyy-MM-dd"))
+                  .Append("</lastmod></url>\n");
+            }
         }
 
         sb.Append("</urlset>");
@@ -264,9 +388,12 @@ public static class FindPageRenderer
         return $"""<img src="{imgSrc}" alt="{E(alt)}" width="150" height="150" style="object-fit:contain" />""";
     }
 
-    private static string Layout(string title, string description, string canonicalPath, string bodyHtml)
+    private static string Layout(
+        string title, string description, string canonicalPath, string bodyHtml,
+        bool noindex = false, string extraHeadHtml = "")
     {
         var canonicalUrl = SiteOrigin + canonicalPath;
+        var robotsTag = noindex ? """<meta name="robots" content="noindex,follow" />""" + "\n  " : "";
         return $"""
             <!DOCTYPE html>
             <html lang="en">
@@ -274,13 +401,14 @@ public static class FindPageRenderer
               <meta charset="UTF-8" />
               <meta name="viewport" content="width=device-width, initial-scale=1.0" />
               <meta name="description" content="{E(description)}" />
-              <link rel="canonical" href="{canonicalUrl}" />
+              {robotsTag}<link rel="canonical" href="{canonicalUrl}" />
               <meta property="og:type" content="website" />
               <meta property="og:title" content="{E(title)}" />
               <meta property="og:description" content="{E(description)}" />
               <meta property="og:url" content="{canonicalUrl}" />
               <title>{E(title)}</title>
               <link rel="stylesheet" href="/style.css" />
+              {extraHeadHtml}
             </head>
             <body>
             <header class="hero" style="padding-bottom:32px">

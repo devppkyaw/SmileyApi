@@ -10,23 +10,31 @@ namespace SmilrApi.Api.Endpoints;
 /// (see PublicPaths in ApiKeyMiddleware.cs) and uses its own IP-based rate limit policy ("find-ip")
 /// rather than the developer-API "api-key-tier" policy, since this surface has no API key.
 ///
-/// URL design (see docs/business-opportunities.md "URL structure decision"): area + business name are
-/// the human-facing/SEO-facing identifiers, with Navnelbnr (the real, unique key) as a stable suffix:
+/// URL design (see docs/business-opportunities.md "URL structure" and "Category hub pages" sections):
+/// area, category, and business name are the human-facing/SEO-facing identifiers, with Navnelbnr (the
+/// real, unique key) as a stable suffix:
 ///   /find/{area-slug}/                          -> hub page listing establishments in that area
+///   /find/{area-slug}/{category-slug}           -> hub page, area x Pixibranche category
 ///   /find/{area-slug}/{business-slug}-{navnelbnr} -> canonical detail page (establishment has a City)
 ///   /find/{business-slug}-{navnelbnr}             -> canonical detail page (establishment has no City)
-/// The hub page and the no-City detail page are both single dynamic segments, so they're mapped by one
-/// route ("/{segment}") and disambiguated at runtime by whether the segment matches the
-/// "{business-slug}-{navnelbnr}" shape — registering them as separate routes (one with a literal
-/// trailing slash) throws AmbiguousMatchException, since ASP.NET Core routing treats those as
-/// equally-specific candidates for the same request.
-/// Both the area-slug and business-slug are computed on the fly from City/Name (FindUrlBuilder) —
-/// never persisted — so a URL whose slug text doesn't match what's freshly computed 301-redirects to
-/// the canonical form, the same way the old CVR-mismatch check used to.
+/// At both the one-segment and two-segment-under-an-area depth, a hub-page slug and a detail-page slug
+/// occupy the same route shape, so each depth is mapped by one route ("/{segment}" and
+/// "/{areaSlug}/{segment}" respectively) and disambiguated at runtime by whether the segment matches the
+/// "{business-slug}-{navnelbnr}" shape — registering them as separate routes throws
+/// AmbiguousMatchException, since ASP.NET Core routing treats those as equally-specific candidates for
+/// the same request.
+/// Category hubs never host their own detail page (no /find/{area}/{category}/{business}-{id}) — they
+/// link out to the flat canonical detail path above. Category is a controlled vocabulary (Pixibranche,
+/// ~26 values from the source XML, "not yet assigned" placeholders excluded), so category-slug maps 1:1
+/// to a raw value, unlike area-slug's many-raw-City-spellings-per-slug grouping.
+/// Area-slug, business-slug, and category-slug are all computed on the fly (FindUrlBuilder) — never
+/// persisted — so a URL whose slug text doesn't match what's freshly computed 301-redirects to the
+/// canonical form (detail pages only; category/area hubs 404 on an unknown slug instead, since there's no
+/// single canonical spelling to redirect to).
 /// CVR is no longer part of any /find URL, but /find/search?q={8-digit-cvr} still resolves it as a
 /// convenience shortcut (people know their CVR, not their Navnelbnr).
 /// Establishments without a CVR are excluded from the directory entirely (no repo method surfaces them
-/// here — GetAllForSitemapAsync, GetByCitiesAsync, and GetCityCountsAsync all filter CvrNumber IS NOT NULL).
+/// here — every repo query below filters CvrNumber IS NOT NULL).
 /// </summary>
 public static class FindEndpoints
 {
@@ -43,6 +51,10 @@ public static class FindEndpoints
 
     private const int SearchPageSize = 20;
     private const int HubPageSize = 20;
+
+    // Below this establishment count, a category hub page still renders (useful to a direct visitor) but
+    // is excluded from the sitemap and marked noindex, to keep thin area x category pages out of Google.
+    private const int CategorySlugThreshold = 3;
 
     public static void MapFindEndpoints(this WebApplication app)
     {
@@ -78,16 +90,21 @@ public static class FindEndpoints
             {
                 entry.AbsoluteExpirationRelativeToNow = CacheTtl;
                 var entries = await repo.GetAllForSitemapAsync(ct);
-                return FindPageRenderer.SitemapXml(entries);
+                var categoryCounts = await repo.GetCityCategoryCountsAsync(ct);
+                return FindPageRenderer.SitemapXml(entries, categoryCounts, CategorySlugThreshold);
             });
             return Results.Content(xml, "application/xml");
         });
 
-        // Detail page, establishment has a City (two segments: area + business-slug-navnelbnr).
-        find.MapGet("/{areaSlug}/{slugAndId}", (
-            string slugAndId, HttpContext http,
+        // Two segments under an area: either a detail page ({business-slug}-{navnelbnr}) or a category hub
+        // ({category-slug}) — same shape as the top-level "/{segment}" ambiguity below, same fix: one
+        // route, disambiguated at runtime by whether the segment matches the detail-slug shape.
+        find.MapGet("/{areaSlug}/{segment}", (
+            string areaSlug, string segment, int? page, HttpContext http,
             IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct) =>
-                DetailHandlerAsync(slugAndId, http, cache, repo, ct));
+                DetailSlugPattern.IsMatch(segment)
+                    ? DetailHandlerAsync(segment, http, cache, repo, ct)
+                    : CategoryHubHandlerAsync(areaSlug, segment, page, cache, repo, ct));
 
         // Single dynamic segment — ambiguous between an area hub ("/find/kobenhavn/") and a detail page
         // for an establishment with no City ("/find/{business-slug}-{navnelbnr}"). ASP.NET Core routing
@@ -116,9 +133,65 @@ public static class FindEndpoints
         var pageNum = Math.Max(page ?? 1, 1);
         var totalCount = await repo.CountByCitiesAsync(area.RawCityValues, ct);
         var establishments = await repo.GetByCitiesAsync(area.RawCityValues, pageNum, HubPageSize, ct);
+        var categoriesInArea = await GetCategoriesInAreaAsync(area.RawCityValues, cache, repo, ct);
 
         return Results.Content(
-            FindPageRenderer.AreaHubPage(area.DisplaySpelling, pageNum, HubPageSize, totalCount, establishments),
+            FindPageRenderer.AreaHubPage(
+                area.DisplaySpelling, pageNum, HubPageSize, totalCount, establishments, categoriesInArea),
+            "text/html");
+    }
+
+    /// <summary>Categories present anywhere in this area (raw category value + its category-slug + count),
+    /// ordered by count desc — drives the area hub page's "Browse by category" section. Internal links here
+    /// aren't threshold-gated: a category present at all is worth linking to from a page a visitor already
+    /// reached, even if it's too thin to be individually indexed (see CategorySlugThreshold).</summary>
+    private static async Task<IReadOnlyList<(string Category, string CategorySlug, int Count)>> GetCategoriesInAreaAsync(
+        IReadOnlyList<string> areaCityValues, IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct)
+    {
+        var allTriples = await cache.GetOrCreateAsync("find:city-category-counts", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = CacheTtl;
+            return await repo.GetCityCategoryCountsAsync(ct);
+        });
+
+        var citySet = areaCityValues.ToHashSet();
+        return allTriples!
+            .Where(t => citySet.Contains(t.City))
+            .GroupBy(t => t.Category)
+            .Select(g => (Category: g.Key, CategorySlug: FindUrlBuilder.CategorySlug(g.Key), Count: g.Sum(t => t.Count)))
+            .OrderByDescending(c => c.Count)
+            .ToList();
+    }
+
+    private static async Task<IResult> CategoryHubHandlerAsync(
+        string areaSlug, string categorySlug, int? page,
+        IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct)
+    {
+        var areaIndex = await GetAreaIndexAsync(cache, repo, ct);
+        if (!areaIndex.TryGetValue(areaSlug, out var area))
+            return Results.Content(
+                FindPageRenderer.NotFoundPage($"No area found for '{areaSlug}'."),
+                "text/html", statusCode: 404);
+
+        var categoryIndex = await GetCategoryIndexAsync(cache, repo, ct);
+        if (!categoryIndex.TryGetValue(categorySlug, out var category))
+            return Results.Content(
+                FindPageRenderer.NotFoundPage($"No category found for '{categorySlug}'."),
+                "text/html", statusCode: 404);
+
+        var pageNum = Math.Max(page ?? 1, 1);
+        var totalCount = await repo.CountByCitiesAndCategoryAsync(area.RawCityValues, category, ct);
+        if (totalCount == 0)
+            return Results.Content(
+                FindPageRenderer.NotFoundPage($"No establishments found for '{categorySlug}' in '{areaSlug}'."),
+                "text/html", statusCode: 404);
+
+        var establishments = await repo.GetByCitiesAndCategoryAsync(area.RawCityValues, category, pageNum, HubPageSize, ct);
+
+        return Results.Content(
+            FindPageRenderer.CategoryHubPage(
+                area.DisplaySpelling, category, areaSlug, categorySlug,
+                pageNum, HubPageSize, totalCount, noindex: totalCount < CategorySlugThreshold, establishments),
             "text/html");
     }
 
@@ -198,6 +271,21 @@ public static class FindEndpoints
                     g => new AreaInfo(
                         DisplaySpelling: g.OrderByDescending(c => c.Count).First().City,
                         RawCityValues: g.Select(c => c.City).ToList()));
+        }))!;
+    }
+
+    private static async Task<IReadOnlyDictionary<string, string>> GetCategoryIndexAsync(
+        IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct)
+    {
+        return (await cache.GetOrCreateAsync("find:category-index", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = CacheTtl;
+            var categoryCounts = await repo.GetCategoryCountsAsync(ct);
+
+            // Pixibranche is a controlled vocabulary (unlike City), so this is a 1:1 map, not a grouping —
+            // but slugify could still theoretically collapse two distinct category strings together, so
+            // last-write-wins here is an accepted, unlikely edge case rather than something to guard on.
+            return categoryCounts.ToDictionary(c => FindUrlBuilder.CategorySlug(c.Category), c => c.Category);
         }))!;
     }
 

@@ -2,6 +2,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using SmilrApi.Core.Interfaces;
 using SmilrApi.Core.Models;
+using SmilrApi.Core.Utils;
 using SmilrApi.Infrastructure.Data;
 
 namespace SmilrApi.Infrastructure.Repositories;
@@ -147,5 +148,61 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
         return await db.Establishments
             .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City))
             .CountAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<(string Category, int Count)>> GetCategoryCountsAsync(CancellationToken ct = default)
+    {
+        var rows = await db.Establishments
+            .Where(e => e.CvrNumber != null && e.Pixibranche != null && e.Pixibranche != ""
+                     && !PixibrancheCategories.Placeholders.Contains(e.Pixibranche))
+            .GroupBy(e => e.Pixibranche)
+            .Select(g => new { Category = g.Key!, Count = g.Count() })
+            .OrderByDescending(g => g.Count)
+            .AsNoTracking()
+            .ToListAsync(ct);
+
+        return rows.Select(r => (r.Category, r.Count)).ToList();
+    }
+
+    public async Task<IReadOnlyList<Establishment>> GetByCitiesAndCategoryAsync(
+        IReadOnlyList<string> cityValues, string category, int page, int limit, CancellationToken ct = default)
+    {
+        if (cityValues.Count == 0 || string.IsNullOrWhiteSpace(category)) return [];
+        page  = Math.Max(1, page);
+        limit = Math.Clamp(limit, 1, 100);
+
+        return await db.Establishments
+            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City)
+                     && e.Pixibranche == category)
+            .Include(e => e.Inspections.OrderByDescending(i => i.InspectedOn).Take(1))
+            .OrderBy(e => e.Name)
+            .Skip((page - 1) * limit)
+            .Take(limit)
+            .AsNoTracking()
+            .ToListAsync(ct);
+    }
+
+    public async Task<int> CountByCitiesAndCategoryAsync(
+        IReadOnlyList<string> cityValues, string category, CancellationToken ct = default)
+    {
+        if (cityValues.Count == 0 || string.IsNullOrWhiteSpace(category)) return 0;
+        return await db.Establishments
+            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City)
+                     && e.Pixibranche == category)
+            .CountAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<(string City, string Category, int Count)>> GetCityCategoryCountsAsync(CancellationToken ct = default)
+    {
+        var rows = await db.Establishments
+            .Where(e => e.CvrNumber != null && e.City != null && e.City != ""
+                     && e.Pixibranche != null && e.Pixibranche != ""
+                     && !PixibrancheCategories.Placeholders.Contains(e.Pixibranche))
+            .GroupBy(e => new { e.City, e.Pixibranche })
+            .Select(g => new { g.Key.City, g.Key.Pixibranche, Count = g.Count() })
+            .AsNoTracking()
+            .ToListAsync(ct);
+
+        return rows.Select(r => (r.City!, r.Pixibranche!, r.Count)).ToList();
     }
 }
