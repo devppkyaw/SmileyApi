@@ -106,8 +106,46 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
     {
         return await db.Establishments
             .Where(e => e.CvrNumber != null)
-            .Select(e => new SitemapEntry(e.CvrNumber!, e.Navnelbnr, e.UpdatedAt))
+            .Select(e => new SitemapEntry(e.Name, e.City, e.Navnelbnr, e.UpdatedAt))
             .AsNoTracking()
             .ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<(string City, int Count)>> GetCityCountsAsync(CancellationToken ct = default)
+    {
+        var rows = await db.Establishments
+            .Where(e => e.CvrNumber != null && e.City != null && e.City != "")
+            .GroupBy(e => e.City)
+            .Select(g => new { City = g.Key!, Count = g.Count() })
+            .OrderByDescending(g => g.Count)
+            .AsNoTracking()
+            .ToListAsync(ct);
+
+        return rows.Select(r => (r.City, r.Count)).ToList();
+    }
+
+    public async Task<IReadOnlyList<Establishment>> GetByCitiesAsync(
+        IReadOnlyList<string> cityValues, int page, int limit, CancellationToken ct = default)
+    {
+        if (cityValues.Count == 0) return [];
+        page  = Math.Max(1, page);
+        limit = Math.Clamp(limit, 1, 100);
+
+        return await db.Establishments
+            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City))
+            .Include(e => e.Inspections.OrderByDescending(i => i.InspectedOn).Take(1))
+            .OrderBy(e => e.Name)
+            .Skip((page - 1) * limit)
+            .Take(limit)
+            .AsNoTracking()
+            .ToListAsync(ct);
+    }
+
+    public async Task<int> CountByCitiesAsync(IReadOnlyList<string> cityValues, CancellationToken ct = default)
+    {
+        if (cityValues.Count == 0) return 0;
+        return await db.Establishments
+            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City))
+            .CountAsync(ct);
     }
 }

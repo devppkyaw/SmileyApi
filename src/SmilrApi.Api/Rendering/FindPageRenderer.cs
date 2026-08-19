@@ -46,7 +46,7 @@ public static class FindPageRenderer
             ? "<p>No matching establishments found.</p>"
             : string.Join("\n", linkable.Select(ResultRowHtml));
 
-        var pagerHtml = BuildPager(query, page, hasMore: results.Count >= limit);
+        var pagerHtml = BuildPager($"/find/search?q={Uri.EscapeDataString(query)}&", page, hasMore: results.Count >= limit);
 
         var body = $"""
             <h1>Search results for "{E(query)}"</h1>
@@ -78,7 +78,34 @@ public static class FindPageRenderer
         return Layout(
             title: $"CVR {cvr} — {locations.Count} locations — SmilrHQ",
             description: $"CVR {cvr} has {locations.Count} registered food establishments in Denmark. View each location's inspection score.",
-            canonicalPath: $"/find/{Uri.EscapeDataString(cvr)}",
+            canonicalPath: $"/find/search?q={Uri.EscapeDataString(cvr)}",
+            bodyHtml: body);
+    }
+
+    public static string AreaHubPage(
+        string displaySpelling, int page, int pageSize, int totalCount, IReadOnlyList<Establishment> establishments)
+    {
+        var rowsHtml = establishments.Count == 0
+            ? "<p>No establishments found for this area yet.</p>"
+            : string.Join("\n", establishments.Select(ResultRowHtml));
+
+        var hasMore = (long)page * pageSize < totalCount;
+        var hubPath = FindUrlBuilder.HubPath(displaySpelling);
+        var pagerHtml = BuildPager($"{hubPath}?", page, hasMore);
+
+        var body = $"""
+            <h1>Restaurants &amp; food businesses in {E(displaySpelling)}</h1>
+            <p class="section-sub">{totalCount} registered establishment{(totalCount == 1 ? "" : "s")} with official Fødevarestyrelsen inspection scores.</p>
+            <div class="find-results">
+            {rowsHtml}
+            </div>
+            {pagerHtml}
+            """;
+
+        return Layout(
+            title: $"Food inspection scores in {displaySpelling} — SmilrHQ",
+            description: $"Browse official Fødevarestyrelsen food inspection (smiley) scores for restaurants and food businesses in {displaySpelling}.",
+            canonicalPath: hubPath,
             bodyHtml: body);
     }
 
@@ -104,9 +131,13 @@ public static class FindPageRenderer
             ? ""
             : $"""<p><a href="{E(est.ReportUrl)}" target="_blank" rel="noopener noreferrer">View official inspection report →</a></p>""";
 
+        var cityCrumb = string.IsNullOrWhiteSpace(est.City)
+            ? ""
+            : $"""<a href="{FindUrlBuilder.HubPath(est.City)}">{E(est.City)}</a> › """;
+
         var body = $"""
             <nav aria-label="breadcrumb" style="margin-bottom:16px;font-size:0.9rem">
-              <a href="/find">Find</a> › <a href="/find/{E(est.CvrNumber)}">CVR {E(est.CvrNumber)}</a> › {E(est.Name)}
+              <a href="/find">Find</a> › {cityCrumb}{E(est.Name)}
             </nav>
             <div class="find-detail">
               <div class="find-detail-badge">{badge}</div>
@@ -129,7 +160,7 @@ public static class FindPageRenderer
         return Layout(
             title: $"{est.Name} — Smilr score — SmilrHQ",
             description: description,
-            canonicalPath: $"/find/{Uri.EscapeDataString(est.CvrNumber ?? "")}/{est.Navnelbnr}",
+            canonicalPath: FindUrlBuilder.DetailPath(est),
             bodyHtml: body);
     }
 
@@ -148,14 +179,33 @@ public static class FindPageRenderer
         var sb = new StringBuilder();
         sb.Append("""<?xml version="1.0" encoding="UTF-8"?>""").Append('\n');
         sb.Append("""<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">""").Append('\n');
+
         foreach (var e in entries)
         {
+            var path = FindUrlBuilder.DetailPath(e.Name, e.City, e.Navnelbnr);
             sb.Append("  <url><loc>")
-              .Append(SiteOrigin).Append("/find/").Append(Uri.EscapeDataString(e.CvrNumber)).Append('/').Append(e.Navnelbnr)
+              .Append(SiteOrigin).Append(path)
               .Append("</loc><lastmod>")
               .Append(e.UpdatedAt.ToString("yyyy-MM-dd"))
               .Append("</lastmod></url>\n");
         }
+
+        // One hub-page entry per area, derived from the same projection — no extra repository call needed.
+        var hubGroups = entries
+            .Where(e => !string.IsNullOrWhiteSpace(e.City))
+            .GroupBy(e => FindUrlBuilder.AreaSlug(e.City!));
+
+        foreach (var group in hubGroups)
+        {
+            var displaySpelling = group.First().City!;
+            var lastmod = group.Max(e => e.UpdatedAt);
+            sb.Append("  <url><loc>")
+              .Append(SiteOrigin).Append(FindUrlBuilder.HubPath(displaySpelling))
+              .Append("</loc><lastmod>")
+              .Append(lastmod.ToString("yyyy-MM-dd"))
+              .Append("</lastmod></url>\n");
+        }
+
         sb.Append("</urlset>");
         return sb.ToString();
     }
@@ -165,7 +215,7 @@ public static class FindPageRenderer
         var addressLine = string.Join(", ", new[] { e.Address, e.City }.Where(s => !string.IsNullOrWhiteSpace(s)));
         var scoreLabel = e.LatestScore is not null ? $"Score {e.LatestScore}/4" : "No score yet";
         return $"""
-            <a class="find-result-row" href="/find/{Uri.EscapeDataString(e.CvrNumber!)}/{e.Navnelbnr}">
+            <a class="find-result-row" href="{FindUrlBuilder.DetailPath(e)}">
               <span class="find-result-name">{E(e.Name)}</span>
               <span class="find-result-address">{E(addressLine)}</span>
               <span class="find-result-score">{E(scoreLabel)}</span>
@@ -180,11 +230,14 @@ public static class FindPageRenderer
         </form>
         """;
 
-    private static string BuildPager(string query, int page, bool hasMore)
+    /// <summary>
+    /// Renders a Previous/Next pager. <paramref name="basePathWithTrailingSeparator"/> must already end in
+    /// "?" or "&amp;" so "page=N" can be appended directly (e.g. "/find/search?q=x&amp;" or "/find/kobenhavn/?").
+    /// </summary>
+    private static string BuildPager(string basePathWithTrailingSeparator, int page, bool hasMore)
     {
-        var q = Uri.EscapeDataString(query);
-        var prev = page > 1 ? $"""<a href="/find/search?q={q}&page={page - 1}">← Previous</a>""" : "";
-        var next = hasMore ? $"""<a href="/find/search?q={q}&page={page + 1}">Next →</a>""" : "";
+        var prev = page > 1 ? $"""<a href="{basePathWithTrailingSeparator}page={page - 1}">← Previous</a>""" : "";
+        var next = hasMore ? $"""<a href="{basePathWithTrailingSeparator}page={page + 1}">Next →</a>""" : "";
         if (string.IsNullOrEmpty(prev) && string.IsNullOrEmpty(next)) return "";
         return $"""<div class="find-pager">{prev}{next}</div>""";
     }
