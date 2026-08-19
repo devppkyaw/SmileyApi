@@ -76,9 +76,11 @@ This shipped before broad indexing, so no legacy-URL redirect layer was needed.
 
 Category context (breadcrumb: Area → Category → Business Name) can still appear in the UI and in `BreadcrumbList` structured data on the detail page for SEO rich-snippet purposes — that's a presentation/schema concern, not a URL concern.
 
-**Routing implementation:** `/find/{area-slug}/{business-slug}-{navnelbnr}` (existing) and `/find/{area-slug}/{category-slug}` (new) are the same two-segment route shape — the same `AmbiguousMatchException` risk already hit once at the one-segment level. Fix: merge into one route, `GET /find/{area-slug}/{segment}`, and reuse the proven disambiguation pattern — if `segment` matches the `-{digits}` suffix shape, it's a detail page; else if it matches one of the 26 known category slugs, it's a category hub; else, 404. Re-validate the category slug list against fresh sync data rather than hardcoding it permanently, in case Fødevarestyrelsen changes Pixibranche values.
+**Routing implementation (shipped):** `/find/{area-slug}/{business-slug}-{navnelbnr}` (existing) and `/find/{area-slug}/{category-slug}` (new) are the same two-segment route shape — the same `AmbiguousMatchException` risk already hit once at the one-segment level. Fix: merged into one route, `GET /find/{areaSlug}/{segment}`, reusing the proven disambiguation pattern — if `segment` matches the `-{digits}` suffix shape, it's a detail page; else it's looked up against a live category-slug index (`GetCategoryCountsAsync` → `FindEndpoints.GetCategoryIndexAsync`, cached 12h) built fresh from the DB every cache cycle, never hardcoded — so it self-corrects if Fødevarestyrelsen adds/renames/retires a Pixibranche value; an unrecognized segment 404s.
 
-**Open (not yet decided): minimum-establishment-count guard.** Area × category is a combinatorial page type (26 categories × N areas); many combinations will have very few or zero establishments (e.g. a small town with no butchers). Those should not be generated as indexable pages (either not generated at all, or `noindex`ed) to avoid thin-content pages diluting the rest of the directory's SEO — exact threshold still to be decided.
+**Minimum-establishment-count guard — resolved and implemented (2026-08-19):** render whenever count ≥ 1 (still useful to a direct visitor); add `<meta name="robots" content="noindex,follow">` and exclude from `sitemap.xml` when count < 3; 404 only when count = 0 (`CategorySlugThreshold` in `FindEndpoints.cs`). Verified against real data: a thin combo (count 2) renders with `noindex` and is absent from the sitemap; a combo ≥ 3 is indexed and included; a genuine zero-count combo 404s.
+
+Also implemented: the detail page's Category breadcrumb segment + `BreadcrumbList` JSON-LD (Find → Area → Category → Name), and an area hub "Browse by category" nav section — both described above as intended, both live. Category hub pages are fully shipped; the directory now supports area hubs, area×category hubs, and canonical establishment detail pages.
 
 ---
 
@@ -98,9 +100,9 @@ The real value proposition for the paid Business tier, since visibility alone is
 
 ## 3. Consumer-facing directory site ("Smilr Finder") — SECONDARY, SEO/acquisition role
 
-See URL structure and category hub sections above (in progress/decided). Each page needs differentiated content beyond a plain score mirror to be worth ranking. "Claim this listing" CTA still funnels into Business registration. Chrome extension idea remains a later, optional addition.
+See URL structure and category hub sections above — both implemented and shipped. Each page needs differentiated content beyond a plain score mirror to be worth ranking. "Claim this listing" CTA still funnels into Business registration. Chrome extension idea remains a later, optional addition.
 
-**Next differentiator to build, once category hub pages land — "Recently changed" / "Most improved" trend feed:**
+**Next differentiator to build, now that category hub pages have landed — "Recently changed" / "Most improved" trend feed:**
 Low-effort, high-differentiation: the webhook system already detects `smiley_score_changed` events (old score vs. new score) via SQL MERGE OUTPUT during each sync — this is the exact data needed, already captured, just not yet exposed as a public read surface. Concrete pages:
 - `/find/{area-slug}/changes` — live feed of establishments whose score moved in the latest sync, filterable by area.
 - "Most improved" / "recently downgraded" leaderboards — same data, framed as a ranked list. Shareable/link-bait potential.
@@ -129,7 +131,6 @@ Phase G (registered widget tier field) and Phase I (session-based Pro webhooks) 
 
 **Open decisions:**
 - Exact set of analytics features for the Business dashboard (trend charts, benchmarking, multi-location view — prioritize which ships first)
-- Minimum-establishment-count threshold for generating/indexing an area × category hub page (see Category hub pages section)
 - Caching/infra approach to keep public anonymous directory traffic from hitting Azure SQL directly at scale
 
 **Resolved:**
@@ -137,3 +138,6 @@ Phase G (registered widget tier field) and Phase I (session-based Pro webhooks) 
 - Category taxonomy: 26 Pixibranche-derived categories, no cuisine-level granularity possible from official data (2026-08-19)
 - URL structure and routing-disambiguation pattern for both area/detail and category/detail conflicts (2026-08-19)
 - Search UX: no on-site query-parsing investment; category/area hub pages carry that job via SEO instead (2026-08-19)
+- Minimum-establishment-count guard for area × category hub pages: threshold 3, render/noindex/404 tiering (2026-08-19) — see Category hub pages section
+
+**Shipped (2026-08-19):** area hub pages, area × category hub pages, canonical establishment detail pages with Area/Category breadcrumbs and `BreadcrumbList` JSON-LD, and `sitemap.xml` covering all three page types. Next up per the sequencing above: the "Recently changed" trend feed (§3).
