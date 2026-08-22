@@ -511,7 +511,7 @@ public static class FindPageRenderer
                   <div class="find-stats-grid">
                     <div class="find-stat">
                       <div class="find-stat-value">{summary.TotalChanges}</div>
-                      <div class="find-stat-label">score change{(summary.TotalChanges == 1 ? "" : "s")} in the latest sync</div>
+                      <div class="find-stat-label">score change{(summary.TotalChanges == 1 ? "" : "s")} in the last {FindEndpoints.ChangesWindowDays} days</div>
                     </div>
                     <div class="find-stat">
                       <div class="find-stat-value find-stat-value--up">{DirectionIconHtml(true)}{summary.ImprovedCount}</div>
