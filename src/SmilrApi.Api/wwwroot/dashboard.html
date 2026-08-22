@@ -38,22 +38,9 @@
 
 
 
-      <div id="freeActions" style="display:none;margin-bottom:24px;padding:16px 20px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)">
-        <strong style="display:block;margin-bottom:4px">Upgrade to Pro</strong>
-        <p style="font-size:0.875rem;color:var(--text-muted);margin-bottom:12px">199 kr/month — up to 20 CVRs, add by Navnelbnr, webhooks, Developer API.</p>
-        <button class="btn-primary" onclick="startCheckout()">Upgrade to Pro →</button>
-        <span id="checkoutStatus" style="margin-left:12px;font-size:0.85rem;color:var(--text-muted)"></span>
-      </div>
-
       <div id="proActions" style="display:none;margin-bottom:24px">
         <button class="btn-secondary" onclick="openPortal()">Manage subscription</button>
         <span id="portalStatus" style="margin-left:12px;font-size:0.85rem;color:var(--text-muted)"></span>
-      </div>
-
-      <div class="dash-tabs">
-        <button class="dash-tab active" data-tab="locations">Locations</button>
-        <button class="dash-tab" data-tab="webhooks">Webhooks</button>
-        <button class="dash-tab" data-tab="apikey">Developer API</button>
       </div>
 
       <!-- ── Locations tab ── -->
@@ -77,7 +64,7 @@
             </form>
             <div id="navFreeHint" class="add-form-inline" style="display:none">
               <span class="add-label">Add by Navnelbnr <span class="pro-tag">Pro</span></span>
-              <span style="font-size:0.8rem;color:var(--text-muted)">Upgrade to add individual locations.</span>
+              <span style="font-size:0.8rem;color:var(--text-muted)">Coming soon on Pro.</span>
             </div>
             <div id="addStatus" class="status-sm"></div>
           </div>
@@ -116,61 +103,6 @@
         </div>
       </div>
 
-      <!-- ── Webhooks tab ── -->
-      <div id="tab-webhooks" class="tab-panel" style="display:none">
-
-        <div id="webhookLocked" style="display:none;padding:24px 0">
-          <div class="locked-card">
-            <div style="font-size:1.4rem;margin-bottom:10px">🔒</div>
-            <strong style="display:block;margin-bottom:6px">Webhooks are a Pro feature</strong>
-            <p style="font-size:0.875rem;color:var(--text-muted);margin-bottom:16px">Upgrade to receive score-change notifications at your URL.</p>
-            <button class="btn-primary" onclick="startCheckout()">Upgrade to Pro →</button>
-          </div>
-        </div>
-
-        <div id="webhookSection" style="display:none">
-          <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:16px">Get notified at your URL when a smiley score changes.</p>
-          <form id="webhookForm" style="display:grid;grid-template-columns:1fr 2fr auto;gap:10px;max-width:640px;align-items:end;margin-bottom:10px">
-            <div>
-              <label style="font-size:0.8rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Establishment ID</label>
-              <input type="number" id="webhookEstId" placeholder="123456" required
-                     style="width:100%;padding:10px 14px;border-radius:6px;border:1.5px solid var(--border);font-size:1rem" />
-            </div>
-            <div>
-              <label style="font-size:0.8rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Callback URL (HTTPS)</label>
-              <input type="url" id="webhookUrl" placeholder="https://yoursite.com/webhook" required
-                     style="width:100%;padding:10px 14px;border-radius:6px;border:1.5px solid var(--border);font-size:1rem" />
-            </div>
-            <button type="submit" class="btn-primary" style="white-space:nowrap">Add webhook</button>
-          </form>
-          <div id="webhookStatus" style="margin-bottom:16px;font-size:0.9rem"></div>
-          <div id="webhookList"></div>
-        </div>
-
-      </div>
-
-      <!-- ── Developer API tab ── -->
-      <div id="tab-apikey" class="tab-panel" style="display:none">
-        <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:16px">
-          Use your API key with the <code>X-Api-Key</code> header to access the REST API.
-          <a href="/developers.html" target="_blank" rel="noopener">API docs →</a>
-        </p>
-        <div id="apikeyStatus" style="margin-bottom:12px;font-size:0.9rem"></div>
-        <div id="apikeyInfo" style="display:none;margin-bottom:16px;padding:14px 16px;border:1px solid var(--border);border-radius:6px;background:var(--surface)">
-          <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px">Active key · tier: <strong><span id="apikeyTier"></span></strong></div>
-          <div style="font-size:0.8rem;color:var(--text-muted)">Created: <span id="apikeyCreatedAt"></span></div>
-        </div>
-        <div id="apikeyNoKey" style="display:none;margin-bottom:16px;font-size:0.875rem;color:var(--text-muted)">No active API key.</div>
-        <div id="apikeyNewKey" style="display:none;margin-bottom:16px;padding:14px 16px;border:1px solid #6ee7b7;border-radius:6px;background:#d1fae5;color:#065f46">
-          <strong>New key — save this, it won't be shown again:</strong><br>
-          <code id="apikeyPlaintext" style="font-family:var(--font-mono);word-break:break-all;font-size:0.9rem"></code>
-        </div>
-        <div style="display:flex;gap:10px">
-          <button class="btn-primary" onclick="generateApiKey()">Generate new key</button>
-          <button class="btn-secondary" id="revokeBtn" style="display:none" onclick="revokeApiKey()">Revoke key</button>
-        </div>
-      </div>
-
     </div>
   </div>
 </section>
@@ -182,15 +114,6 @@
 <script>
 let currentTier = 'free';
 var locationData = {};
-
-document.querySelectorAll('.dash-tab').forEach(function (btn) {
-  btn.addEventListener('click', function () {
-    document.querySelectorAll('.dash-tab').forEach(function (b) { b.classList.remove('active'); });
-    document.querySelectorAll('.tab-panel').forEach(function (p) { p.style.display = 'none'; });
-    btn.classList.add('active');
-    document.getElementById('tab-' + btn.dataset.tab).style.display = 'block';
-  });
-});
 
 (async function () {
   const res = await fetch('/v1/business/me');
@@ -211,75 +134,25 @@ document.querySelectorAll('.dash-tab').forEach(function (btn) {
     document.getElementById('proActions').style.display     = 'block';
     document.getElementById('addForm').style.display        = 'flex';
     document.getElementById('navFreeHint').style.display    = 'none';
-    document.getElementById('webhookSection').style.display = 'block';
   } else {
-    document.getElementById('freeActions').style.display    = 'block';
     document.getElementById('addForm').style.display        = 'none';
     document.getElementById('navFreeHint').style.display    = 'flex';
     document.getElementById('cvrFreeNote').style.display    = 'block';
-    document.getElementById('webhookLocked').style.display  = 'block';
   }
 
   if (new URLSearchParams(location.search).get('upgraded') === '1') {
     currentTier = 'pro';
     document.getElementById('upgradedBanner').style.display  = 'block';
-    document.getElementById('freeActions').style.display     = 'none';
     document.getElementById('proActions').style.display      = 'block';
     document.getElementById('addForm').style.display          = 'flex';
     document.getElementById('navFreeHint').style.display      = 'none';
     document.getElementById('cvrFreeNote').style.display      = 'none';
-    document.getElementById('webhookLocked').style.display    = 'none';
-    document.getElementById('webhookSection').style.display  = 'block';
     document.getElementById('tierBadge').textContent         = 'Pro account';
     history.replaceState(null, '', '/dashboard.html');
-    loadWebhooks();
-  } else if (me.tier === 'pro') {
-    loadWebhooks();
   }
 
   loadLocations();
-  loadApiKey();
 })();
-
-async function loadApiKey() {
-  const res  = await fetch('/v1/business/apikey');
-  const data = await res.json();
-  if (data.hasKey) {
-    document.getElementById('apikeyInfo').style.display  = 'block';
-    document.getElementById('apikeyNoKey').style.display = 'none';
-    document.getElementById('revokeBtn').style.display   = 'inline-block';
-    document.getElementById('apikeyTier').textContent    = data.tier;
-    document.getElementById('apikeyCreatedAt').textContent = formatDate(data.createdAt.slice(0, 10).replace(/-/g, '-'));
-  } else {
-    document.getElementById('apikeyInfo').style.display  = 'none';
-    document.getElementById('apikeyNoKey').style.display = 'block';
-    document.getElementById('revokeBtn').style.display   = 'none';
-  }
-}
-
-async function generateApiKey() {
-  const hasKey = document.getElementById('revokeBtn').style.display !== 'none';
-  if (hasKey && !confirm('This will invalidate your existing key. Continue?')) return;
-  document.getElementById('apikeyNewKey').style.display = 'none';
-  const status = document.getElementById('apikeyStatus');
-  status.textContent = '';
-  const res  = await fetch('/v1/business/apikey/generate', { method: 'POST' });
-  const data = await res.json();
-  if (res.ok) {
-    document.getElementById('apikeyPlaintext').textContent = data.key;
-    document.getElementById('apikeyNewKey').style.display  = 'block';
-    loadApiKey();
-  } else {
-    status.style.color = 'var(--red)';
-    status.textContent = data.error?.message || 'Failed.';
-  }
-}
-
-async function revokeApiKey() {
-  if (!confirm('Revoke your API key? All requests using it will stop working immediately.')) return;
-  const res = await fetch('/v1/business/apikey', { method: 'DELETE' });
-  if (res.ok) loadApiKey();
-}
 
 var allLocations = [];
 
@@ -512,11 +385,7 @@ document.getElementById('cvrForm').addEventListener('submit', async function (e)
     loadLocations();
   } else {
     status.style.color = 'var(--red)';
-    if (data.error?.code === 'cvr_limit_reached') {
-      status.innerHTML = data.error.message + ' <a href="#" onclick="startCheckout();return false">Upgrade →</a>';
-    } else {
-      status.textContent = data.error?.message || 'Failed.';
-    }
+    status.textContent = data.error?.message || 'Failed.';
   }
 });
 
@@ -534,73 +403,6 @@ async function removeByCvr(cvr) {
     body: JSON.stringify({ cvr })
   });
   loadLocations();
-}
-
-async function loadWebhooks() {
-  const res  = await fetch('/v1/business/webhooks');
-  const list = await res.json();
-  const el   = document.getElementById('webhookList');
-  if (!Array.isArray(list) || !list.length) {
-    el.innerHTML = '<p style="color:var(--text-muted);font-size:0.9rem">No webhooks yet.</p>';
-    return;
-  }
-  el.innerHTML = list.map(function (w) {
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border:1px solid var(--border);border-radius:6px;margin-bottom:8px;background:var(--surface);gap:12px">' +
-      '<div style="font-size:0.875rem">' +
-        '<span style="font-family:var(--font-mono);color:var(--text-muted)">#' + w.establishmentId + '</span>' +
-        ' <span>' + esc(w.callbackUrl) + '</span>' +
-      '</div>' +
-      '<button onclick="deleteWebhook(' + w.id + ')" style="background:none;border:1px solid var(--border);border-radius:4px;padding:4px 10px;cursor:pointer;font-size:0.8rem;color:var(--text-muted)">Remove</button>' +
-    '</div>';
-  }).join('');
-}
-
-document.getElementById('webhookForm').addEventListener('submit', async function (e) {
-  e.preventDefault();
-  const status = document.getElementById('webhookStatus');
-  status.textContent = '';
-  const res  = await fetch('/v1/business/webhooks', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      establishmentId: parseInt(document.getElementById('webhookEstId').value),
-      callbackUrl:     document.getElementById('webhookUrl').value.trim()
-    })
-  });
-  const data = await res.json();
-  if (res.ok || res.status === 201) {
-    status.style.color = 'var(--green)';
-    status.textContent = 'Webhook added. Secret (save this — shown once): ' + data.secret;
-    document.getElementById('webhookEstId').value = '';
-    document.getElementById('webhookUrl').value   = '';
-    loadWebhooks();
-  } else {
-    status.style.color = 'var(--red)';
-    status.textContent = data.error?.message || 'Failed.';
-  }
-});
-
-async function deleteWebhook(id) {
-  if (!confirm('Remove this webhook?')) return;
-  await fetch('/v1/business/webhooks/' + id, { method: 'DELETE' });
-  loadWebhooks();
-}
-
-async function startCheckout() {
-  const status = document.getElementById('checkoutStatus');
-  if (status) status.textContent = 'Redirecting…';
-  try {
-    const res  = await fetch('/v1/business/checkout', { method: 'POST' });
-    const data = await res.json();
-    if (res.ok) {
-      if (status) status.textContent = '';
-      location.href = data.url;
-    } else {
-      if (status) status.textContent = data.error?.message || 'Failed to start checkout.';
-    }
-  } catch {
-    if (status) status.textContent = 'Network error.';
-  }
 }
 
 async function openPortal() {
@@ -697,17 +499,18 @@ function esc(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-document.getElementById('embedModal').addEventListener('click', function (e) {
-  if (e.target === this) closeEmbedModal();
-});
+document.addEventListener('DOMContentLoaded', function () {
+  document.getElementById('embedModal').addEventListener('click', function (e) {
+    if (e.target === this) closeEmbedModal();
+  });
 
-document.getElementById('historyModal').addEventListener('click', function (e) {
-  if (e.target === this) closeHistoryModal();
+  document.getElementById('historyModal').addEventListener('click', function (e) {
+    if (e.target === this) closeHistoryModal();
+  });
 });
 
 window.addEventListener('pageshow', function () {
   document.getElementById('portalStatus').textContent   = '';
-  document.getElementById('checkoutStatus').textContent = '';
 });
 </script>
 

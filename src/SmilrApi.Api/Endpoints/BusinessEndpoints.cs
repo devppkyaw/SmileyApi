@@ -242,7 +242,7 @@ public static class BusinessEndpoints
 
                 if (existingCvrs.Count >= 1 && !existingCvrs.Contains(req.Cvr.Trim()))
                     return Results.Json(
-                        Error("cvr_limit_reached", "Free accounts are limited to one CVR. Upgrade to Pro to add more."),
+                        Error("cvr_limit_reached", "Free accounts are limited to one CVR."),
                         statusCode: 403);
             }
             else

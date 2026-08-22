@@ -108,8 +108,10 @@ public static class FindPageRenderer
         var body = $"""
             <h1>Restaurants &amp; food businesses in {E(displaySpelling)}</h1>
             <p class="section-sub">{totalCount} registered establishment{(totalCount == 1 ? "" : "s")} with official Fødevarestyrelsen inspection scores.</p>
-            <p><a href="{FindUrlBuilder.RecentlyInspectedPath(displaySpelling)}">Recently inspected in {E(displaySpelling)} →</a></p>
-            <p><a href="{FindUrlBuilder.ChangesPath(displaySpelling)}">Recent score changes in {E(displaySpelling)} →</a></p>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px">
+              <a href="{FindUrlBuilder.RecentlyInspectedPath(displaySpelling)}" class="city-tag">Recently inspected in {E(displaySpelling)} →</a>
+              <a href="{FindUrlBuilder.ChangesPath(displaySpelling)}" class="city-tag">Recent score changes in {E(displaySpelling)} →</a>
+            </div>
             {categoryNavHtml}
             <div class="find-results">
             {rowsHtml}
@@ -244,8 +246,10 @@ public static class FindPageRenderer
               </table>
             </div>
             {pagerHtml}
-            <p><a href="{FindUrlBuilder.HubPath(displaySpelling)}">View all food businesses in {E(displaySpelling)} →</a></p>
-            <p><a href="{FindUrlBuilder.ChangesPath(displaySpelling)}">See businesses whose inspection score recently changed →</a></p>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin:16px 0">
+              <a href="{FindUrlBuilder.HubPath(displaySpelling)}" class="city-tag">View all food businesses in {E(displaySpelling)} →</a>
+              <a href="{FindUrlBuilder.ChangesPath(displaySpelling)}" class="city-tag">See businesses whose inspection score recently changed →</a>
+            </div>
             {categoryNavHtml}
             <div class="find-business-cta">
               <h2>Own a food business?</h2>
@@ -422,8 +426,10 @@ public static class FindPageRenderer
             """;
 
         var exploreLinksHtml = $"""
-            <p><a href="{FindUrlBuilder.RecentlyInspectedPath(displaySpelling)}">Recently inspected in {E(displaySpelling)} →</a></p>
-            <p><a href="{FindUrlBuilder.HubPath(displaySpelling)}">View all food businesses in {E(displaySpelling)} →</a></p>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin:16px 0">
+              <a href="{FindUrlBuilder.RecentlyInspectedPath(displaySpelling)}" class="city-tag">Recently inspected in {E(displaySpelling)} →</a>
+              <a href="{FindUrlBuilder.HubPath(displaySpelling)}" class="city-tag">View all food businesses in {E(displaySpelling)} →</a>
+            </div>
             """;
 
         var ctaHtml = $"""
@@ -883,7 +889,6 @@ public static class FindPageRenderer
                 <a href="/" class="nav-logo" style="text-decoration:none">Smilr<span class="accent">HQ</span></a>
                 <div class="nav-links">
                   <a href="/find" class="nav-link">Find a restaurant</a>
-                  <a href="/developers.html" class="nav-link">Developers</a>
                   <a href="/login.html" class="nav-link">Log in</a>
                 </div>
               </nav>

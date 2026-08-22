@@ -326,6 +326,21 @@ section { padding: 80px 0; }
   padding: 2px 7px;
 }
 
+/* Clickable pill link (e.g. homepage popular-city shortcuts) — same border/radius/padding language as
+   the badges above, but interactive: a pill-shaped sibling of .btn-secondary rather than a static label. */
+.city-tag {
+  display: inline-block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  text-decoration: none;
+}
+.city-tag:hover { background: var(--accent-dim); border-color: var(--accent); }
+
 /* ─── Examples ────────────────────────────────────────────── */
 
 .examples { background: var(--bg); }
@@ -650,6 +665,23 @@ pre:not([class*="language-"]) strong {
   margin-left: 6px;
   text-transform: none;
   letter-spacing: 0;
+  vertical-align: middle;
+}
+
+/* Background is --surface (white), not --surface-2, since this sits on top of .tier-table th's
+   own --surface-2 background and needs contrast against it. */
+.tier-note {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-left: 6px;
   vertical-align: middle;
 }
 
