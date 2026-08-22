@@ -17,7 +17,12 @@ namespace SmilrApi.Api.Rendering;
 /// </summary>
 public static class FindPageRenderer
 {
-    private const string SiteOrigin = "https://smilrhq.dk";
+    // Set once at startup from Seo:CanonicalOrigin (see Program.cs). This file is a fully static,
+    // non-DI rendering module by design, so a settable static — written exactly once before any
+    // request is served — is used here instead of threading the origin through every render method.
+    internal static string SiteOrigin { get; private set; } = "https://smilrhq.dk";
+
+    internal static void Configure(string canonicalOrigin) => SiteOrigin = canonicalOrigin.TrimEnd('/');
 
     // Mirrors the SCORES map in wwwroot/widget.js and smilr-icons.js so /find pages show the same
     // badge as the widget: four score values, three faces (2 and 3 both render as the neutral Sm3).
@@ -56,7 +61,10 @@ public static class FindPageRenderer
             ? "<p>No matching establishments found.</p>"
             : string.Join("\n", linkable.Select(ResultRowHtml));
 
-        var pagerHtml = BuildPager($"/find/search?q={Uri.EscapeDataString(query)}&", page, hasMore: results.Count >= limit);
+        var searchBasePath = $"/find/search?q={Uri.EscapeDataString(query)}&";
+        var hasMore = results.Count >= limit;
+        var pagerHtml = BuildPager(searchBasePath, page, hasMore);
+        var (prevPath, nextPath) = PagerLinks(searchBasePath, page, hasMore);
 
         var body = $"""
             <h1>Search results for "{E(query)}"</h1>
@@ -70,8 +78,12 @@ public static class FindPageRenderer
         return Layout(
             title: $"\"{query}\" — Search results — SmilrHQ",
             description: $"Food inspection scores matching \"{query}\" — official Fødevarestyrelsen data.",
-            canonicalPath: $"/find/search?q={Uri.EscapeDataString(query)}",
-            bodyHtml: body);
+            canonicalPath: page > 1
+                ? $"/find/search?q={Uri.EscapeDataString(query)}&page={page}"
+                : $"/find/search?q={Uri.EscapeDataString(query)}",
+            bodyHtml: body,
+            prevPath: prevPath,
+            nextPath: nextPath);
     }
 
     public static string LocationChoicePage(string cvr, IReadOnlyList<Establishment> locations)
@@ -93,7 +105,8 @@ public static class FindPageRenderer
     }
 
     public static string AreaHubPage(
-        string displaySpelling, int page, int pageSize, int totalCount, IReadOnlyList<Establishment> establishments,
+        string displaySpelling, int page, int pageSize, int totalCount, bool noindex,
+        IReadOnlyList<Establishment> establishments,
         IReadOnlyList<(string Category, string CategorySlug, int Count)> categoriesInArea)
     {
         var rowsHtml = establishments.Count == 0
@@ -103,6 +116,7 @@ public static class FindPageRenderer
         var hasMore = (long)page * pageSize < totalCount;
         var hubPath = FindUrlBuilder.HubPath(displaySpelling);
         var pagerHtml = BuildPager($"{hubPath}?", page, hasMore);
+        var (prevPath, nextPath) = PagerLinks($"{hubPath}?", page, hasMore);
         var categoryNavHtml = CategoryNavHtml(displaySpelling, categoriesInArea);
 
         var body = $"""
@@ -123,7 +137,10 @@ public static class FindPageRenderer
             title: $"Food inspection scores in {displaySpelling} — SmilrHQ",
             description: $"Browse official Fødevarestyrelsen food inspection (smiley) scores for restaurants and food businesses in {displaySpelling}.",
             canonicalPath: hubPath,
-            bodyHtml: body);
+            bodyHtml: body,
+            noindex: noindex,
+            prevPath: prevPath,
+            nextPath: nextPath);
     }
 
     public static string CategoryHubPage(
@@ -137,6 +154,14 @@ public static class FindPageRenderer
         var hasMore = (long)page * pageSize < totalCount;
         var categoryPath = FindUrlBuilder.CategoryHubPath(displayCity, displayCategory);
         var pagerHtml = BuildPager($"{categoryPath}?", page, hasMore);
+        var (prevPath, nextPath) = PagerLinks($"{categoryPath}?", page, hasMore);
+
+        var jsonLdCrumbs = new List<(string Name, string Path)>
+        {
+            ("Find", "/find"),
+            (displayCity, FindUrlBuilder.HubPath(displayCity)),
+            (displayCategory, categoryPath)
+        };
 
         var body = $"""
             <nav aria-label="breadcrumb" style="margin-bottom:16px;font-size:0.9rem">
@@ -155,7 +180,10 @@ public static class FindPageRenderer
             description: $"Browse official Fødevarestyrelsen food inspection (smiley) scores for {displayCategory.ToLowerInvariant()} in {displayCity}.",
             canonicalPath: categoryPath,
             bodyHtml: body,
-            noindex: noindex);
+            noindex: noindex,
+            extraHeadHtml: BreadcrumbJsonLd(jsonLdCrumbs),
+            prevPath: prevPath,
+            nextPath: nextPath);
     }
 
     private static string CategoryNavHtml(
@@ -189,6 +217,7 @@ public static class FindPageRenderer
         var hasMore = (long)page * pageSize < summary.TotalWithInspection;
         var recentPath = FindUrlBuilder.RecentlyInspectedPath(displaySpelling);
         var pagerHtml = BuildPager($"{recentPath}?", page, hasMore);
+        var (prevPath, nextPath) = PagerLinks($"{recentPath}?", page, hasMore);
         var categoryNavHtml = CategoryNavHtml(displaySpelling, categoriesInArea);
 
         var latestDateText = summary.LatestInspectionDate is { } d ? FormatDate(d) : null;
@@ -264,7 +293,9 @@ public static class FindPageRenderer
             canonicalPath: recentPath,
             bodyHtml: body,
             noindex: noindex,
-            extraHeadHtml: BreadcrumbJsonLd(jsonLdCrumbs));
+            extraHeadHtml: BreadcrumbJsonLd(jsonLdCrumbs),
+            prevPath: prevPath,
+            nextPath: nextPath);
     }
 
     /// <summary>Renders the recently-inspected table body, inserting a full-width date-header row
@@ -441,6 +472,7 @@ public static class FindPageRenderer
             """;
 
         string body;
+        string? prevPath = null, nextPath = null;
         if (changes.Count == 0)
         {
             // Spec §14: a quiet city is a normal, honest state, not an error — no stats card (there's
@@ -465,6 +497,7 @@ public static class FindPageRenderer
         {
             var hasMore = (long)page * pageSize < summary.TotalChanges;
             var pagerHtml = BuildPager($"{changesPath}?", page, hasMore);
+            (prevPath, nextPath) = PagerLinks($"{changesPath}?", page, hasMore);
             var mostRecentText = summary.MostRecentChangeDate is { } d ? FormatDate(d) : null;
             var introText = mostRecentText is null
                 ? $"Smilr tracks changes to official food inspection scores in {E(displaySpelling)}."
@@ -521,7 +554,9 @@ public static class FindPageRenderer
             canonicalPath: changesPath,
             bodyHtml: body,
             noindex: noindex,
-            extraHeadHtml: BreadcrumbJsonLd(jsonLdCrumbs));
+            extraHeadHtml: BreadcrumbJsonLd(jsonLdCrumbs),
+            prevPath: prevPath,
+            nextPath: nextPath);
     }
 
     private static string ChangesRowsHtml(IReadOnlyList<ScoreChangeRow> changes)
@@ -834,11 +869,21 @@ public static class FindPageRenderer
     /// </summary>
     private static string BuildPager(string basePathWithTrailingSeparator, int page, bool hasMore)
     {
-        var prev = page > 1 ? $"""<a href="{basePathWithTrailingSeparator}page={page - 1}">← Previous</a>""" : "";
-        var next = hasMore ? $"""<a href="{basePathWithTrailingSeparator}page={page + 1}">Next →</a>""" : "";
+        var (prevUrl, nextUrl) = PagerLinks(basePathWithTrailingSeparator, page, hasMore);
+        var prev = prevUrl is not null ? $"""<a href="{prevUrl}">← Previous</a>""" : "";
+        var next = nextUrl is not null ? $"""<a href="{nextUrl}">Next →</a>""" : "";
         if (string.IsNullOrEmpty(prev) && string.IsNullOrEmpty(next)) return "";
         return $"""<div class="find-pager">{prev}{next}</div>""";
     }
+
+    /// <summary>Shared prev/next URL computation for paginated /find pages — used both for the visible
+    /// pager links (via BuildPager) and for the rel="prev"/rel="next" &lt;link&gt; tags in Layout(), so a
+    /// page's canonical tag (always page 1) doesn't leave crawlers with no path to the other pages.</summary>
+    private static (string? Prev, string? Next) PagerLinks(string basePathWithTrailingSeparator, int page, bool hasMore) =>
+    (
+        page > 1 ? $"{basePathWithTrailingSeparator}page={page - 1}" : null,
+        hasMore ? $"{basePathWithTrailingSeparator}page={page + 1}" : null
+    );
 
     private static string ScoreBadgeHtml(int? score, string? virksomhedsType)
     {
@@ -863,10 +908,12 @@ public static class FindPageRenderer
 
     private static string Layout(
         string title, string description, string canonicalPath, string bodyHtml,
-        bool noindex = false, string extraHeadHtml = "")
+        bool noindex = false, string extraHeadHtml = "", string? prevPath = null, string? nextPath = null)
     {
         var canonicalUrl = SiteOrigin + canonicalPath;
         var robotsTag = noindex ? """<meta name="robots" content="noindex,follow" />""" + "\n  " : "";
+        var prevTag = prevPath is not null ? $"""<link rel="prev" href="{SiteOrigin + prevPath}" />""" + "\n  " : "";
+        var nextTag = nextPath is not null ? $"""<link rel="next" href="{SiteOrigin + nextPath}" />""" + "\n  " : "";
         return $"""
             <!DOCTYPE html>
             <html lang="en">
@@ -875,10 +922,15 @@ public static class FindPageRenderer
               <meta name="viewport" content="width=device-width, initial-scale=1.0" />
               <meta name="description" content="{E(description)}" />
               {robotsTag}<link rel="canonical" href="{canonicalUrl}" />
-              <meta property="og:type" content="website" />
+              {prevTag}{nextTag}<meta property="og:type" content="website" />
               <meta property="og:title" content="{E(title)}" />
               <meta property="og:description" content="{E(description)}" />
               <meta property="og:url" content="{canonicalUrl}" />
+              <meta property="og:image" content="{SiteOrigin}/images/hero.jpg" />
+              <meta name="twitter:card" content="summary_large_image" />
+              <meta name="twitter:title" content="{E(title)}" />
+              <meta name="twitter:description" content="{E(description)}" />
+              <meta name="twitter:image" content="{SiteOrigin}/images/hero.jpg" />
               <title>{E(title)}</title>
               <link rel="stylesheet" href="/style.css" />
               {extraHeadHtml}

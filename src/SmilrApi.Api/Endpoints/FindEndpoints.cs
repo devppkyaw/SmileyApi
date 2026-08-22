@@ -125,10 +125,10 @@ public static class FindEndpoints
                 DetailSlugPattern.IsMatch(segment)
                     ? DetailHandlerAsync(segment, http, cache, repo, ct)
                 : segment == "recently-inspected"
-                    ? RecentlyInspectedHandlerAsync(areaSlug, page, cache, repo, ct)
+                    ? RecentlyInspectedHandlerAsync(areaSlug, page, http, cache, repo, ct)
                 : segment == "changes"
-                    ? ChangesHandlerAsync(areaSlug, page, cache, repo, ct)
-                    : CategoryHubHandlerAsync(areaSlug, segment, page, cache, repo, ct));
+                    ? ChangesHandlerAsync(areaSlug, page, http, cache, repo, ct)
+                    : CategoryHubHandlerAsync(areaSlug, segment, page, http, cache, repo, ct));
 
         // Single dynamic segment — ambiguous between an area hub ("/find/kobenhavn/") and a detail page
         // for an establishment with no City ("/find/{business-slug}-{navnelbnr}"). ASP.NET Core routing
@@ -141,11 +141,11 @@ public static class FindEndpoints
             IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct) =>
                 DetailSlugPattern.IsMatch(segment)
                     ? DetailHandlerAsync(segment, http, cache, repo, ct)
-                    : AreaHubHandlerAsync(segment, page, cache, repo, ct));
+                    : AreaHubHandlerAsync(segment, page, http, cache, repo, ct));
     }
 
     private static async Task<IResult> AreaHubHandlerAsync(
-        string areaSlug, int? page,
+        string areaSlug, int? page, HttpContext http,
         IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct)
     {
         var areaIndex = await GetAreaIndexAsync(cache, repo, ct);
@@ -154,14 +154,25 @@ public static class FindEndpoints
                 FindPageRenderer.NotFoundPage($"No area found for '{areaSlug}'."),
                 "text/html", statusCode: 404);
 
+        // Canonical-redirect on a trailing-slash mismatch or wrong-case "/find" prefix — same pattern as
+        // DetailHandlerAsync below, preserving the query string so a ?page=N request doesn't lose it.
+        var canonicalPath = FindUrlBuilder.HubPath(area.DisplaySpelling);
+        var requestPath = http.Request.Path.Value ?? "";
+        if (!string.Equals(canonicalPath, requestPath, StringComparison.Ordinal))
+            return Results.Redirect(canonicalPath + http.Request.QueryString, permanent: true);
+
         var pageNum = Math.Max(page ?? 1, 1);
         var totalCount = await repo.CountByCitiesAsync(area.RawCityValues, ct);
         var establishments = await repo.GetByCitiesAsync(area.RawCityValues, pageNum, HubPageSize, ct);
         var categoriesInArea = await GetCategoriesInAreaAsync(area.RawCityValues, cache, repo, ct);
 
+        // Page 1 is indexable once the area meets CategorySlugThreshold; page 2+ is noindex,follow —
+        // same philosophy as the category-hub/recently-inspected/changes pages below.
+        var noindex = pageNum > 1 || totalCount < CategorySlugThreshold;
+
         return Results.Content(
             FindPageRenderer.AreaHubPage(
-                area.DisplaySpelling, pageNum, HubPageSize, totalCount, establishments, categoriesInArea),
+                area.DisplaySpelling, pageNum, HubPageSize, totalCount, noindex, establishments, categoriesInArea),
             "text/html");
     }
 
@@ -188,7 +199,7 @@ public static class FindEndpoints
     }
 
     private static async Task<IResult> CategoryHubHandlerAsync(
-        string areaSlug, string categorySlug, int? page,
+        string areaSlug, string categorySlug, int? page, HttpContext http,
         IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct)
     {
         var areaIndex = await GetAreaIndexAsync(cache, repo, ct);
@@ -203,6 +214,13 @@ public static class FindEndpoints
                 FindPageRenderer.NotFoundPage($"No category found for '{categorySlug}'."),
                 "text/html", statusCode: 404);
 
+        // Canonical-redirect on a trailing-slash/case mismatch — same pattern as DetailHandlerAsync,
+        // preserving the query string so a ?page=N request doesn't lose it.
+        var canonicalPath = FindUrlBuilder.CategoryHubPath(area.DisplaySpelling, category);
+        var requestPath = http.Request.Path.Value ?? "";
+        if (!string.Equals(canonicalPath, requestPath, StringComparison.Ordinal))
+            return Results.Redirect(canonicalPath + http.Request.QueryString, permanent: true);
+
         var pageNum = Math.Max(page ?? 1, 1);
         var totalCount = await repo.CountByCitiesAndCategoryAsync(area.RawCityValues, category, ct);
         if (totalCount == 0)
@@ -212,15 +230,20 @@ public static class FindEndpoints
 
         var establishments = await repo.GetByCitiesAndCategoryAsync(area.RawCityValues, category, pageNum, HubPageSize, ct);
 
+        // Same pageNum>1-or-thin noindex band as RecentlyInspectedHandlerAsync/ChangesHandlerAsync —
+        // canonicalPath always points at page 1, so page 2+ must be noindexed to avoid a duplicate-
+        // content signal (previously only the thin-category case was covered here).
+        var noindex = pageNum > 1 || totalCount < CategorySlugThreshold;
+
         return Results.Content(
             FindPageRenderer.CategoryHubPage(
                 area.DisplaySpelling, category, areaSlug, categorySlug,
-                pageNum, HubPageSize, totalCount, noindex: totalCount < CategorySlugThreshold, establishments),
+                pageNum, HubPageSize, totalCount, noindex, establishments),
             "text/html");
     }
 
     private static async Task<IResult> RecentlyInspectedHandlerAsync(
-        string areaSlug, int? page,
+        string areaSlug, int? page, HttpContext http,
         IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct)
     {
         var areaIndex = await GetAreaIndexAsync(cache, repo, ct);
@@ -228,6 +251,13 @@ public static class FindEndpoints
             return Results.Content(
                 FindPageRenderer.NotFoundPage($"No area found for '{areaSlug}'."),
                 "text/html", statusCode: 404);
+
+        // Canonical-redirect on a trailing-slash/case mismatch — same pattern as DetailHandlerAsync,
+        // preserving the query string so a ?page=N request doesn't lose it.
+        var canonicalPath = FindUrlBuilder.RecentlyInspectedPath(area.DisplaySpelling);
+        var requestPath = http.Request.Path.Value ?? "";
+        if (!string.Equals(canonicalPath, requestPath, StringComparison.Ordinal))
+            return Results.Redirect(canonicalPath + http.Request.QueryString, permanent: true);
 
         var pageNum = Math.Max(page ?? 1, 1);
         var summary = await repo.GetRecentlyInspectedSummaryAsync(area.RawCityValues, ct);
@@ -253,7 +283,7 @@ public static class FindEndpoints
     }
 
     private static async Task<IResult> ChangesHandlerAsync(
-        string areaSlug, int? page,
+        string areaSlug, int? page, HttpContext http,
         IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct)
     {
         var areaIndex = await GetAreaIndexAsync(cache, repo, ct);
@@ -261,6 +291,13 @@ public static class FindEndpoints
             return Results.Content(
                 FindPageRenderer.NotFoundPage($"No area found for '{areaSlug}'."),
                 "text/html", statusCode: 404);
+
+        // Canonical-redirect on a trailing-slash/case mismatch — same pattern as DetailHandlerAsync,
+        // preserving the query string so a ?page=N request doesn't lose it.
+        var canonicalPath = FindUrlBuilder.ChangesPath(area.DisplaySpelling);
+        var requestPath = http.Request.Path.Value ?? "";
+        if (!string.Equals(canonicalPath, requestPath, StringComparison.Ordinal))
+            return Results.Redirect(canonicalPath + http.Request.QueryString, permanent: true);
 
         var pageNum = Math.Max(page ?? 1, 1);
         var windowStart = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-ChangesWindowDays));
