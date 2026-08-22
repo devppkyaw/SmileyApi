@@ -8,12 +8,20 @@ namespace SmilrApi.Api.Middleware;
 /// Production (no canonical domain is DNS-live locally/in dev) and explicitly skips /health so Container
 /// Apps' internal readiness/liveness probes are never redirected regardless of the Host header they use —
 /// verify post-deploy that probes indeed don't send a Host header requiring this path anyway.
+///
+/// Also gated on Seo:EnforceCanonicalHost (default false), mirroring infra/parameters/prod.bicepparam's
+/// own customDomainName gate: smilrhq.dk isn't bound to this Container App yet (it currently points at an
+/// unrelated static site), so redirecting there unconditionally would 404 every single request — this
+/// caused a real production outage before the flag was added. Flip it to true only once the custom domain
+/// is actually DNS-live and bound (see prod.bicepparam's comment for the exact sequencing).
 /// </summary>
 public class CanonicalHostMiddleware(RequestDelegate next, IConfiguration configuration, IWebHostEnvironment env)
 {
     public async Task InvokeAsync(HttpContext context)
     {
-        if (!env.IsProduction() || context.Request.Path.StartsWithSegments("/health"))
+        if (!env.IsProduction()
+            || !configuration.GetValue<bool>("Seo:EnforceCanonicalHost")
+            || context.Request.Path.StartsWithSegments("/health"))
         {
             await next(context);
             return;
