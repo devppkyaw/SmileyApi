@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Display your official Danish food inspection Smilr score on your website. Register free, select your location, and embed your score badge in seconds." />
   <title>Smilr API — Danish Food Inspection Scores</title>
+  <link rel="canonical" href="https://smilrhq.dk/" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -14,9 +15,8 @@
   <nav class="nav">
     <a href="/" class="nav-logo" style="text-decoration:none">Smilr<span class="accent">HQ</span></a>
     <div class="nav-links">
+      <a href="/find" class="nav-link">Find</a>
       <a href="#businesses" class="nav-link">For Businesses</a>
-      <a href="developers.html" class="nav-link">Developers</a>
-      <a href="/scalar/v1" class="nav-link">API Docs</a>
       <a id="navAuthLink" href="/login.html" class="nav-link">Log in</a>
     </div>
   </nav>
@@ -26,9 +26,6 @@
     <div class="cta-pair">
       <a href="register.html" class="btn-primary">Register your business →</a>
     </div>
-    <p style="margin-top:16px;font-size:0.9rem;color:rgba(255,255,255,0.55)">
-      Building an app? <a href="developers.html" style="color:rgba(255,255,255,0.85);text-decoration:underline">Developer API →</a>
-    </p>
   </div>
 </header>
 
@@ -55,6 +52,50 @@
   </div>
 </section>
 
+<!-- ─── Check a food business ──────────────────────────────── -->
+<section class="features">
+  <div class="container">
+    <h2 class="section-title">Check a food business</h2>
+    <p class="section-sub">Search for a restaurant, café, bakery or other food business and see its latest official inspection score.</p>
+    <form action="/find/search" method="get" class="find-search-form" style="max-width:480px;margin:0 auto 20px">
+      <input type="text" name="q" placeholder="Business name or CVR" required />
+      <button type="submit" class="btn-primary">Search</button>
+    </form>
+    <div style="max-width:640px;margin:20px auto 0;display:flex;flex-wrap:wrap;gap:8px;justify-content:center">
+      <a href="/find/koebenhavn-k/" class="city-tag">Copenhagen</a>
+      <a href="/find/aarhus-c/" class="city-tag">Aarhus</a>
+      <a href="/find/odense-c/" class="city-tag">Odense</a>
+      <a href="/find/aalborg/" class="city-tag">Aalborg</a>
+      <a href="/find/kolding/" class="city-tag">Kolding</a>
+      <a href="/find/vejle/" class="city-tag">Vejle</a>
+      <a href="/find/horsens/" class="city-tag">Horsens</a>
+      <a href="/find/silkeborg/" class="city-tag">Silkeborg</a>
+      <a href="/find/esbjerg/" class="city-tag">Esbjerg</a>
+      <a href="/find/randers/" class="city-tag">Randers</a>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Explore food inspections ───────────────────────────── -->
+<section class="business-section">
+  <div class="container">
+    <h2 class="section-title">Explore food inspections</h2>
+    <p class="section-sub">See recently inspected businesses and follow recent official score changes.</p>
+    <div class="feature-grid" style="grid-template-columns:repeat(2,1fr);max-width:720px;margin:0 auto">
+      <div class="feature-card">
+        <h3>Recently inspected</h3>
+        <p>See food businesses with the most recent recorded inspections.</p>
+        <a href="/find/koebenhavn-k/recently-inspected">View recently inspected →</a>
+      </div>
+      <div class="feature-card">
+        <h3>Recent score changes</h3>
+        <p>See businesses whose official inspection scores recently changed.</p>
+        <a href="/find/koebenhavn-k/changes">View recent changes →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ─── Tier Comparison ────────────────────────────────────── -->
 <section class="tiers">
   <div class="container">
@@ -65,9 +106,9 @@
         <thead>
           <tr>
             <th></th>
-            <th>Free<br><small style="font-weight:400;font-size:0.8rem">0 kr/mo</small></th>
-            <th>Pro<br><small style="font-weight:400;font-size:0.8rem">199 kr/mo</small></th>
-            <th>Enterprise<br><small style="font-weight:400;font-size:0.8rem">Contact us</small></th>
+            <th>Free<br><small style="font-weight:400;font-size:0.8rem">0 kr/mo</small> <span class="tier-note">Available now</span></th>
+            <th>Pro<br><small style="font-weight:400;font-size:0.8rem">199 kr/mo</small> <span class="tier-note">Coming soon</span></th>
+            <th>Enterprise<br><small style="font-weight:400;font-size:0.8rem">Contact us</small> <span class="tier-note">Coming soon</span></th>
           </tr>
         </thead>
         <tbody>
@@ -106,6 +147,7 @@
     </div>
     <div class="tiers-cta" style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;align-items:center">
       <a href="register.html" class="btn-primary">Register for free →</a>
+      <a href="mailto:info@smilrhq.dk" class="btn-secondary">Pro — contact us →</a>
       <a href="mailto:info@smilrhq.dk" class="btn-secondary">Enterprise — contact us →</a>
     </div>
   </div>

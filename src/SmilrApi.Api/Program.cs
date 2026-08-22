@@ -171,7 +171,7 @@ builder.Services.AddRateLimiter(options =>
         ctx.HttpContext.Response.StatusCode = 429;
         ctx.HttpContext.Response.ContentType = "application/json";
         await ctx.HttpContext.Response.WriteAsync(
-            """{"error":{"code":"rate_limit_exceeded","message":"Daily request limit reached. Upgrade to Pro for higher limits."}}""", ct);
+            """{"error":{"code":"rate_limit_exceeded","message":"Daily request limit reached."}}""", ct);
     };
 });
 
