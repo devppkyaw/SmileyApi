@@ -107,7 +107,7 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
     {
         return await db.Establishments
             .Where(e => e.CvrNumber != null)
-            .Select(e => new SitemapEntry(e.Name, e.City, e.Navnelbnr, e.UpdatedAt))
+            .Select(e => new SitemapEntry(e.Name, e.City, e.Navnelbnr, e.UpdatedAt, e.LatestScoreDate != null))
             .AsNoTracking()
             .ToListAsync(ct);
     }
@@ -204,5 +204,105 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
             .ToListAsync(ct);
 
         return rows.Select(r => (r.City!, r.Pixibranche!, r.Count)).ToList();
+    }
+
+    public async Task<IReadOnlyList<Establishment>> GetByCitiesOrderedByLatestInspectionAsync(
+        IReadOnlyList<string> cityValues, int page, int limit, CancellationToken ct = default)
+    {
+        if (cityValues.Count == 0) return [];
+        page  = Math.Max(1, page);
+        limit = Math.Clamp(limit, 1, 100);
+
+        return await db.Establishments
+            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City)
+                     && e.LatestScoreDate != null)
+            .Include(e => e.Inspections.OrderByDescending(i => i.InspectedOn).Take(1))
+            .OrderByDescending(e => e.LatestScoreDate)
+            .ThenBy(e => e.Name)
+            .Skip((page - 1) * limit)
+            .Take(limit)
+            .AsNoTracking()
+            .ToListAsync(ct);
+    }
+
+    public async Task<RecentlyInspectedSummary> GetRecentlyInspectedSummaryAsync(
+        IReadOnlyList<string> cityValues, CancellationToken ct = default)
+    {
+        if (cityValues.Count == 0) return new RecentlyInspectedSummary(0, null, 0);
+        var cutoff = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-30));
+
+        var q = db.Establishments
+            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City)
+                     && e.LatestScoreDate != null);
+
+        return new RecentlyInspectedSummary(
+            await q.CountAsync(ct),
+            await q.MaxAsync(e => (DateOnly?)e.LatestScoreDate, ct),
+            await q.CountAsync(e => e.LatestScoreDate >= cutoff, ct));
+    }
+
+    public async Task<IReadOnlyList<ScoreChangeRow>> GetRecentChangesByCitiesAsync(
+        IReadOnlyList<string> cityValues, DateOnly windowStart, int page, int limit, CancellationToken ct = default)
+    {
+        if (cityValues.Count == 0) return [];
+        page  = Math.Max(1, page);
+        limit = Math.Clamp(limit, 1, 100);
+
+        var establishments = await db.Establishments
+            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City))
+            .Include(e => e.Inspections.OrderByDescending(i => i.InspectedOn))
+            .AsNoTracking()
+            .ToListAsync(ct);
+
+        return establishments
+            .Select(e => (Establishment: e, Change: ScoreChangeCalculator.LatestChange(e.Inspections)))
+            .Where(x => x.Change is { } c && c.ChangeDate >= windowStart)
+            .Select(x => new ScoreChangeRow(x.Establishment, x.Change!.Value.PreviousScore, x.Change.Value.NewScore, x.Change.Value.ChangeDate))
+            .OrderByDescending(r => r.ChangeDate)
+            .ThenBy(r => r.Establishment.Name)
+            .Skip((page - 1) * limit)
+            .Take(limit)
+            .ToList();
+    }
+
+    public async Task<ChangesSummary> GetChangesSummaryAsync(
+        IReadOnlyList<string> cityValues, DateOnly windowStart, CancellationToken ct = default)
+    {
+        if (cityValues.Count == 0) return new ChangesSummary(0, 0, 0, null);
+
+        var establishments = await db.Establishments
+            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City))
+            .Include(e => e.Inspections.OrderByDescending(i => i.InspectedOn))
+            .AsNoTracking()
+            .ToListAsync(ct);
+
+        var inWindow = establishments
+            .Select(e => ScoreChangeCalculator.LatestChange(e.Inspections))
+            .Where(c => c is { } cc && cc.ChangeDate >= windowStart)
+            .Select(c => c!.Value)
+            .ToList();
+
+        return new ChangesSummary(
+            inWindow.Count,
+            inWindow.Count(c => c.NewScore < c.PreviousScore),
+            inWindow.Count(c => c.NewScore > c.PreviousScore),
+            inWindow.Count > 0 ? inWindow.Max(c => c.ChangeDate) : null);
+    }
+
+    public async Task<IReadOnlyList<(string City, int Count)>> GetChangeCountsByCityAsync(
+        DateOnly windowStart, CancellationToken ct = default)
+    {
+        var establishments = await db.Establishments
+            .Where(e => e.CvrNumber != null && e.City != null && e.City != "")
+            .Include(e => e.Inspections.OrderByDescending(i => i.InspectedOn))
+            .AsNoTracking()
+            .ToListAsync(ct);
+
+        return establishments
+            .Select(e => (e.City, Change: ScoreChangeCalculator.LatestChange(e.Inspections)))
+            .Where(x => x.Change is { } c && c.ChangeDate >= windowStart)
+            .GroupBy(x => x.City!)
+            .Select(g => (City: g.Key, Count: g.Count()))
+            .ToList();
     }
 }

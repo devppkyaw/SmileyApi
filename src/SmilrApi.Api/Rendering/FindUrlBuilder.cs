@@ -38,4 +38,13 @@ public static class FindUrlBuilder
     /// (unlike HubPath) — matches the existing detail-page path style.</summary>
     public static string CategoryHubPath(string city, string pixibranche) =>
         $"/find/{AreaSlug(city)}/{CategorySlug(pixibranche)}";
+
+    /// <summary>"Recently inspected" hub page path, e.g. "/find/kobenhavn/recently-inspected".
+    /// "recently-inspected" is a reserved segment (see FindEndpoints.MapFindEndpoints) — never a real
+    /// category-slug value, since Pixibranche is a controlled vocabulary checked separately.</summary>
+    public static string RecentlyInspectedPath(string city) => $"/find/{AreaSlug(city)}/recently-inspected";
+
+    /// <summary>Score-change feed page path, e.g. "/find/kobenhavn/changes". "changes" is a reserved
+    /// segment (see FindEndpoints.MapFindEndpoints), same reasoning as RecentlyInspectedPath.</summary>
+    public static string ChangesPath(string city) => $"/find/{AreaSlug(city)}/changes";
 }

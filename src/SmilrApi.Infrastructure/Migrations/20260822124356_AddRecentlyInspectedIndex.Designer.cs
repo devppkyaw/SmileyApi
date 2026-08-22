@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SmilrApi.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using SmilrApi.Infrastructure.Data;
 namespace SmilrApi.Infrastructure.Migrations
 {
     [DbContext(typeof(SmilrDbContext))]
-    partial class SmilrDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260822124356_AddRecentlyInspectedIndex")]
+    partial class AddRecentlyInspectedIndex
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

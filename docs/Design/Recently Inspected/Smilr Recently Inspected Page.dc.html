@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  body { margin: 0; background: #f5f8f2; color: #1a2e19; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; }
+  a { color: #2d6a4f; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</helmet>
+<div style="background:#f5f8f2;color:#1a2e19;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:16px;line-height:1.6;min-height:100%">
+
+  <div style="background:linear-gradient(135deg,#0f2814 0%,#2d6a4f 100%)">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 24px;max-width:1100px;margin:0 auto">
+      <a href="#" style="font-size:1.2rem;font-weight:700;letter-spacing:-0.3px;color:#fff;text-decoration:none">Smilr<span style="color:#a8d5b5">HQ</span></a>
+      <div style="display:flex;gap:20px;align-items:center">
+        <a href="#" style="font-size:0.9rem;color:rgba(255,255,255,0.8);text-decoration:none">Find</a>
+        <a href="#" style="font-size:0.9rem;color:rgba(255,255,255,0.8);text-decoration:none">For businesses</a>
+        <a href="#" style="font-size:0.9rem;color:rgba(255,255,255,0.8);text-decoration:none">Log in</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="max-width:1100px;margin:0 auto;padding:0 24px">
+
+    <nav aria-label="Breadcrumb" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:20px 0 0;font-size:0.82rem;color:#56775a">
+      <a href="#" style="color:#56775a;text-decoration:none">Find</a>
+      <span aria-hidden="true">›</span>
+      <a href="#" style="color:#56775a;text-decoration:none">Silkeborg</a>
+      <span aria-hidden="true">›</span>
+      <span style="color:#1a2e19;font-weight:600">Recently inspected</span>
+    </nav>
+
+    <header style="padding:24px 0 0;max-width:720px">
+      <h1 style="font-size:2rem;font-weight:800;letter-spacing:-0.8px;line-height:1.15;margin:0 0 12px">Recently inspected food businesses in Silkeborg</h1>
+      <p style="margin:0 0 8px;font-size:1.05rem;color:#56775a">See the establishments in Silkeborg with the most recent recorded food inspections.</p>
+      <p style="margin:0;font-size:0.9rem;color:#56775a">Updated from the latest available Fødevarestyrelsen data.</p>
+    </header>
+
+    <section style="margin:28px 0 0;background:#fff;border:1px solid #cce0bc;border-radius:10px;padding:20px 24px">
+      <div style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#56775a;margin-bottom:14px">Silkeborg</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:20px 32px">
+        <div>
+          <div style="font-size:1.6rem;font-weight:800;letter-spacing:-0.5px;line-height:1.2">248</div>
+          <div style="font-size:0.85rem;color:#56775a">food establishments</div>
+        </div>
+        <div>
+          <div style="font-size:1.6rem;font-weight:800;letter-spacing:-0.5px;line-height:1.2">18 Aug 2026</div>
+          <div style="font-size:0.85rem;color:#56775a">latest inspection</div>
+        </div>
+        <div>
+          <div style="font-size:1.6rem;font-weight:800;letter-spacing:-0.5px;line-height:1.2">37</div>
+          <div style="font-size:0.85rem;color:#56775a">inspections in the last 30 days</div>
+        </div>
+        <div>
+          <div style="font-size:1.6rem;font-weight:800;letter-spacing:-0.5px;line-height:1.2">15</div>
+          <div style="font-size:0.85rem;color:#56775a">shown on this page</div>
+        </div>
+      </div>
+
+    </section>
+
+    <p style="margin:24px 0 0;max-width:720px;font-size:0.95rem;color:#56775a;text-wrap:pretty">Smilr lists food establishments in Silkeborg by the date of their latest recorded food inspection. This page shows the most recently inspected businesses first, together with their current inspection score and links to their inspection history. The latest recorded inspection in this list took place on <strong style="color:#1a2e19;font-weight:600">18 August 2026</strong>.</p>
+
+    <section style="margin:36px 0 0">
+      <div style="display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px">
+        <h2 style="font-size:1.3rem;font-weight:700;letter-spacing:-0.4px;margin:0">Recently inspected</h2>
+        <span style="font-size:0.8rem;color:#56775a">Sorted by inspection date, most recent first</span>
+      </div>
+
+      <sc-if value="{{ narrow }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <sc-for list="{{ rows }}" as="row" hint-placeholder-count="6">
+            <a href="{{ row.href }}" style="display:block;background:#fff;border:1px solid #cce0bc;border-radius:10px;padding:14px 16px;text-decoration:none;color:#1a2e19" style-hover="border-color:#2d6a4f;text-decoration:none">
+              <div style="display:flex;align-items:center;gap:11px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;flex:0 0 34px;border-radius:9px;background:#edf4e6;color:#40916c">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ row.icon }}"></path></svg>
+                </span>
+                <span style="font-weight:600;font-size:0.98rem;line-height:1.35">{{ row.name }}</span>
+              </div>
+              <div style="margin:6px 0 0 45px;font-size:0.8rem;color:#56775a">{{ row.category }}</div>
+              <div style="margin:10px 0 0 45px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <img src="{{ row.smiley }}" alt="{{ row.smileyAlt }}" width="26" height="26" style="display:block;width:26px;height:26px;border-radius:4px">
+                <span style="font-size:0.82rem;color:#56775a">Inspected <time datetime="{{ row.iso }}">{{ row.date }}</time></span>
+              </div>
+            </a>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ wide }}" hint-placeholder-val="{{ true }}">
+      <div style="border:1px solid #cce0bc;border-radius:10px;background:#fff;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse;font-size:0.9rem">
+          <thead>
+            <tr>
+              <th style="width:44px;padding:10px 14px;text-align:right;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:#56775a;background:#edf4e6;border-bottom:1px solid #cce0bc">#</th>
+              <th style="padding:10px 14px;text-align:left;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:#56775a;background:#edf4e6;border-bottom:1px solid #cce0bc">Business</th>
+              <th style="padding:10px 14px;text-align:left;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:#56775a;background:#edf4e6;border-bottom:1px solid #cce0bc">Category</th>
+              <th style="width:265px;padding:10px 14px;text-align:left;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:#56775a;background:#edf4e6;border-bottom:1px solid #cce0bc">Score</th>
+              <th style="width:44px;padding:10px 14px;background:#edf4e6;border-bottom:1px solid #cce0bc"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <sc-for list="{{ rows }}" as="row" hint-placeholder-count="12">
+              <sc-if value="{{ row.newGroup }}" hint-placeholder-val="{{ false }}">
+                <tr>
+                  <td colspan="5" style="padding:9px 14px;background:#f7fbf3;border-top:1px solid #cce0bc;border-bottom:1px solid #e4efd9;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#56775a">
+                    <time datetime="{{ row.iso }}">{{ row.date }}</time>
+                  </td>
+                </tr>
+              </sc-if>
+              <tr style="cursor:pointer" style-hover="background:#f7fbf3">
+                <td style="padding:11px 14px;border-bottom:1px solid #e4efd9;text-align:right;font-variant-numeric:tabular-nums;color:#56775a;font-size:0.85rem">{{ row.n }}</td>
+                <td style="padding:11px 14px;border-bottom:1px solid #e4efd9">
+                  <div style="display:flex;align-items:center;gap:11px">
+                    <span style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;flex:0 0 30px;border-radius:8px;background:#edf4e6;color:#40916c">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ row.icon }}"></path></svg>
+                    </span>
+                    <span>
+                      <a href="{{ row.href }}" style="font-weight:600;color:#1a2e19;text-decoration:none;white-space:nowrap" style-hover="color:#2d6a4f;text-decoration:underline">{{ row.name }}</a>
+                      <div style="font-size:0.78rem;color:#56775a">{{ row.address }}</div>
+                    </span>
+                  </div>
+                </td>
+                <td style="padding:11px 14px;border-bottom:1px solid #e4efd9;color:#56775a;font-size:0.85rem;min-width:230px">{{ row.category }}</td>
+                <td style="padding:11px 14px;border-bottom:1px solid #e4efd9">
+                  <span style="display:inline-flex;align-items:center;gap:9px">
+                    <img src="{{ row.smiley }}" alt="{{ row.smileyAlt }}" width="24" height="24" style="display:block;width:24px;height:24px;border-radius:4px">
+                    <span style="font-size:0.8rem;color:#56775a;white-space:nowrap">{{ row.scoreLabel }}</span>
+                  </span>
+                </td>
+                <td style="padding:11px 14px;border-bottom:1px solid #e4efd9;text-align:right;color:#2d6a4f">›</td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </div>
+      </sc-if>
+
+      <nav aria-label="Pagination" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px">
+        <span style="font-size:0.85rem;color:#56775a">Showing 1–15 of 248</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="padding:8px 14px;border:1px solid #cce0bc;border-radius:8px;font-size:0.85rem;color:#9db894">‹ Previous</span>
+          <a href="#" style="padding:8px 14px;border:1.5px solid #2d6a4f;border-radius:8px;font-size:0.85rem;font-weight:600;color:#2d6a4f;text-decoration:none" style-hover="background:rgba(45,106,79,0.10);text-decoration:none">Next ›</a>
+        </div>
+      </nav>
+    </section>
+
+    <section style="margin:40px 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">
+      <a href="#" style="display:block;background:#fff;border:1px solid #cce0bc;border-radius:10px;padding:20px 22px;text-decoration:none;color:#1a2e19" style-hover="border-color:#2d6a4f;text-decoration:none">
+        <div style="font-size:1.05rem;font-weight:700;margin-bottom:4px">Recently changed in Silkeborg</div>
+        <div style="font-size:0.88rem;color:#56775a">See businesses whose inspection score changed in the latest sync.</div>
+        <div style="margin-top:10px;font-size:0.85rem;font-weight:600;color:#2d6a4f">View recently changed →</div>
+      </a>
+      <a href="#" style="display:block;background:#fff;border:1px solid #cce0bc;border-radius:10px;padding:20px 22px;text-decoration:none;color:#1a2e19" style-hover="border-color:#2d6a4f;text-decoration:none">
+        <div style="font-size:1.05rem;font-weight:700;margin-bottom:4px">All food businesses in Silkeborg</div>
+        <div style="font-size:0.88rem;color:#56775a">Go to the area page with all 248 registered establishments.</div>
+        <div style="margin-top:10px;font-size:0.85rem;font-weight:600;color:#2d6a4f">View all businesses →</div>
+      </a>
+    </section>
+
+    <section style="margin:40px 0 0;border-top:1px solid #cce0bc;padding-top:28px">
+      <h2 style="font-size:1.15rem;font-weight:700;letter-spacing:-0.3px;margin:0 0 4px">Explore food inspection scores in Silkeborg</h2>
+      <p style="margin:0 0 16px;font-size:0.88rem;color:#56775a">Browse by category — the same official data, grouped by the Fødevarestyrelsen category field.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px 20px">
+        <sc-for list="{{ categories }}" as="cat" hint-placeholder-count="7">
+          <a href="{{ cat.href }}" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid #e4efd9;font-size:0.9rem;color:#2d6a4f;text-decoration:none" style-hover="color:#1a2e19">
+            <span style="display:flex;align-items:center;gap:10px">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#40916c" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:0 0 17px"><path d="{{ cat.icon }}"></path></svg>
+              {{ cat.label }}
+            </span>
+            <span style="font-size:0.8rem;color:#9db894;font-variant-numeric:tabular-nums">{{ cat.count }}</span>
+          </a>
+        </sc-for>
+      </div>
+    </section>
+
+    <section style="margin:44px 0 0;background:#edf4e6;border:1px solid #cce0bc;border-radius:10px;padding:24px 26px;display:flex;flex-wrap:wrap;gap:24px;align-items:center;justify-content:space-between">
+      <div style="max-width:520px">
+        <h2 style="font-size:1.05rem;font-weight:700;margin:0 0 6px">Own a food business?</h2>
+        <p style="margin:0 0 10px;font-size:0.88rem;color:#56775a">Monitor your inspection score automatically with Smilr Business.</p>
+        <ul style="margin:0;padding-left:18px;font-size:0.85rem;color:#56775a">
+          <li>Get notified when your score changes</li>
+          <li>Monitor multiple locations in one dashboard</li>
+          <li>Add an inspection badge to your website</li>
+        </ul>
+      </div>
+      <a href="#" style="display:inline-block;padding:12px 26px;background:#2d6a4f;color:#fff;border-radius:10px;font-weight:600;font-size:0.9rem;text-decoration:none;white-space:nowrap" style-hover="opacity:0.85;text-decoration:none">Learn about Smilr Business →</a>
+    </section>
+
+    <p style="margin:28px 0 0;padding-bottom:40px;font-size:0.82rem;color:#56775a">Inspection data is based on official Fødevarestyrelsen data. Data synchronized 19 August 2026. The score is a regulatory inspection result — not a customer review.</p>
+  </div>
+
+  <footer style="background:#edf4e6;border-top:1px solid #cce0bc;padding:28px 24px;text-align:center;font-size:0.85rem;color:#56775a">
+    <p style="margin:0">SmilrHQ — inspection data from Fødevarestyrelsen</p>
+  </footer>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;narrow&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Layout&quot;}}">
+const SMILEY_DIR = "src/SmilrApi.Api/wwwroot/Smiley_figurer/";
+
+// Face mapping is lifted verbatim from the repo (smilr-icons.js, widget.js,
+// FindPageRenderer.cs): four score values, three faces — 2 and 3 share Sm3.
+const FACE = { 1: "Sm1", 2: "Sm3", 3: "Sm3", 4: "Sm4" };
+const FACE_COLOR = { Sm1: "#2d6a4f", Sm3: "#a4551a", Sm4: "#b83232" };
+
+// Rows carry the bare term (kept on one line); the legend carries the gloss.
+const CHIP = {
+  1: { label: "No remarks", full: "No remarks" },
+  2: { label: "Indskærpelse", full: "Indskærpelse (enforcement notice)" },
+  3: { label: "Påbud / forbud", full: "Påbud or forbud (order or ban)" },
+  4: { label: "Bødeforlæg / politianmeldelse", full: "Bødeforlæg or politianmeldelse (fine or police report)" }
+};
+
+function smileySrc(score, size) {
+  return SMILEY_DIR + (size === 32 ? "32/" : "150/") + FACE[score] + (size === 32 ? "cg" : "bg") + ".jpg";
+}
+
+const DATA = [
+  ["Daruma Ramen", "Vestergade 12", "Restauranter, pizzeriaer, kantiner m.m.", "2026-08-18", 1, "daruma-ramen-1449060"],
+  ["Bageriet Søholt", "Søndergade 44", "Bagere og bagerafdelinger", "2026-08-18", 1, "bageriet-soeholt-1201884"],
+  ["Café Nørretorv", "Nørretorv 3", "Restauranter, pizzeriaer, kantiner m.m.", "2026-08-18", 2, "cafe-noerretorv-1388211"],
+  ["Silkeborg Fiskehus", "Havnevej 8", "Fiske- og vildtforretninger", "2026-08-17", 1, "silkeborg-fiskehus-1104772"],
+  ["Rema 1000 Alderslyst", "Nordre Højmarksvej 2", "Dagligvarer", "2026-08-17", 1, "rema-1000-alderslyst-1502330"],
+  ["Slagter Kjeldsen", "Torvet 6", "Slagtere, slagterafdelinger", "2026-08-14", 1, "slagter-kjeldsen-1066418"],
+  ["Papizza Silkeborg", "Borgergade 21", "Restauranter, pizzeriaer, kantiner m.m.", "2026-08-14", 4, "papizza-silkeborg-1477903"],
+  ["Kantinen, Silkeborg Sygehus", "Falkevej 1", "Hospitals- og institutionskøkkener", "2026-08-13", 1, "kantinen-silkeborg-sygehus-1019557"],
+  ["Delikatessen på Hostrupsgade", "Hostrupsgade 17", "Delikatesse og smørrebrød", "2026-08-12", 2, "delikatessen-paa-hostrupsgade-1330045"],
+  ["Netto Kastaniehøjvej", "Kastaniehøjvej 4", "Dagligvarer", "2026-08-12", 1, "netto-kastaniehoejvej-1288916"],
+  ["Restaurant Sejs Kro", "Julsøvej 130", "Restauranter, pizzeriaer, kantiner m.m.", "2026-08-11", 1, "restaurant-sejs-kro-1157742"],
+  ["Silkeborg Bryghus", "Åhave Allé 9", "Restauranter, pizzeriaer, kantiner m.m.", "2026-08-10", 1, "silkeborg-bryghus-1420088"],
+  ["Bager Bech, Balle", "Ballelundvej 24", "Bagere og bagerafdelinger", "2026-08-10", 3, "bager-bech-balle-1093615"],
+  ["Kvickly Silkeborg", "Vestergade 27", "Dagligvarer", "2026-08-07", 1, "kvickly-silkeborg-1011239"],
+  ["Sushi Sen", "Søndergade 9", "Restauranter, pizzeriaer, kantiner m.m.", "2026-08-06", 1, "sushi-sen-1461028"]
+];
+
+const ICONS = {
+  all: "M3 21h18M5 21V8l7-5 7 5v13M9.5 21v-6h5v6",
+  restaurant: "M6 3v7a2 2 0 0 0 4 0V3M8 10v11M15 3c-1.5 1.5-1.5 4 0 5.5V21",
+  grocery: "M3 6h2l2.5 9h10L20 8H6.5M9 20a1 1 0 1 0 2 0 1 1 0 1 0-2 0m6 0a1 1 0 1 0 2 0 1 1 0 1 0-2 0",
+  institution: "M4 21V9l8-5 8 5v12M4 21h16M9 21v-5h6v5M9 12h6",
+  bakery: "M4 15c0-3.5 3.5-6 8-6s8 2.5 8 6v3H4zM9 9.5V18M15 9.5V18",
+  deli: "M4 17h16M5 17c0-3 3-5.5 7-5.5s7 2.5 7 5.5M8 11.5l1-3M15 11.5l1-3",
+  butcher: "M3 5h11v8H3zM14 8h7",
+  fish: "M21 12c-2-3-5-4.5-8.5-4.5S6 9 4 12c2 3 5 4.5 8.5 4.5S19 15 21 12zM4 12 1 8v8zM17 11.4h.01"
+};
+
+const CATEGORIES = [
+  ["All food businesses in Silkeborg", 248, "all"],
+  ["Restaurants, pizzerias and canteens", 96, "restaurant"],
+  ["Grocery stores", 41, "grocery"],
+  ["Hospital and institutional kitchens", 33, "institution"],
+  ["Bakeries and in-store bakeries", 14, "bakery"],
+  ["Delis and smørrebrød shops", 9, "deli"],
+  ["Butchers and meat counters", 6, "butcher"],
+  ["Fishmongers and game dealers", 3, "fish"]
+];
+
+const CAT_ICON = [
+  [/restaurant|pizzeria|kantine/i, "restaurant"],
+  [/dagligvarer|grocery/i, "grocery"],
+  [/hospital|institution/i, "institution"],
+  [/bager|bakel|bakeri/i, "bakery"],
+  [/delikatesse|smørrebrød/i, "deli"],
+  [/slagter|butcher/i, "butcher"],
+  [/fisk|fish|vildt/i, "fish"]
+];
+
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+class Component extends DCLogic {
+  renderVals() {
+    let lastDay = null;
+    const rows = DATA.map(([name, address, category, iso, score, slug], i) => {
+      const d = new Date(iso + "T00:00:00");
+      const hit = CAT_ICON.find(([re]) => re.test(category));
+      const dateText = d.getDate() + " " + MONTHS[d.getMonth()] + " " + d.getFullYear();
+      const newGroup = iso !== lastDay;
+      lastDay = iso;
+      return {
+        n: i + 1, name, address, category, iso, score, newGroup,
+        date: dateText,
+        icon: ICONS[hit ? hit[1] : "all"],
+        scoreLabel: CHIP[score].label,
+        smiley: smileySrc(score, 32),
+        smileyAlt: "Inspection score " + score,
+        href: "/find/silkeborg/" + slug
+      };
+    });
+
+    // Legend lists all four score values; the bar is grouped by FACE, because
+    // two adjacent scores render as the same smiley to the public.
+    const dist = [1, 2, 3, 4].map(s => {
+      const n = DATA.filter(r => r[4] === s).length;
+      return { score: s, n, label: CHIP[s].full, color: FACE_COLOR[FACE[s]],
+               smiley: smileySrc(s, 150), smileyAlt: "Inspection score " + s };
+    }).filter(d => d.n > 0);
+
+    const bar = ["Sm1", "Sm3", "Sm4"].map(f => {
+      const n = DATA.filter(r => FACE[r[4]] === f).length;
+      return { color: FACE_COLOR[f], width: Math.round(n / DATA.length * 100) + "%", n };
+    }).filter(b => b.n > 0);
+
+    const categories = CATEGORIES.map(([label, count, icon]) => ({
+      label, count: count + " businesses", icon: ICONS[icon],
+      href: "/find/silkeborg/" + label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+    }));
+    const narrow = !!this.props.narrow;
+    return { rows, categories, dist, bar, narrow, wide: !narrow };
+  }
+}
+
+</script>
+</body>
+</html>

@@ -20,6 +20,10 @@ public class SmilrDbContext(DbContextOptions<SmilrDbContext> options) : DbContex
             e.HasIndex(x => x.Navnelbnr).IsUnique();
             e.HasIndex(x => x.VirksomhedsType);
             e.HasIndex(x => x.City);
+            // Feeds /find/{area-slug}/recently-inspected: establishments in a city ordered by latest
+            // inspection date desc, with Name as a deterministic tie-break for same-day inspections.
+            e.HasIndex(x => new { x.City, x.LatestScoreDate, x.Name })
+             .IsDescending(false, true, false);
             e.Property(x => x.Name).HasMaxLength(512);
             e.Property(x => x.CvrNumber).HasMaxLength(20);
             e.Property(x => x.Address).HasMaxLength(512);

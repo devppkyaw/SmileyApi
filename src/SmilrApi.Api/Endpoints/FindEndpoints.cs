@@ -15,6 +15,8 @@ namespace SmilrApi.Api.Endpoints;
 /// real, unique key) as a stable suffix:
 ///   /find/{area-slug}/                          -> hub page listing establishments in that area
 ///   /find/{area-slug}/{category-slug}           -> hub page, area x Pixibranche category
+///   /find/{area-slug}/recently-inspected         -> hub page, area establishments by latest inspection date
+///   /find/{area-slug}/changes                    -> hub page, area establishments whose score recently changed
 ///   /find/{area-slug}/{business-slug}-{navnelbnr} -> canonical detail page (establishment has a City)
 ///   /find/{business-slug}-{navnelbnr}             -> canonical detail page (establishment has no City)
 /// At both the one-segment and two-segment-under-an-area depth, a hub-page slug and a detail-page slug
@@ -22,7 +24,8 @@ namespace SmilrApi.Api.Endpoints;
 /// "/{areaSlug}/{segment}" respectively) and disambiguated at runtime by whether the segment matches the
 /// "{business-slug}-{navnelbnr}" shape — registering them as separate routes throws
 /// AmbiguousMatchException, since ASP.NET Core routing treats those as equally-specific candidates for
-/// the same request.
+/// the same request. Under an area, "recently-inspected" and "changes" are additionally reserved ahead
+/// of the category-slug lookup — see the "/{areaSlug}/{segment}" route below.
 /// Category hubs never host their own detail page (no /find/{area}/{category}/{business}-{id}) — they
 /// link out to the flat canonical detail path above. Category is a controlled vocabulary (Pixibranche,
 /// ~26 values from the source XML, "not yet assigned" placeholders excluded), so category-slug maps 1:1
@@ -51,9 +54,21 @@ public static class FindEndpoints
 
     private const int SearchPageSize = 20;
     private const int HubPageSize = 20;
+    private const int RecentlyInspectedPageSize = 30;
+    private const int ChangesPageSize = 30;
+
+    // Score changes recorded on or after this many days ago count as "recent" on /changes — without a
+    // window, a city with one very old change would keep showing that single stale entry indefinitely.
+    // internal (not private) so FindPageRenderer can compute the exact same window when deciding
+    // whether to show the establishment-detail-page cross-link and history-row annotation (spec §23/24).
+    internal const int ChangesWindowDays = 90;
 
     // Below this establishment count, a category hub page still renders (useful to a direct visitor) but
     // is excluded from the sitemap and marked noindex, to keep thin area x category pages out of Google.
+    // Also reused as the recently-inspected and changes pages' "3+" indexable cutoff (see
+    // RecentlyInspectedHandlerAsync/ChangesHandlerAsync) — same threshold, same rationale, different
+    // noindex band (those pages render down to 1 (recently-inspected) or 0 (changes) rather than 404ing
+    // below this count).
     private const int CategorySlugThreshold = 3;
 
     public static void MapFindEndpoints(this WebApplication app)
@@ -91,19 +106,28 @@ public static class FindEndpoints
                 entry.AbsoluteExpirationRelativeToNow = CacheTtl;
                 var entries = await repo.GetAllForSitemapAsync(ct);
                 var categoryCounts = await repo.GetCityCategoryCountsAsync(ct);
-                return FindPageRenderer.SitemapXml(entries, categoryCounts, CategorySlugThreshold);
+                var changeWindowStart = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-ChangesWindowDays));
+                var changeCounts = await repo.GetChangeCountsByCityAsync(changeWindowStart, ct);
+                return FindPageRenderer.SitemapXml(entries, categoryCounts, changeCounts, CategorySlugThreshold);
             });
             return Results.Content(xml, "application/xml");
         });
 
-        // Two segments under an area: either a detail page ({business-slug}-{navnelbnr}) or a category hub
-        // ({category-slug}) — same shape as the top-level "/{segment}" ambiguity below, same fix: one
-        // route, disambiguated at runtime by whether the segment matches the detail-slug shape.
+        // Two segments under an area: a detail page ({business-slug}-{navnelbnr}), one of the reserved
+        // "recently-inspected"/"changes" segments, or a category hub ({category-slug}) — same shape as
+        // the top-level "/{segment}" ambiguity below, same fix: one route, disambiguated at runtime.
+        // The reserved segments are checked before the category-slug index lookup so neither can ever be
+        // shadowed by a Pixibranche value that happened to slugify the same way (it doesn't today —
+        // Pixibranche is a small controlled vocabulary — but this ordering makes it structurally safe).
         find.MapGet("/{areaSlug}/{segment}", (
             string areaSlug, string segment, int? page, HttpContext http,
             IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct) =>
                 DetailSlugPattern.IsMatch(segment)
                     ? DetailHandlerAsync(segment, http, cache, repo, ct)
+                : segment == "recently-inspected"
+                    ? RecentlyInspectedHandlerAsync(areaSlug, page, cache, repo, ct)
+                : segment == "changes"
+                    ? ChangesHandlerAsync(areaSlug, page, cache, repo, ct)
                     : CategoryHubHandlerAsync(areaSlug, segment, page, cache, repo, ct));
 
         // Single dynamic segment — ambiguous between an area hub ("/find/kobenhavn/") and a detail page
@@ -192,6 +216,68 @@ public static class FindEndpoints
             FindPageRenderer.CategoryHubPage(
                 area.DisplaySpelling, category, areaSlug, categorySlug,
                 pageNum, HubPageSize, totalCount, noindex: totalCount < CategorySlugThreshold, establishments),
+            "text/html");
+    }
+
+    private static async Task<IResult> RecentlyInspectedHandlerAsync(
+        string areaSlug, int? page,
+        IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct)
+    {
+        var areaIndex = await GetAreaIndexAsync(cache, repo, ct);
+        if (!areaIndex.TryGetValue(areaSlug, out var area))
+            return Results.Content(
+                FindPageRenderer.NotFoundPage($"No area found for '{areaSlug}'."),
+                "text/html", statusCode: 404);
+
+        var pageNum = Math.Max(page ?? 1, 1);
+        var summary = await repo.GetRecentlyInspectedSummaryAsync(area.RawCityValues, ct);
+        if (summary.TotalWithInspection == 0)
+            return Results.Content(
+                FindPageRenderer.NotFoundPage($"No inspection records found for '{areaSlug}'."),
+                "text/html", statusCode: 404);
+
+        var areaTotalCount = await repo.CountByCitiesAsync(area.RawCityValues, ct);
+        var establishments = await repo.GetByCitiesOrderedByLatestInspectionAsync(area.RawCityValues, pageNum, RecentlyInspectedPageSize, ct);
+        var categoriesInArea = await GetCategoriesInAreaAsync(area.RawCityValues, cache, repo, ct);
+
+        // Page 1 is indexable once the area meets CategorySlugThreshold (1-2 establishments still
+        // render, just noindexed); page 2+ is always noindex,follow — same as the category-hub
+        // philosophy, just with a 1-2 noindex band instead of a 0-2 one (0 already 404'd above).
+        var noindex = pageNum > 1 || summary.TotalWithInspection < CategorySlugThreshold;
+
+        return Results.Content(
+            FindPageRenderer.RecentlyInspectedPage(
+                area.DisplaySpelling, pageNum, RecentlyInspectedPageSize, areaTotalCount, summary,
+                noindex, establishments, categoriesInArea),
+            "text/html");
+    }
+
+    private static async Task<IResult> ChangesHandlerAsync(
+        string areaSlug, int? page,
+        IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct)
+    {
+        var areaIndex = await GetAreaIndexAsync(cache, repo, ct);
+        if (!areaIndex.TryGetValue(areaSlug, out var area))
+            return Results.Content(
+                FindPageRenderer.NotFoundPage($"No area found for '{areaSlug}'."),
+                "text/html", statusCode: 404);
+
+        var pageNum = Math.Max(page ?? 1, 1);
+        var windowStart = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-ChangesWindowDays));
+        var summary = await repo.GetChangesSummaryAsync(area.RawCityValues, windowStart, ct);
+
+        // Unlike RecentlyInspectedHandlerAsync, a zero result here is a normal, honest state (spec §14)
+        // — a quiet city, not a 404 — so ChangesPage renders its own empty-state block instead.
+        var changes = summary.TotalChanges == 0
+            ? Array.Empty<ScoreChangeRow>()
+            : await repo.GetRecentChangesByCitiesAsync(area.RawCityValues, windowStart, pageNum, ChangesPageSize, ct);
+        var categoriesInArea = await GetCategoriesInAreaAsync(area.RawCityValues, cache, repo, ct);
+
+        var noindex = pageNum > 1 || summary.TotalChanges < CategorySlugThreshold;
+
+        return Results.Content(
+            FindPageRenderer.ChangesPage(
+                area.DisplaySpelling, pageNum, ChangesPageSize, summary, noindex, changes, categoriesInArea),
             "text/html");
     }
 

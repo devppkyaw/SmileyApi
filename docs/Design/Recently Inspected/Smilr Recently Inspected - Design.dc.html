@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>
+  body { margin: 0; background: #eef1ea; color: #1a2e19; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  a { color: #2d6a4f; }
+  a:hover { color: #1a2e19; }
+</style>
+</helmet>
+
+<section style="padding:56px 48px;display:flex;flex-direction:column;gap:40px">
+
+  <div style="display:flex;align-items:baseline;gap:16px;flex-wrap:wrap">
+    <span style="font-family:'SF Mono',Consolas,monospace;font-size:0.75rem;font-weight:700;letter-spacing:0.5px;background:#1a2e19;color:#fff;padding:4px 9px;border-radius:5px">1a</span>
+    <h1 style="margin:0;font-size:1.5rem;font-weight:800;letter-spacing:-0.5px">/find/silkeborg/recently-inspected</h1>
+    <span style="font-size:0.9rem;color:#56775a">English UI · desktop + mobile · compact table listing</span>
+  </div>
+
+  <div style="display:flex;gap:32px;align-items:flex-start;flex-wrap:wrap">
+
+    <div style="flex:0 0 1280px;width:1280px;display:flex;flex-direction:column;gap:12px">
+      <div style="font-family:'SF Mono',Consolas,monospace;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.8px;color:#56775a">Desktop — 1280px</div>
+      <div style="border:1px solid #cce0bc;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 6px 24px rgba(26,46,25,0.08)">
+        <dc-import name="Smilr Recently Inspected Page" hint-size="1280px,1800px" style="width:1280px"></dc-import>
+      </div>
+    </div>
+
+    <div style="flex:0 0 390px;display:flex;flex-direction:column;gap:12px">
+      <div style="font-family:'SF Mono',Consolas,monospace;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.8px;color:#56775a">Mobile — 390px</div>
+      <div style="width:390px;border:1px solid #cce0bc;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 6px 24px rgba(26,46,25,0.08)">
+        <dc-import name="Smilr Recently Inspected Page" narrow="{{ true }}" hint-size="390px,2200px" style="width:390px"></dc-import>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="max-width:960px;background:#fff;border:1px solid #cce0bc;border-radius:12px;padding:28px 32px">
+    <h2 style="margin:0 0 4px;font-size:1.05rem;font-weight:700">Implementation notes</h2>
+    <p style="margin:0 0 20px;font-size:0.88rem;color:#56775a">Notes on the decisions this layout encodes.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:18px 36px">
+      <sc-for list="{{ notes }}" as="note" hint-placeholder-count="8">
+        <div style="border-top:1px solid #e4efd9;padding-top:12px">
+          <div style="font-family:'SF Mono',Consolas,monospace;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.6px;color:#40916c;margin-bottom:4px">{{ note.tag }}</div>
+          <div style="font-size:0.88rem;line-height:1.6;color:#1a2e19;text-wrap:pretty">{{ note.text }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const NOTES = [
+  ["Title / meta", "Title: “Recently Inspected Food Businesses in Silkeborg | Smilr”. Meta description is the H1 subline plus the inspection-date framing — factual, no “best restaurants” language."],
+  ["Canonical", "https://smilrhq.dk/find/silkeborg/recently-inspected — identical on ?page=2; the Container Apps hostname is never canonical."],
+  ["Robots", "0 establishments → 404. 1–2 → noindex,follow. 3+ → index,follow. Page 2+ is noindex,follow but crawlable, matching the category-hub threshold pattern already shipped."],
+  ["Sort order", "LatestInspectionDate DESC, Name ASC. The secondary sort is what keeps same-day groups (18 Aug here has three rows) stable between requests."],
+  ["Dates", "Absolute dates only (“18 August 2026”), never “57 days ago”, wrapped in <time datetime> for machine readability."],
+  ["Score display", "Uses the official Fødevarestyrelsen artwork from wwwroot/Smiley_figurer — 32/*cg.jpg in table rows, 150/*bg.jpg in the legend — following the same size/suffix convention as smilr-icons.js. No hand-drawn smileys, no numeric badge of our own invention."],
+  ["Score mapping", "Lifted verbatim from the repo (smilr-icons.js, widget.js, FindPageRenderer.cs): { 1: Sm1, 2: Sm3, 3: Sm3, 4: Sm4 }. FOUR score values, THREE faces — 1 is the big smile, 2 and 3 both take the neutral straight mouth, 4 is the sad face. Matches findsmiley."],
+  ["Not a rating", "No Review or AggregateRating structured data anywhere. Elitesmiley is a separate badge, not a score level, and is out of scope for this page."],
+  ["Score wording", "Danish sanction terms (indskærpelse, påbud, forbud, bødeforlæg) are kept verbatim even in the English UI — they are legal categories, and translating them invents a meaning the regulator did not assign. The legend carries an English gloss in parentheses; table rows carry the bare term on a single line so row heights stay uniform. Image alt text is plain English (“Inspection score 3”) since that is description, not a legal term."],
+  ["Structured data", "BreadcrumbList (Find → Silkeborg → Recently inspected) plus ItemList mirroring the visible rows in order — 30 in production, 15 in this mock."],
+  ["Internal links", "Every row links to the existing canonical detail URL /find/silkeborg/{business-slug}-{navnelbnr}. No establishment URL is ever nested under /recently-inspected."],
+  ["Cross-links", "Two peer cards: /find/silkeborg/changes and the /find/silkeborg area hub. The category list below reuses the live Pixibranche slug index, so it self-corrects per sync."],
+  ["Freshness", "“Updated from the latest available Fødevarestyrelsen data” reflects real data change; the “Data synchronized …” line in the source note carries the genuine sync timestamp. The two are deliberately separate claims."],
+  ["CTA placement", "Business CTA sits below the list and the SEO link blocks, deliberately small. Nothing above the fold asks for login or signup."],
+  ["Sample size", "This mock lists 15 rows so both frames stay readable; the production page paginates at 30 per page, which is what the ItemList, the “shown on this page” tile and the pagination range should reflect once wired to the real query."],
+  ["Caching", "Page renders from a cached projection (1–6h TTL) invalidated by the daily sync, backed by a LatestInspectionDate index on (CitySlug, LatestInspectionDate DESC, Name)."],
+  ["Mobile", "The table collapses to stacked rows at narrow widths rather than scrolling horizontally; each card is one link target with a 44px+ tap area."],
+  ["Empty state", "Unknown city slug → 404. Known city with no inspection records → the page renders with an explanatory line in place of the table, and noindex."]
+];
+
+class Component extends DCLogic {
+  renderVals() {
+    return { notes: NOTES.map(([tag, text]) => ({ tag, text })) };
+  }
+}
+
+</script>
+</body>
+</html>

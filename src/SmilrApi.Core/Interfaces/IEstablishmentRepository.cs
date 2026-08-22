@@ -51,6 +51,43 @@ public interface IEstablishmentRepository
     /// hub page's "Browse by category" list without looping every category × every area as separate
     /// queries.</summary>
     Task<IReadOnlyList<(string City, string Category, int Count)>> GetCityCategoryCountsAsync(CancellationToken ct = default);
+
+    /// <summary>Paginated establishments in the given raw City values with a recorded inspection date
+    /// (LatestScoreDate not null), ordered by LatestScoreDate desc then Name asc as a deterministic
+    /// tie-break — feeds the /find/{area-slug}/recently-inspected page.</summary>
+    Task<IReadOnlyList<Establishment>> GetByCitiesOrderedByLatestInspectionAsync(
+        IReadOnlyList<string> cityValues, int page, int limit, CancellationToken ct = default);
+
+    /// <summary>Stats for the given raw City values feeding the /find/{area-slug}/recently-inspected
+    /// page: how many establishments have a recorded inspection date (drives pagination and the
+    /// indexing threshold), the most recent such date in the area, and how many of those establishments
+    /// were inspected in the last 30 days.</summary>
+    Task<RecentlyInspectedSummary> GetRecentlyInspectedSummaryAsync(
+        IReadOnlyList<string> cityValues, CancellationToken ct = default);
+
+    /// <summary>Establishments in the given raw City values whose current score transition (see
+    /// ScoreChangeCalculator) falls on or after windowStart — one row per establishment (its most
+    /// recent transition only), ordered by change date desc then Name asc — feeds
+    /// /find/{area-slug}/changes.</summary>
+    Task<IReadOnlyList<ScoreChangeRow>> GetRecentChangesByCitiesAsync(
+        IReadOnlyList<string> cityValues, DateOnly windowStart, int page, int limit, CancellationToken ct = default);
+
+    /// <summary>Stats for the given raw City values within the change window: total establishments
+    /// with an in-window transition, how many improved vs downgraded, and the most recent change
+    /// date.</summary>
+    Task<ChangesSummary> GetChangesSummaryAsync(
+        IReadOnlyList<string> cityValues, DateOnly windowStart, CancellationToken ct = default);
+
+    /// <summary>(City, Count) of establishments with an in-window score transition, nationwide — feeds
+    /// the /changes sitemap entries' per-area indexability check.</summary>
+    Task<IReadOnlyList<(string City, int Count)>> GetChangeCountsByCityAsync(
+        DateOnly windowStart, CancellationToken ct = default);
 }
 
-public record SitemapEntry(string Name, string? City, int Navnelbnr, DateTime UpdatedAt);
+public record SitemapEntry(string Name, string? City, int Navnelbnr, DateTime UpdatedAt, bool HasInspectionDate);
+
+public record RecentlyInspectedSummary(int TotalWithInspection, DateOnly? LatestInspectionDate, int Last30DaysCount);
+
+public record ScoreChangeRow(Establishment Establishment, int PreviousScore, int NewScore, DateOnly ChangeDate);
+
+public record ChangesSummary(int TotalChanges, int ImprovedCount, int DowngradedCount, DateOnly? MostRecentChangeDate);
