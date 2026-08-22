@@ -602,7 +602,25 @@ public static class FindPageRenderer
             """;
     }
 
-    public static string DetailPage(Establishment est)
+    // Score -> what that score level means, per Fødevarestyrelsen's smiley scheme. Danish sanction terms
+    // (indskærpelse, påbud, forbud, bødeforlæg) are kept verbatim even in the English UI — they're legal
+    // categories, not translatable descriptions — same convention already validated for
+    // /find/{area}/recently-inspected. This describes what the SCORE LEVEL means in general, never a
+    // specific claim about what a particular inspection found — the source XML only ever gives us a
+    // score and a date, never free-text remarks, so nothing more specific can be said truthfully.
+    private static readonly Dictionary<int, string> ScoreOutcome = new()
+    {
+        [1] = "No remarks",
+        [2] = "Indskærpelse (enforcement notice)",
+        [3] = "Påbud or forbud (order or ban)",
+        [4] = "Bødeforlæg or politianmeldelse (fine or police report)"
+    };
+
+    public static string DetailPage(
+        Establishment est,
+        IReadOnlyList<Establishment> recentlyInspectedInCity,
+        IReadOnlyList<ScoreChangeRow> recentChangesInCity,
+        IReadOnlyList<Establishment> otherInCategory)
     {
         var badge = ScoreBadgeHtml(est.LatestScore, est.VirksomhedsType);
         var addressLine = string.Join(", ", new[] { est.Address, est.PostalCode, est.City }
@@ -618,15 +636,22 @@ public static class FindPageRenderer
             .Select(i =>
             {
                 var directionHtml = latestChange is { } lc && i.InspectedOn == lc.ChangeDate
-                    ? " " + DirectionBadgeHtml(lc.NewScore < lc.PreviousScore)
+                    ? DirectionBadgeHtml(lc.NewScore < lc.PreviousScore)
                     : "";
-                return $"<tr><td>{i.InspectedOn:dd/MM/yyyy}</td><td>{i.SmileyScore}{directionHtml}</td></tr>";
+                var outcome = ScoreOutcome.GetValueOrDefault(i.SmileyScore, "—");
+                return $"""
+                    <tr>
+                      <td>{i.InspectedOn:dd/MM/yyyy}</td>
+                      <td><span style="display:inline-flex;align-items:center;gap:8px">{ScoreChipHtml(i.SmileyScore, dim: false)}{directionHtml}</span></td>
+                      <td>{E(outcome)}</td>
+                    </tr>
+                    """;
             });
         var historyHtml = est.Inspections.Count == 0
             ? "<p>No inspection history recorded yet.</p>"
             : $"""
               <table class="find-history">
-                <thead><tr><th>Date</th><th>Score</th></tr></thead>
+                <thead><tr><th>Date</th><th>Score</th><th>Outcome</th></tr></thead>
                 <tbody>{string.Join("\n", historyRows)}</tbody>
               </table>
               """;
@@ -670,7 +695,108 @@ public static class FindPageRenderer
         if (hasCategory)
             jsonLdCrumbs.Add((est.Pixibranche!, FindUrlBuilder.CategoryHubPath(est.City!, est.Pixibranche!)));
         jsonLdCrumbs.Add((est.Name, FindUrlBuilder.DetailPath(est)));
-        var breadcrumbJsonLd = BreadcrumbJsonLd(jsonLdCrumbs);
+        var extraHeadHtml = BreadcrumbJsonLd(jsonLdCrumbs) + FoodEstablishmentJsonLd(est, addressLine) + FaqJsonLd();
+
+        // ── Quick facts + Location ──────────────────────────────────────────────────────────────
+        var quickFacts = new List<(string Value, string Label)>
+        {
+            (est.LatestScore?.ToString() ?? "—", "current smiley"),
+            (est.Inspections.Count == 0
+                ? "0"
+                : $"{est.Inspections.Count} since {est.Inspections.Min(i => i.InspectedOn).Year}", "inspections")
+        };
+        if (latestChange is { } lc2)
+            quickFacts.Add(($"{lc2.PreviousScore} → {lc2.NewScore} in {lc2.ChangeDate.Year}", "last change"));
+
+        var quickFactsHtml = $"""
+            <div class="find-stats-card">
+              <div class="find-stats-grid">
+                {string.Join("\n", quickFacts.Select(f => $"""
+                <div class="find-stat">
+                  <div class="find-stat-value">{E(f.Value)}</div>
+                  <div class="find-stat-label">{E(f.Label)}</div>
+                </div>
+                """))}
+              </div>
+            </div>
+            """;
+
+        var mapHref = est.GeoLat is { } lat && est.GeoLng is { } lng
+            ? $"https://www.google.com/maps/search/?api=1&query={lat.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture)},{lng.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture)}"
+            : $"https://www.google.com/maps/search/?api=1&query={Uri.EscapeDataString((addressLine.Length > 0 ? addressLine + ", " : "") + "Denmark")}";
+        var locationHtml = $"""
+            <div class="find-stats-card">
+              <div class="find-stats-label">Location</div>
+              <p class="section-sub" style="margin:0 0 10px">{E(addressLine)}</p>
+              <a href="{mapHref}" target="_blank" rel="noopener noreferrer">Open in Google Maps →</a>
+            </div>
+            """;
+
+        // ── Business identity ───────────────────────────────────────────────────────────────────
+        var identityRows = new List<(string Label, string Value)> { ("Business name", est.Name) };
+        if (!string.IsNullOrWhiteSpace(addressLine)) identityRows.Add(("Address", addressLine));
+        if (!string.IsNullOrWhiteSpace(est.City)) identityRows.Add(("City", est.City));
+        if (hasCategory) identityRows.Add(("Category", est.Pixibranche!));
+        if (!string.IsNullOrWhiteSpace(est.CvrNumber)) identityRows.Add(("CVR", est.CvrNumber));
+        if (!string.IsNullOrWhiteSpace(est.PNumber)) identityRows.Add(("P-number", est.PNumber));
+        if (est.Inspections.Count > 0)
+            identityRows.Add(("First published inspection", FormatDate(est.Inspections.Min(i => i.InspectedOn))));
+
+        var identityHtml = $"""
+            <h2 class="section-title" style="margin-top:40px">Business identity</h2>
+            <dl class="find-stats-card" style="margin:0">
+              {string.Join("\n", identityRows.Select(r => $"""<div class="find-identity-row"><dt>{E(r.Label)}</dt><dd>{E(r.Value)}</dd></div>"""))}
+            </dl>
+            """;
+
+        // ── Related discovery ───────────────────────────────────────────────────────────────────
+        var discoveryCards = "";
+        if (!string.IsNullOrWhiteSpace(est.City))
+        {
+            var recentCardItems = recentlyInspectedInCity
+                .Select(e => (e.Name, Meta: e.LatestScoreDate is { } d ? FormatDate(d) : "", Href: FindUrlBuilder.DetailPath(e)))
+                .ToList();
+            var changesCardItems = recentChangesInCity
+                .Select(r => (r.Establishment.Name, Meta: $"{r.PreviousScore} → {r.NewScore}", Href: FindUrlBuilder.DetailPath(r.Establishment)))
+                .ToList();
+            var categoryCardItems = hasCategory
+                ? otherInCategory.Select(e => (e.Name, Meta: e.LatestScore is { } s ? $"Score {s}" : "", Href: FindUrlBuilder.DetailPath(e))).ToList()
+                : [];
+
+            var cards = new List<string>();
+            if (recentCardItems.Count > 0)
+                cards.Add(DiscoveryCardHtml($"Recently inspected in {est.City}", recentCardItems,
+                    FindUrlBuilder.RecentlyInspectedPath(est.City), $"Recently inspected in {est.City}"));
+            if (changesCardItems.Count > 0)
+                cards.Add(DiscoveryCardHtml($"Recent changes in {est.City}", changesCardItems,
+                    FindUrlBuilder.ChangesPath(est.City), $"Recent changes in {est.City}"));
+            if (categoryCardItems.Count > 0)
+                cards.Add(DiscoveryCardHtml(est.Pixibranche!, categoryCardItems,
+                    FindUrlBuilder.CategoryHubPath(est.City, est.Pixibranche!), "Browse the category"));
+
+            if (cards.Count > 0)
+                discoveryCards = $"""
+                    <h2 class="section-title" style="margin-top:40px">Related discovery</h2>
+                    <div class="feature-grid">
+                    {string.Join("\n", cards)}
+                    </div>
+                    """;
+        }
+
+        // ── FAQ ──────────────────────────────────────────────────────────────────────────────────
+        var faqHtml = $"""
+            <h2 class="section-title" style="margin-top:40px">About the smiley scheme</h2>
+            <div class="find-stats-card" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px 28px">
+              <div>
+                <div style="font-weight:700;margin-bottom:4px">What do the smiley scores mean?</div>
+                <p class="section-sub" style="margin:0">Score 1 means no remarks. Score 2 is an indskærpelse (enforcement notice). Score 3 is a påbud or forbud (order or ban). Score 4 is a bødeforlæg or politianmeldelse (fine or police report). 1 is the best result, 4 the worst.</p>
+              </div>
+              <div>
+                <div style="font-weight:700;margin-bottom:4px">How often is this page updated?</div>
+                <p class="section-sub" style="margin:0">Updated from the latest available Fødevarestyrelsen data, synced daily.</p>
+              </div>
+            </div>
+            """;
 
         var body = $"""
             <nav aria-label="breadcrumb" style="margin-bottom:16px;font-size:0.9rem">
@@ -686,10 +812,15 @@ public static class FindPageRenderer
                 <a href="/register.html?claim_cvr={Uri.EscapeDataString(est.CvrNumber ?? "")}" class="btn-primary">Claim this listing →</a>
               </div>
             </div>
+            {quickFactsHtml}
+            {locationHtml}
             {recentlyInspectedBlurb}
             {recentChangeBlurb}
             <h2 class="section-title" style="margin-top:40px">Inspection history</h2>
             {historyHtml}
+            {identityHtml}
+            {discoveryCards}
+            {faqHtml}
             """;
 
         var description = est.LatestScore is not null
@@ -701,7 +832,98 @@ public static class FindPageRenderer
             description: description,
             canonicalPath: FindUrlBuilder.DetailPath(est),
             bodyHtml: body,
-            extraHeadHtml: breadcrumbJsonLd);
+            extraHeadHtml: extraHeadHtml);
+    }
+
+    /// <summary>One "Related discovery" card — a title, up to a handful of name+meta links, and a
+    /// "View all" link to the full page. Returns "" if there's nothing to show (caller already checks
+    /// this, but kept defensive since an empty card would otherwise render as a bare title).</summary>
+    private static string DiscoveryCardHtml(
+        string title, IReadOnlyList<(string Name, string Meta, string Href)> items, string viewAllHref, string viewAllLabel)
+    {
+        if (items.Count == 0) return "";
+        var itemsHtml = string.Join("\n", items.Select(i => $"""
+            <a href="{i.Href}" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:8px 0;border-top:1px solid var(--border);font-size:0.85rem">
+              <span style="font-weight:600;color:var(--text)">{E(i.Name)}</span>
+              <span style="font-size:0.78rem;color:var(--text-muted)">{E(i.Meta)}</span>
+            </a>
+            """));
+        return $"""
+            <div class="feature-card">
+              <h3>{E(title)}</h3>
+              {itemsHtml}
+              <a href="{viewAllHref}" style="font-size:0.85rem;font-weight:600;margin-top:10px;display:inline-block">{E(viewAllLabel)} →</a>
+            </div>
+            """;
+    }
+
+    /// <summary>schema.org FoodEstablishment — deliberately not "Restaurant" (the mockup's choice),
+    /// since Pixibranche spans bakeries, grocery stores, butchers etc. — FoodEstablishment is the
+    /// accurate general type for all of them. geo/identifier are omitted, not emitted as null, when the
+    /// underlying field isn't present.</summary>
+    private static string FoodEstablishmentJsonLd(Establishment est, string addressLine)
+    {
+        var address = new Dictionary<string, object?> { ["@type"] = "PostalAddress" };
+        if (!string.IsNullOrWhiteSpace(est.Address)) address["streetAddress"] = est.Address;
+        if (!string.IsNullOrWhiteSpace(est.PostalCode)) address["postalCode"] = est.PostalCode;
+        if (!string.IsNullOrWhiteSpace(est.City)) address["addressLocality"] = est.City;
+        address["addressCountry"] = "DK";
+
+        var schema = new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "FoodEstablishment",
+            ["name"] = est.Name,
+            ["url"] = SiteOrigin + FindUrlBuilder.DetailPath(est),
+            ["address"] = address
+        };
+
+        if (est.GeoLat is { } lat && est.GeoLng is { } lng)
+            schema["geo"] = new Dictionary<string, object?> { ["@type"] = "GeoCoordinates", ["latitude"] = lat, ["longitude"] = lng };
+
+        var identifiers = new List<Dictionary<string, object?>>();
+        if (!string.IsNullOrWhiteSpace(est.CvrNumber))
+            identifiers.Add(new() { ["@type"] = "PropertyValue", ["name"] = "CVR", ["value"] = est.CvrNumber });
+        if (!string.IsNullOrWhiteSpace(est.PNumber))
+            identifiers.Add(new() { ["@type"] = "PropertyValue", ["name"] = "P-number", ["value"] = est.PNumber });
+        if (identifiers.Count > 0) schema["identifier"] = identifiers;
+
+        return $"""<script type="application/ld+json">{JsonSerializer.Serialize(schema)}</script>""";
+    }
+
+    /// <summary>FAQPage JSON-LD for the two generic, business-agnostic FAQ entries — accurate here since
+    /// the content is genuinely generic Q&amp;A about the scheme, not a dressed-up review/rating.</summary>
+    private static string FaqJsonLd()
+    {
+        var schema = new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "FAQPage",
+            ["mainEntity"] = new[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["@type"] = "Question",
+                    ["name"] = "What do the smiley scores mean?",
+                    ["acceptedAnswer"] = new Dictionary<string, object?>
+                    {
+                        ["@type"] = "Answer",
+                        ["text"] = "Score 1 means no remarks. Score 2 is an indskærpelse (enforcement notice). Score 3 is a påbud or forbud (order or ban). Score 4 is a bødeforlæg or politianmeldelse (fine or police report). 1 is the best result, 4 the worst."
+                    }
+                },
+                new Dictionary<string, object?>
+                {
+                    ["@type"] = "Question",
+                    ["name"] = "How often is this page updated?",
+                    ["acceptedAnswer"] = new Dictionary<string, object?>
+                    {
+                        ["@type"] = "Answer",
+                        ["text"] = "This page is updated from the latest available Fødevarestyrelsen data, synced daily."
+                    }
+                }
+            }
+        };
+        return $"""<script type="application/ld+json">{JsonSerializer.Serialize(schema)}</script>""";
     }
 
     /// <summary>Renders a schema.org BreadcrumbList JSON-LD block for search-engine rich snippets — kept

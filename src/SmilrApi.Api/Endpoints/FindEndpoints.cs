@@ -2,6 +2,8 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Caching.Memory;
 using SmilrApi.Api.Rendering;
 using SmilrApi.Core.Interfaces;
+using SmilrApi.Core.Models;
+using SmilrApi.Core.Utils;
 
 namespace SmilrApi.Api.Endpoints;
 
@@ -332,9 +334,36 @@ public static class FindEndpoints
         {
             entry.AbsoluteExpirationRelativeToNow = CacheTtl;
             var est = await repo.GetHistoryByNavnelbnrAsync(navnelbnr, ct);
-            return est is null || est.CvrNumber is null
-                ? new DetailLookupResult(null, null)
-                : new DetailLookupResult(FindPageRenderer.DetailPage(est), FindUrlBuilder.DetailPath(est));
+            if (est is null || est.CvrNumber is null)
+                return new DetailLookupResult(null, null);
+
+            // Related-discovery queries (plan §5): deliberately scoped to this establishment's own raw
+            // City value rather than the full area-slug's grouped RawCityValues — avoids pulling the
+            // area-index lookup into a single-establishment render for a "related content" nice-to-have.
+            // Fetch 5 and take 4 after filtering self out, rather than adding an "exclude id" parameter
+            // to three shared repository methods just for this one caller. Only run on a cache miss, so
+            // the extra cost is amortized over the same 12h TTL as everything else on this page.
+            var recentlyInspectedInCity = Array.Empty<Establishment>() as IReadOnlyList<Establishment>;
+            var recentChangesInCity = Array.Empty<ScoreChangeRow>() as IReadOnlyList<ScoreChangeRow>;
+            var otherInCategory = Array.Empty<Establishment>() as IReadOnlyList<Establishment>;
+            if (!string.IsNullOrWhiteSpace(est.City))
+            {
+                var cities = new[] { est.City };
+                recentlyInspectedInCity = (await repo.GetByCitiesOrderedByLatestInspectionAsync(cities, 1, 5, ct))
+                    .Where(e => e.Navnelbnr != est.Navnelbnr).Take(4).ToList();
+
+                var changesWindowStart = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-ChangesWindowDays));
+                recentChangesInCity = (await repo.GetRecentChangesByCitiesAsync(cities, changesWindowStart, 1, 5, ct))
+                    .Where(r => r.Establishment.Navnelbnr != est.Navnelbnr).Take(4).ToList();
+
+                if (!string.IsNullOrWhiteSpace(est.Pixibranche) && !PixibrancheCategories.IsPlaceholder(est.Pixibranche))
+                    otherInCategory = (await repo.GetByCitiesAndCategoryAsync(cities, est.Pixibranche, 1, 5, ct))
+                        .Where(e => e.Navnelbnr != est.Navnelbnr).Take(4).ToList();
+            }
+
+            return new DetailLookupResult(
+                FindPageRenderer.DetailPage(est, recentlyInspectedInCity, recentChangesInCity, otherInCategory),
+                FindUrlBuilder.DetailPath(est));
         });
 
         if (result!.Html is null)
