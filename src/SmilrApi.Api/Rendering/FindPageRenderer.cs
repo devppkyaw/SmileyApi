@@ -660,14 +660,6 @@ public static class FindPageRenderer
             ? ""
             : $"""<p><a href="{E(est.ReportUrl)}" target="_blank" rel="noopener noreferrer">View official inspection report →</a></p>""";
 
-        var recentlyInspectedBlurb = !string.IsNullOrWhiteSpace(est.City) && est.LatestScoreDate is { } latestDate
-            ? $"""
-              <p class="section-sub">Latest inspection: <time datetime="{latestDate:yyyy-MM-dd}">{FormatDate(latestDate)}</time>.
-              This establishment is among the recently inspected food businesses in {E(est.City)}.
-              <a href="{FindUrlBuilder.RecentlyInspectedPath(est.City!)}">See recently inspected businesses in {E(est.City)} →</a></p>
-              """
-            : "";
-
         // Spec §23: only shown when this establishment would actually appear on the changes page right
         // now — most businesses most of the time have no recent change, unlike the unconditional
         // recently-inspected link above.
@@ -814,7 +806,6 @@ public static class FindPageRenderer
             </div>
             {quickFactsHtml}
             {locationHtml}
-            {recentlyInspectedBlurb}
             {recentChangeBlurb}
             <h2 class="section-title" style="margin-top:40px">Inspection history</h2>
             {historyHtml}
