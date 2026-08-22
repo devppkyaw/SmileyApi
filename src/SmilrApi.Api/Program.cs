@@ -8,6 +8,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Scalar.AspNetCore;
 using SmilrApi.Api.Endpoints;
 using SmilrApi.Api.Middleware;
+using SmilrApi.Api.Rendering;
 using SmilrApi.Api.Workers;
 using SmilrApi.Core.Interfaces;
 using SmilrApi.Core.Models;
@@ -177,7 +178,16 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
+FindPageRenderer.Configure(app.Configuration["Seo:CanonicalOrigin"] ?? "https://smilrhq.dk");
+
 app.UseForwardedHeaders();
+
+app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+app.UseMiddleware<CanonicalHostMiddleware>();
 
 app.UseExceptionHandler(errorApp =>
 {

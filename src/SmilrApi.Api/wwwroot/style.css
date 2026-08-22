@@ -1243,6 +1243,21 @@ pre:not([class*="language-"]) strong {
 .find-stat-value--up { color: var(--accent); }
 .find-stat-value--down { color: var(--red); }
 
+/* ─── /find/{area}/{business} business identity table ─────── */
+
+.find-identity-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 200px) 1fr;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.find-identity-row:last-child { border-bottom: none; }
+.find-identity-row dt { color: var(--text-muted); font-weight: 600; }
+.find-identity-row dd { margin: 0; }
+
 .find-recent-table-wrap {
   border: 1px solid var(--border);
   border-radius: var(--radius);

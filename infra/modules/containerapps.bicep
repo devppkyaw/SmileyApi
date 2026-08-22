@@ -6,6 +6,12 @@ param appInsightsConnectionString string
 param environment string
 param imageName string
 
+// Custom domain for the Container App (e.g. 'smilrhq.dk'). Left empty by default — see
+// infra/parameters/prod.bicepparam for why this isn't set yet. Both the customDomains binding below and
+// the managed certificate are fully conditional on this being non-empty, so leaving it '' deploys no
+// domain-related resources at all.
+param customDomainName string = ''
+
 resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: 'cae-${name}'
   location: location
@@ -17,6 +23,19 @@ resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
         sharedKey: listKeys(logAnalyticsWorkspaceId, '2023-09-01').primarySharedKey
       }
     }
+  }
+}
+
+// Managed certificate for the custom domain, only created once customDomainName is set (see its param
+// comment above). Azure validates domain ownership via a CNAME/TXT record you add at the DNS provider —
+// not part of this deployment; see infra/parameters/prod.bicepparam for the follow-up steps.
+resource managedCert 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(customDomainName)) {
+  parent: containerAppsEnv
+  name: 'cert-${replace(customDomainName, '.', '-')}'
+  location: location
+  properties: {
+    subjectName: customDomainName
+    domainControlValidation: 'CNAME'
   }
 }
 
@@ -33,6 +52,16 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         external: true
         targetPort: 8080
         transport: 'auto'
+        customDomains: !empty(customDomainName) ? [
+          {
+            name: customDomainName
+            bindingType: 'SniEnabled'
+            // Built via resourceId() rather than a symbolic reference to managedCert (below), since that
+            // resource is itself conditional on the same customDomainName — referencing it symbolically
+            // here would make Bicep try to resolve it even in the empty-string/no-op case.
+            certificateId: resourceId('Microsoft.App/managedEnvironments/managedCertificates', containerAppsEnv.name, 'cert-${replace(customDomainName, '.', '-')}')
+          }
+        ] : []
       }
     }
     template: {

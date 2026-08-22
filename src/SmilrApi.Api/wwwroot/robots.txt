@@ -5,5 +5,9 @@ Disallow: /dashboard.html
 Disallow: /v1/
 Disallow: /scalar/
 Disallow: /hangfire/
+Disallow: /find/search
 
+# Sitemap URL is intentionally static — robots.txt is served as a plain static file and cannot read
+# app configuration (see Seo:CanonicalOrigin in appsettings.json). If the canonical origin ever
+# changes from smilrhq.dk, update this line to match.
 Sitemap: https://smilrhq.dk/find/sitemap.xml

@@ -44,6 +44,9 @@ param stripePriceId string = ''
 @description('Admin key required via X-Admin-Key header on /admin/* endpoints. Leave empty to run those endpoints unauthenticated.')
 param adminKey string = ''
 
+@description('Custom domain to bind to the Container App (e.g. "smilrhq.dk"). Left empty until DNS validation records exist externally — see infra/parameters/prod.bicepparam.')
+param customDomainName string = ''
+
 
 // A short deterministic suffix scoped to this resource group avoids global naming conflicts
 // for App Service (*.azurewebsites.net) and Key Vault (globally unique).
@@ -109,6 +112,7 @@ module containerApp 'modules/containerapps.bicep' = {
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     environment: environment
     imageName: imageName
+    customDomainName: customDomainName
   }
 }
 

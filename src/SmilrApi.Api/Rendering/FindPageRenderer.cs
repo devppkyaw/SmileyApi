@@ -17,7 +17,12 @@ namespace SmilrApi.Api.Rendering;
 /// </summary>
 public static class FindPageRenderer
 {
-    private const string SiteOrigin = "https://smilrhq.dk";
+    // Set once at startup from Seo:CanonicalOrigin (see Program.cs). This file is a fully static,
+    // non-DI rendering module by design, so a settable static — written exactly once before any
+    // request is served — is used here instead of threading the origin through every render method.
+    internal static string SiteOrigin { get; private set; } = "https://smilrhq.dk";
+
+    internal static void Configure(string canonicalOrigin) => SiteOrigin = canonicalOrigin.TrimEnd('/');
 
     // Mirrors the SCORES map in wwwroot/widget.js and smilr-icons.js so /find pages show the same
     // badge as the widget: four score values, three faces (2 and 3 both render as the neutral Sm3).
@@ -56,7 +61,10 @@ public static class FindPageRenderer
             ? "<p>No matching establishments found.</p>"
             : string.Join("\n", linkable.Select(ResultRowHtml));
 
-        var pagerHtml = BuildPager($"/find/search?q={Uri.EscapeDataString(query)}&", page, hasMore: results.Count >= limit);
+        var searchBasePath = $"/find/search?q={Uri.EscapeDataString(query)}&";
+        var hasMore = results.Count >= limit;
+        var pagerHtml = BuildPager(searchBasePath, page, hasMore);
+        var (prevPath, nextPath) = PagerLinks(searchBasePath, page, hasMore);
 
         var body = $"""
             <h1>Search results for "{E(query)}"</h1>
@@ -70,8 +78,12 @@ public static class FindPageRenderer
         return Layout(
             title: $"\"{query}\" — Search results — SmilrHQ",
             description: $"Food inspection scores matching \"{query}\" — official Fødevarestyrelsen data.",
-            canonicalPath: $"/find/search?q={Uri.EscapeDataString(query)}",
-            bodyHtml: body);
+            canonicalPath: page > 1
+                ? $"/find/search?q={Uri.EscapeDataString(query)}&page={page}"
+                : $"/find/search?q={Uri.EscapeDataString(query)}",
+            bodyHtml: body,
+            prevPath: prevPath,
+            nextPath: nextPath);
     }
 
     public static string LocationChoicePage(string cvr, IReadOnlyList<Establishment> locations)
@@ -93,7 +105,8 @@ public static class FindPageRenderer
     }
 
     public static string AreaHubPage(
-        string displaySpelling, int page, int pageSize, int totalCount, IReadOnlyList<Establishment> establishments,
+        string displaySpelling, int page, int pageSize, int totalCount, bool noindex,
+        IReadOnlyList<Establishment> establishments,
         IReadOnlyList<(string Category, string CategorySlug, int Count)> categoriesInArea)
     {
         var rowsHtml = establishments.Count == 0
@@ -103,6 +116,7 @@ public static class FindPageRenderer
         var hasMore = (long)page * pageSize < totalCount;
         var hubPath = FindUrlBuilder.HubPath(displaySpelling);
         var pagerHtml = BuildPager($"{hubPath}?", page, hasMore);
+        var (prevPath, nextPath) = PagerLinks($"{hubPath}?", page, hasMore);
         var categoryNavHtml = CategoryNavHtml(displaySpelling, categoriesInArea);
 
         var body = $"""
@@ -123,7 +137,10 @@ public static class FindPageRenderer
             title: $"Food inspection scores in {displaySpelling} — SmilrHQ",
             description: $"Browse official Fødevarestyrelsen food inspection (smiley) scores for restaurants and food businesses in {displaySpelling}.",
             canonicalPath: hubPath,
-            bodyHtml: body);
+            bodyHtml: body,
+            noindex: noindex,
+            prevPath: prevPath,
+            nextPath: nextPath);
     }
 
     public static string CategoryHubPage(
@@ -137,6 +154,14 @@ public static class FindPageRenderer
         var hasMore = (long)page * pageSize < totalCount;
         var categoryPath = FindUrlBuilder.CategoryHubPath(displayCity, displayCategory);
         var pagerHtml = BuildPager($"{categoryPath}?", page, hasMore);
+        var (prevPath, nextPath) = PagerLinks($"{categoryPath}?", page, hasMore);
+
+        var jsonLdCrumbs = new List<(string Name, string Path)>
+        {
+            ("Find", "/find"),
+            (displayCity, FindUrlBuilder.HubPath(displayCity)),
+            (displayCategory, categoryPath)
+        };
 
         var body = $"""
             <nav aria-label="breadcrumb" style="margin-bottom:16px;font-size:0.9rem">
@@ -155,7 +180,10 @@ public static class FindPageRenderer
             description: $"Browse official Fødevarestyrelsen food inspection (smiley) scores for {displayCategory.ToLowerInvariant()} in {displayCity}.",
             canonicalPath: categoryPath,
             bodyHtml: body,
-            noindex: noindex);
+            noindex: noindex,
+            extraHeadHtml: BreadcrumbJsonLd(jsonLdCrumbs),
+            prevPath: prevPath,
+            nextPath: nextPath);
     }
 
     private static string CategoryNavHtml(
@@ -189,6 +217,7 @@ public static class FindPageRenderer
         var hasMore = (long)page * pageSize < summary.TotalWithInspection;
         var recentPath = FindUrlBuilder.RecentlyInspectedPath(displaySpelling);
         var pagerHtml = BuildPager($"{recentPath}?", page, hasMore);
+        var (prevPath, nextPath) = PagerLinks($"{recentPath}?", page, hasMore);
         var categoryNavHtml = CategoryNavHtml(displaySpelling, categoriesInArea);
 
         var latestDateText = summary.LatestInspectionDate is { } d ? FormatDate(d) : null;
@@ -264,7 +293,9 @@ public static class FindPageRenderer
             canonicalPath: recentPath,
             bodyHtml: body,
             noindex: noindex,
-            extraHeadHtml: BreadcrumbJsonLd(jsonLdCrumbs));
+            extraHeadHtml: BreadcrumbJsonLd(jsonLdCrumbs),
+            prevPath: prevPath,
+            nextPath: nextPath);
     }
 
     /// <summary>Renders the recently-inspected table body, inserting a full-width date-header row
@@ -441,6 +472,7 @@ public static class FindPageRenderer
             """;
 
         string body;
+        string? prevPath = null, nextPath = null;
         if (changes.Count == 0)
         {
             // Spec §14: a quiet city is a normal, honest state, not an error — no stats card (there's
@@ -465,6 +497,7 @@ public static class FindPageRenderer
         {
             var hasMore = (long)page * pageSize < summary.TotalChanges;
             var pagerHtml = BuildPager($"{changesPath}?", page, hasMore);
+            (prevPath, nextPath) = PagerLinks($"{changesPath}?", page, hasMore);
             var mostRecentText = summary.MostRecentChangeDate is { } d ? FormatDate(d) : null;
             var introText = mostRecentText is null
                 ? $"Smilr tracks changes to official food inspection scores in {E(displaySpelling)}."
@@ -521,7 +554,9 @@ public static class FindPageRenderer
             canonicalPath: changesPath,
             bodyHtml: body,
             noindex: noindex,
-            extraHeadHtml: BreadcrumbJsonLd(jsonLdCrumbs));
+            extraHeadHtml: BreadcrumbJsonLd(jsonLdCrumbs),
+            prevPath: prevPath,
+            nextPath: nextPath);
     }
 
     private static string ChangesRowsHtml(IReadOnlyList<ScoreChangeRow> changes)
@@ -567,7 +602,25 @@ public static class FindPageRenderer
             """;
     }
 
-    public static string DetailPage(Establishment est)
+    // Score -> what that score level means, per Fødevarestyrelsen's smiley scheme. Danish sanction terms
+    // (indskærpelse, påbud, forbud, bødeforlæg) are kept verbatim even in the English UI — they're legal
+    // categories, not translatable descriptions — same convention already validated for
+    // /find/{area}/recently-inspected. This describes what the SCORE LEVEL means in general, never a
+    // specific claim about what a particular inspection found — the source XML only ever gives us a
+    // score and a date, never free-text remarks, so nothing more specific can be said truthfully.
+    private static readonly Dictionary<int, string> ScoreOutcome = new()
+    {
+        [1] = "No remarks",
+        [2] = "Indskærpelse (enforcement notice)",
+        [3] = "Påbud or forbud (order or ban)",
+        [4] = "Bødeforlæg or politianmeldelse (fine or police report)"
+    };
+
+    public static string DetailPage(
+        Establishment est,
+        IReadOnlyList<Establishment> recentlyInspectedInCity,
+        IReadOnlyList<ScoreChangeRow> recentChangesInCity,
+        IReadOnlyList<Establishment> otherInCategory)
     {
         var badge = ScoreBadgeHtml(est.LatestScore, est.VirksomhedsType);
         var addressLine = string.Join(", ", new[] { est.Address, est.PostalCode, est.City }
@@ -583,15 +636,22 @@ public static class FindPageRenderer
             .Select(i =>
             {
                 var directionHtml = latestChange is { } lc && i.InspectedOn == lc.ChangeDate
-                    ? " " + DirectionBadgeHtml(lc.NewScore < lc.PreviousScore)
+                    ? DirectionBadgeHtml(lc.NewScore < lc.PreviousScore)
                     : "";
-                return $"<tr><td>{i.InspectedOn:dd/MM/yyyy}</td><td>{i.SmileyScore}{directionHtml}</td></tr>";
+                var outcome = ScoreOutcome.GetValueOrDefault(i.SmileyScore, "—");
+                return $"""
+                    <tr>
+                      <td>{i.InspectedOn:dd/MM/yyyy}</td>
+                      <td><span style="display:inline-flex;align-items:center;gap:8px">{ScoreChipHtml(i.SmileyScore, dim: false)}{directionHtml}</span></td>
+                      <td>{E(outcome)}</td>
+                    </tr>
+                    """;
             });
         var historyHtml = est.Inspections.Count == 0
             ? "<p>No inspection history recorded yet.</p>"
             : $"""
               <table class="find-history">
-                <thead><tr><th>Date</th><th>Score</th></tr></thead>
+                <thead><tr><th>Date</th><th>Score</th><th>Outcome</th></tr></thead>
                 <tbody>{string.Join("\n", historyRows)}</tbody>
               </table>
               """;
@@ -599,14 +659,6 @@ public static class FindPageRenderer
         var reportLink = string.IsNullOrWhiteSpace(est.ReportUrl)
             ? ""
             : $"""<p><a href="{E(est.ReportUrl)}" target="_blank" rel="noopener noreferrer">View official inspection report →</a></p>""";
-
-        var recentlyInspectedBlurb = !string.IsNullOrWhiteSpace(est.City) && est.LatestScoreDate is { } latestDate
-            ? $"""
-              <p class="section-sub">Latest inspection: <time datetime="{latestDate:yyyy-MM-dd}">{FormatDate(latestDate)}</time>.
-              This establishment is among the recently inspected food businesses in {E(est.City)}.
-              <a href="{FindUrlBuilder.RecentlyInspectedPath(est.City!)}">See recently inspected businesses in {E(est.City)} →</a></p>
-              """
-            : "";
 
         // Spec §23: only shown when this establishment would actually appear on the changes page right
         // now — most businesses most of the time have no recent change, unlike the unconditional
@@ -635,7 +687,108 @@ public static class FindPageRenderer
         if (hasCategory)
             jsonLdCrumbs.Add((est.Pixibranche!, FindUrlBuilder.CategoryHubPath(est.City!, est.Pixibranche!)));
         jsonLdCrumbs.Add((est.Name, FindUrlBuilder.DetailPath(est)));
-        var breadcrumbJsonLd = BreadcrumbJsonLd(jsonLdCrumbs);
+        var extraHeadHtml = BreadcrumbJsonLd(jsonLdCrumbs) + FoodEstablishmentJsonLd(est, addressLine) + FaqJsonLd();
+
+        // ── Quick facts + Location ──────────────────────────────────────────────────────────────
+        var quickFacts = new List<(string Value, string Label)>
+        {
+            (est.LatestScore?.ToString() ?? "—", "current smiley"),
+            (est.Inspections.Count == 0
+                ? "0"
+                : $"{est.Inspections.Count} since {est.Inspections.Min(i => i.InspectedOn).Year}", "inspections")
+        };
+        if (latestChange is { } lc2)
+            quickFacts.Add(($"{lc2.PreviousScore} → {lc2.NewScore} in {lc2.ChangeDate.Year}", "last change"));
+
+        var quickFactsHtml = $"""
+            <div class="find-stats-card">
+              <div class="find-stats-grid">
+                {string.Join("\n", quickFacts.Select(f => $"""
+                <div class="find-stat">
+                  <div class="find-stat-value">{E(f.Value)}</div>
+                  <div class="find-stat-label">{E(f.Label)}</div>
+                </div>
+                """))}
+              </div>
+            </div>
+            """;
+
+        var mapHref = est.GeoLat is { } lat && est.GeoLng is { } lng
+            ? $"https://www.google.com/maps/search/?api=1&query={lat.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture)},{lng.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture)}"
+            : $"https://www.google.com/maps/search/?api=1&query={Uri.EscapeDataString((addressLine.Length > 0 ? addressLine + ", " : "") + "Denmark")}";
+        var locationHtml = $"""
+            <div class="find-stats-card">
+              <div class="find-stats-label">Location</div>
+              <p class="section-sub" style="margin:0 0 10px">{E(addressLine)}</p>
+              <a href="{mapHref}" target="_blank" rel="noopener noreferrer">Open in Google Maps →</a>
+            </div>
+            """;
+
+        // ── Business identity ───────────────────────────────────────────────────────────────────
+        var identityRows = new List<(string Label, string Value)> { ("Business name", est.Name) };
+        if (!string.IsNullOrWhiteSpace(addressLine)) identityRows.Add(("Address", addressLine));
+        if (!string.IsNullOrWhiteSpace(est.City)) identityRows.Add(("City", est.City));
+        if (hasCategory) identityRows.Add(("Category", est.Pixibranche!));
+        if (!string.IsNullOrWhiteSpace(est.CvrNumber)) identityRows.Add(("CVR", est.CvrNumber));
+        if (!string.IsNullOrWhiteSpace(est.PNumber)) identityRows.Add(("P-number", est.PNumber));
+        if (est.Inspections.Count > 0)
+            identityRows.Add(("First published inspection", FormatDate(est.Inspections.Min(i => i.InspectedOn))));
+
+        var identityHtml = $"""
+            <h2 class="section-title" style="margin-top:40px">Business identity</h2>
+            <dl class="find-stats-card" style="margin:0">
+              {string.Join("\n", identityRows.Select(r => $"""<div class="find-identity-row"><dt>{E(r.Label)}</dt><dd>{E(r.Value)}</dd></div>"""))}
+            </dl>
+            """;
+
+        // ── Related discovery ───────────────────────────────────────────────────────────────────
+        var discoveryCards = "";
+        if (!string.IsNullOrWhiteSpace(est.City))
+        {
+            var recentCardItems = recentlyInspectedInCity
+                .Select(e => (e.Name, Meta: e.LatestScoreDate is { } d ? FormatDate(d) : "", Href: FindUrlBuilder.DetailPath(e)))
+                .ToList();
+            var changesCardItems = recentChangesInCity
+                .Select(r => (r.Establishment.Name, Meta: $"{r.PreviousScore} → {r.NewScore}", Href: FindUrlBuilder.DetailPath(r.Establishment)))
+                .ToList();
+            var categoryCardItems = hasCategory
+                ? otherInCategory.Select(e => (e.Name, Meta: e.LatestScore is { } s ? $"Score {s}" : "", Href: FindUrlBuilder.DetailPath(e))).ToList()
+                : [];
+
+            var cards = new List<string>();
+            if (recentCardItems.Count > 0)
+                cards.Add(DiscoveryCardHtml($"Recently inspected in {est.City}", recentCardItems,
+                    FindUrlBuilder.RecentlyInspectedPath(est.City), $"Recently inspected in {est.City}"));
+            if (changesCardItems.Count > 0)
+                cards.Add(DiscoveryCardHtml($"Recent changes in {est.City}", changesCardItems,
+                    FindUrlBuilder.ChangesPath(est.City), $"Recent changes in {est.City}"));
+            if (categoryCardItems.Count > 0)
+                cards.Add(DiscoveryCardHtml(est.Pixibranche!, categoryCardItems,
+                    FindUrlBuilder.CategoryHubPath(est.City, est.Pixibranche!), "Browse the category"));
+
+            if (cards.Count > 0)
+                discoveryCards = $"""
+                    <h2 class="section-title" style="margin-top:40px">Related discovery</h2>
+                    <div class="feature-grid">
+                    {string.Join("\n", cards)}
+                    </div>
+                    """;
+        }
+
+        // ── FAQ ──────────────────────────────────────────────────────────────────────────────────
+        var faqHtml = $"""
+            <h2 class="section-title" style="margin-top:40px">About the smiley scheme</h2>
+            <div class="find-stats-card" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px 28px">
+              <div>
+                <div style="font-weight:700;margin-bottom:4px">What do the smiley scores mean?</div>
+                <p class="section-sub" style="margin:0">Score 1 means no remarks. Score 2 is an indskærpelse (enforcement notice). Score 3 is a påbud or forbud (order or ban). Score 4 is a bødeforlæg or politianmeldelse (fine or police report). 1 is the best result, 4 the worst.</p>
+              </div>
+              <div>
+                <div style="font-weight:700;margin-bottom:4px">How often is this page updated?</div>
+                <p class="section-sub" style="margin:0">Updated from the latest available Fødevarestyrelsen data, synced daily.</p>
+              </div>
+            </div>
+            """;
 
         var body = $"""
             <nav aria-label="breadcrumb" style="margin-bottom:16px;font-size:0.9rem">
@@ -651,10 +804,14 @@ public static class FindPageRenderer
                 <a href="/register.html?claim_cvr={Uri.EscapeDataString(est.CvrNumber ?? "")}" class="btn-primary">Claim this listing →</a>
               </div>
             </div>
-            {recentlyInspectedBlurb}
+            {quickFactsHtml}
+            {locationHtml}
             {recentChangeBlurb}
             <h2 class="section-title" style="margin-top:40px">Inspection history</h2>
             {historyHtml}
+            {identityHtml}
+            {discoveryCards}
+            {faqHtml}
             """;
 
         var description = est.LatestScore is not null
@@ -666,7 +823,98 @@ public static class FindPageRenderer
             description: description,
             canonicalPath: FindUrlBuilder.DetailPath(est),
             bodyHtml: body,
-            extraHeadHtml: breadcrumbJsonLd);
+            extraHeadHtml: extraHeadHtml);
+    }
+
+    /// <summary>One "Related discovery" card — a title, up to a handful of name+meta links, and a
+    /// "View all" link to the full page. Returns "" if there's nothing to show (caller already checks
+    /// this, but kept defensive since an empty card would otherwise render as a bare title).</summary>
+    private static string DiscoveryCardHtml(
+        string title, IReadOnlyList<(string Name, string Meta, string Href)> items, string viewAllHref, string viewAllLabel)
+    {
+        if (items.Count == 0) return "";
+        var itemsHtml = string.Join("\n", items.Select(i => $"""
+            <a href="{i.Href}" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:8px 0;border-top:1px solid var(--border);font-size:0.85rem">
+              <span style="font-weight:600;color:var(--text)">{E(i.Name)}</span>
+              <span style="font-size:0.78rem;color:var(--text-muted)">{E(i.Meta)}</span>
+            </a>
+            """));
+        return $"""
+            <div class="feature-card">
+              <h3>{E(title)}</h3>
+              {itemsHtml}
+              <a href="{viewAllHref}" style="font-size:0.85rem;font-weight:600;margin-top:10px;display:inline-block">{E(viewAllLabel)} →</a>
+            </div>
+            """;
+    }
+
+    /// <summary>schema.org FoodEstablishment — deliberately not "Restaurant" (the mockup's choice),
+    /// since Pixibranche spans bakeries, grocery stores, butchers etc. — FoodEstablishment is the
+    /// accurate general type for all of them. geo/identifier are omitted, not emitted as null, when the
+    /// underlying field isn't present.</summary>
+    private static string FoodEstablishmentJsonLd(Establishment est, string addressLine)
+    {
+        var address = new Dictionary<string, object?> { ["@type"] = "PostalAddress" };
+        if (!string.IsNullOrWhiteSpace(est.Address)) address["streetAddress"] = est.Address;
+        if (!string.IsNullOrWhiteSpace(est.PostalCode)) address["postalCode"] = est.PostalCode;
+        if (!string.IsNullOrWhiteSpace(est.City)) address["addressLocality"] = est.City;
+        address["addressCountry"] = "DK";
+
+        var schema = new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "FoodEstablishment",
+            ["name"] = est.Name,
+            ["url"] = SiteOrigin + FindUrlBuilder.DetailPath(est),
+            ["address"] = address
+        };
+
+        if (est.GeoLat is { } lat && est.GeoLng is { } lng)
+            schema["geo"] = new Dictionary<string, object?> { ["@type"] = "GeoCoordinates", ["latitude"] = lat, ["longitude"] = lng };
+
+        var identifiers = new List<Dictionary<string, object?>>();
+        if (!string.IsNullOrWhiteSpace(est.CvrNumber))
+            identifiers.Add(new() { ["@type"] = "PropertyValue", ["name"] = "CVR", ["value"] = est.CvrNumber });
+        if (!string.IsNullOrWhiteSpace(est.PNumber))
+            identifiers.Add(new() { ["@type"] = "PropertyValue", ["name"] = "P-number", ["value"] = est.PNumber });
+        if (identifiers.Count > 0) schema["identifier"] = identifiers;
+
+        return $"""<script type="application/ld+json">{JsonSerializer.Serialize(schema)}</script>""";
+    }
+
+    /// <summary>FAQPage JSON-LD for the two generic, business-agnostic FAQ entries — accurate here since
+    /// the content is genuinely generic Q&amp;A about the scheme, not a dressed-up review/rating.</summary>
+    private static string FaqJsonLd()
+    {
+        var schema = new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "FAQPage",
+            ["mainEntity"] = new[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["@type"] = "Question",
+                    ["name"] = "What do the smiley scores mean?",
+                    ["acceptedAnswer"] = new Dictionary<string, object?>
+                    {
+                        ["@type"] = "Answer",
+                        ["text"] = "Score 1 means no remarks. Score 2 is an indskærpelse (enforcement notice). Score 3 is a påbud or forbud (order or ban). Score 4 is a bødeforlæg or politianmeldelse (fine or police report). 1 is the best result, 4 the worst."
+                    }
+                },
+                new Dictionary<string, object?>
+                {
+                    ["@type"] = "Question",
+                    ["name"] = "How often is this page updated?",
+                    ["acceptedAnswer"] = new Dictionary<string, object?>
+                    {
+                        ["@type"] = "Answer",
+                        ["text"] = "This page is updated from the latest available Fødevarestyrelsen data, synced daily."
+                    }
+                }
+            }
+        };
+        return $"""<script type="application/ld+json">{JsonSerializer.Serialize(schema)}</script>""";
     }
 
     /// <summary>Renders a schema.org BreadcrumbList JSON-LD block for search-engine rich snippets — kept
@@ -834,11 +1082,21 @@ public static class FindPageRenderer
     /// </summary>
     private static string BuildPager(string basePathWithTrailingSeparator, int page, bool hasMore)
     {
-        var prev = page > 1 ? $"""<a href="{basePathWithTrailingSeparator}page={page - 1}">← Previous</a>""" : "";
-        var next = hasMore ? $"""<a href="{basePathWithTrailingSeparator}page={page + 1}">Next →</a>""" : "";
+        var (prevUrl, nextUrl) = PagerLinks(basePathWithTrailingSeparator, page, hasMore);
+        var prev = prevUrl is not null ? $"""<a href="{prevUrl}">← Previous</a>""" : "";
+        var next = nextUrl is not null ? $"""<a href="{nextUrl}">Next →</a>""" : "";
         if (string.IsNullOrEmpty(prev) && string.IsNullOrEmpty(next)) return "";
         return $"""<div class="find-pager">{prev}{next}</div>""";
     }
+
+    /// <summary>Shared prev/next URL computation for paginated /find pages — used both for the visible
+    /// pager links (via BuildPager) and for the rel="prev"/rel="next" &lt;link&gt; tags in Layout(), so a
+    /// page's canonical tag (always page 1) doesn't leave crawlers with no path to the other pages.</summary>
+    private static (string? Prev, string? Next) PagerLinks(string basePathWithTrailingSeparator, int page, bool hasMore) =>
+    (
+        page > 1 ? $"{basePathWithTrailingSeparator}page={page - 1}" : null,
+        hasMore ? $"{basePathWithTrailingSeparator}page={page + 1}" : null
+    );
 
     private static string ScoreBadgeHtml(int? score, string? virksomhedsType)
     {
@@ -863,10 +1121,12 @@ public static class FindPageRenderer
 
     private static string Layout(
         string title, string description, string canonicalPath, string bodyHtml,
-        bool noindex = false, string extraHeadHtml = "")
+        bool noindex = false, string extraHeadHtml = "", string? prevPath = null, string? nextPath = null)
     {
         var canonicalUrl = SiteOrigin + canonicalPath;
         var robotsTag = noindex ? """<meta name="robots" content="noindex,follow" />""" + "\n  " : "";
+        var prevTag = prevPath is not null ? $"""<link rel="prev" href="{SiteOrigin + prevPath}" />""" + "\n  " : "";
+        var nextTag = nextPath is not null ? $"""<link rel="next" href="{SiteOrigin + nextPath}" />""" + "\n  " : "";
         return $"""
             <!DOCTYPE html>
             <html lang="en">
@@ -875,10 +1135,15 @@ public static class FindPageRenderer
               <meta name="viewport" content="width=device-width, initial-scale=1.0" />
               <meta name="description" content="{E(description)}" />
               {robotsTag}<link rel="canonical" href="{canonicalUrl}" />
-              <meta property="og:type" content="website" />
+              {prevTag}{nextTag}<meta property="og:type" content="website" />
               <meta property="og:title" content="{E(title)}" />
               <meta property="og:description" content="{E(description)}" />
               <meta property="og:url" content="{canonicalUrl}" />
+              <meta property="og:image" content="{SiteOrigin}/images/hero.jpg" />
+              <meta name="twitter:card" content="summary_large_image" />
+              <meta name="twitter:title" content="{E(title)}" />
+              <meta name="twitter:description" content="{E(description)}" />
+              <meta name="twitter:image" content="{SiteOrigin}/images/hero.jpg" />
               <title>{E(title)}</title>
               <link rel="stylesheet" href="/style.css" />
               {extraHeadHtml}
