@@ -130,7 +130,7 @@ public static class FindPageRenderer
         var (prevPath, nextPath) = PagerLinks(hubQueryPrefix, page, hasMore);
         var categoryNavHtml = CategoryNavHtml(displaySpelling, categoriesInArea);
         var sortBarHtml = SortBarHtml(hubPath, sort, hideUnscored);
-        var snapshotHtml = AreaScoreSnapshotHtml(displaySpelling, snapshot);
+        var snapshotHtml = HealthSnapshotHtml($"{displaySpelling} health snapshot", snapshot, displaySpelling);
 
         var jsonLdCrumbs = new List<(string Name, string Path)>
         {
@@ -168,17 +168,21 @@ public static class FindPageRenderer
             nextPath: nextPath);
     }
 
-    /// <summary>"Area health snapshot" stat strip — a live score-distribution stat ("X% currently have
-    /// the top smiley"), reusing the .find-stats-card shape already used by RecentlyInspectedPage/
-    /// ChangesPage/DetailPage. Renders nothing if the area has no scored establishments yet, rather than
-    /// showing a meaningless 0%.</summary>
-    private static string AreaScoreSnapshotHtml(string displaySpelling, AreaScoreSnapshot snapshot)
+    /// <summary>"Health snapshot" stat strip — a live score-distribution stat ("X% currently have the top
+    /// smiley"), reusing the .find-stats-card shape already used by RecentlyInspectedPage/ChangesPage/
+    /// DetailPage. Shared by the area hub (whole-area snapshot) and category hub (area×category
+    /// snapshot) — <paramref name="label"/> and the CTA text are supplied by the caller so each can word
+    /// it correctly (e.g. "Aarhus health snapshot" vs. "Restauranter in Aarhus health snapshot"); the CTA
+    /// link itself always points at the area's own /changes page since no category-scoped changes page
+    /// exists. Renders nothing if there are no scored establishments in scope yet, rather than showing a
+    /// meaningless 0%.</summary>
+    private static string HealthSnapshotHtml(string label, AreaScoreSnapshot snapshot, string displaySpelling)
     {
         if (snapshot.TotalScored == 0) return "";
 
         return $"""
             <div class="find-stats-card">
-              <div class="find-stats-label">{E(displaySpelling)} health snapshot</div>
+              <div class="find-stats-label">{E(label)}</div>
               <div class="find-stats-grid">
                 <div class="find-stat">
                   <div class="find-stat-value">{snapshot.TopSharePercent.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)}%</div>
@@ -237,7 +241,8 @@ public static class FindPageRenderer
 
     public static string CategoryHubPage(
         string displayCity, string displayCategory, string areaSlug, string categorySlug,
-        int page, int pageSize, int totalCount, bool noindex, IReadOnlyList<Establishment> establishments)
+        int page, int pageSize, int totalCount, bool noindex, string? sort, bool hideUnscored,
+        AreaScoreSnapshot snapshot, IReadOnlyList<Establishment> establishments)
     {
         var rowsHtml = establishments.Count == 0
             ? "<p>No establishments found for this category in this area yet.</p>"
@@ -245,8 +250,18 @@ public static class FindPageRenderer
 
         var hasMore = (long)page * pageSize < totalCount;
         var categoryPath = FindUrlBuilder.CategoryHubPath(displayCity, displayCategory);
-        var pagerHtml = BuildPager($"{categoryPath}?", page, hasMore);
-        var (prevPath, nextPath) = PagerLinks($"{categoryPath}?", page, hasMore);
+
+        // Same composed-prefix technique as the area hub: BuildPager/PagerLinks stay unaware of
+        // sort/hide_unscored, they just build "page=N" off whatever prefix they're handed.
+        var extraQs = string.Concat(
+            sort is not null ? $"sort={sort}&" : "",
+            hideUnscored ? "hide_unscored=1&" : "");
+        var categoryQueryPrefix = $"{categoryPath}?{extraQs}";
+
+        var pagerHtml = BuildPager(categoryQueryPrefix, page, hasMore);
+        var (prevPath, nextPath) = PagerLinks(categoryQueryPrefix, page, hasMore);
+        var sortBarHtml = SortBarHtml(categoryPath, sort, hideUnscored);
+        var snapshotHtml = HealthSnapshotHtml($"{displayCategory} in {displayCity} health snapshot", snapshot, displayCity);
 
         var jsonLdCrumbs = new List<(string Name, string Path)>
         {
@@ -261,6 +276,8 @@ public static class FindPageRenderer
             </nav>
             <h1>{E(displayCategory)} in {E(displayCity)}</h1>
             <p class="section-sub">{totalCount} registered establishment{(totalCount == 1 ? "" : "s")} with official Fødevarestyrelsen inspection scores.</p>
+            {snapshotHtml}
+            {sortBarHtml}
             <div class="find-results">
             {rowsHtml}
             </div>

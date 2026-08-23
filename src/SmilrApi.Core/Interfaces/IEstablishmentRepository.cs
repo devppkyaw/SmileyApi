@@ -46,12 +46,17 @@ public interface IEstablishmentRepository
     Task<IReadOnlyList<(string Category, int Count)>> GetCategoryCountsAsync(CancellationToken ct = default);
 
     /// <summary>Paginated establishments in the given raw City values AND the given raw Pixibranche value —
-    /// feeds the /find/{area-slug}/{category-slug} hub page.</summary>
-    Task<IReadOnlyList<Establishment>> GetByCitiesAndCategoryAsync(IReadOnlyList<string> cityValues, string category, int page, int limit, CancellationToken ct = default);
+    /// feeds the /find/{area-slug}/{category-slug} hub page. Same sort/hideUnscored semantics as
+    /// GetByCitiesAsync.</summary>
+    Task<IReadOnlyList<Establishment>> GetByCitiesAndCategoryAsync(
+        IReadOnlyList<string> cityValues, string category, int page, int limit,
+        string? sort = null, bool hideUnscored = false, CancellationToken ct = default);
 
     /// <summary>Total establishment count for the given raw City values AND raw Pixibranche value — feeds
-    /// hub-page pagination and the minimum-establishment-count indexing guard.</summary>
-    Task<int> CountByCitiesAndCategoryAsync(IReadOnlyList<string> cityValues, string category, CancellationToken ct = default);
+    /// hub-page pagination and the minimum-establishment-count indexing guard. <paramref name="hideUnscored"/>
+    /// must match whatever was passed to GetByCitiesAndCategoryAsync for the count to agree with the page
+    /// of results being paginated.</summary>
+    Task<int> CountByCitiesAndCategoryAsync(IReadOnlyList<string> cityValues, string category, bool hideUnscored = false, CancellationToken ct = default);
 
     /// <summary>(City, Category, Count) triples across the whole dataset (CVR/City/Pixibranche all
     /// non-null, Pixibranche not a placeholder) — feeds the sitemap's area×category entries and the area
@@ -95,6 +100,12 @@ public interface IEstablishmentRepository
     /// query from GetChangesSummaryAsync: this answers "how healthy is this area's food scene right now",
     /// GetChangesSummaryAsync answers "what changed recently" — different questions, not interchangeable.</summary>
     Task<AreaScoreSnapshot> GetAreaScoreSnapshotAsync(IReadOnlyList<string> cityValues, CancellationToken ct = default);
+
+    /// <summary>Same as GetAreaScoreSnapshotAsync, scoped down to one raw Pixibranche category within the
+    /// given raw City values — feeds the category hub page's health snapshot. A parallel method rather
+    /// than an optional category filter on GetAreaScoreSnapshotAsync, matching this repository's existing
+    /// convention of parallel "...AndCategory" methods (GetByCitiesAsync/GetByCitiesAndCategoryAsync).</summary>
+    Task<AreaScoreSnapshot> GetCategoryScoreSnapshotAsync(IReadOnlyList<string> cityValues, string category, CancellationToken ct = default);
 }
 
 public record SitemapEntry(string Name, string? City, int Navnelbnr, DateTime UpdatedAt, bool HasInspectionDate);
