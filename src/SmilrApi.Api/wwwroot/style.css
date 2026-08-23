@@ -1408,6 +1408,7 @@ a.find-pager-page:hover { background: var(--surface-2); color: var(--accent); te
 .find-recent-row td.biz a { font-weight: 600; color: var(--text); }
 .find-recent-row td.biz a:hover { color: var(--accent); text-decoration: underline; }
 .find-recent-row .addr { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
+.find-recent-changed-on { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
 .find-recent-row td.cat-col { color: var(--text-muted); }
 .find-recent-row td.chev-col { text-align: right; color: var(--accent); }
 .find-recent-row td.chev-col a { color: inherit; }

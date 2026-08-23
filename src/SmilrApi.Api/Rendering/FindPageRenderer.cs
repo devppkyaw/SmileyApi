@@ -705,6 +705,7 @@ public static class FindPageRenderer
                   <span>
                     <a href="{path}">{E(e.Name)}</a>
                     <div class="addr">{E(addressLine)}</div>
+                    <div class="find-recent-changed-on">Changed {FormatDate(row.ChangeDate)}</div>
                   </span>
                 </div>
               </td>
