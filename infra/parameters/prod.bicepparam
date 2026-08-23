@@ -14,6 +14,7 @@ param customDomainName = 'smilrhq.dk'
 
 // Two-phase deploy required — see provisionManagedCertificate's description in main.bicep and the
 // comments in infra/modules/containerapps.bicep for why (Azure requires the hostname registered on the
-// container app before a managed cert can be created for it). Leave false for the deploy that registers
-// the hostname; once that succeeds, flip to true and redeploy to create the cert and switch to HTTPS.
-param provisionManagedCertificate = false
+// container app before a managed cert can be created for it). Phase 1 (customDomainName set, this false)
+// deployed successfully on 2026-08-23 — hostname is registered, confirmed reachable over plain HTTP.
+// Phase 2 (this true): create the managed cert and switch the binding to HTTPS.
+param provisionManagedCertificate = true
