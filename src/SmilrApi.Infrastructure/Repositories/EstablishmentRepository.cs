@@ -145,7 +145,6 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
         {
             "score_asc"  => query.OrderBy(e => e.LatestScore == null ? 1 : 0).ThenBy(e => e.LatestScore).ThenBy(e => e.Name),
             "score_desc" => query.OrderBy(e => e.LatestScore == null ? 1 : 0).ThenByDescending(e => e.LatestScore).ThenBy(e => e.Name),
-            "recent"     => query.OrderBy(e => e.LatestScoreDate == null ? 1 : 0).ThenByDescending(e => e.LatestScoreDate).ThenBy(e => e.Name),
             _            => query.OrderBy(e => e.Name)
         };
 

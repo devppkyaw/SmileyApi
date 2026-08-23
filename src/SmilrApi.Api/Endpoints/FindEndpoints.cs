@@ -148,10 +148,14 @@ public static class FindEndpoints
                     : AreaHubHandlerAsync(segment, page, sort, hideUnscored, http, cache, repo, ct));
     }
 
-    // Whitelist for the area hub's ?sort= query param — anything else (typo, probing, absent) is treated
-    // as "not set" and falls back to the default alphabetical-by-name order. internal so it's directly
-    // unit-testable without going through the full handler/HTTP pipeline.
-    internal static readonly string[] ValidSortValues = ["score_asc", "score_desc", "recent"];
+    // Whitelist for the area/category hub's ?sort= query param — anything else (typo, probing, absent) is
+    // treated as "not set" and falls back to the default alphabetical-by-name order. internal so it's
+    // directly unit-testable without going through the full handler/HTTP pipeline. No "recent" option:
+    // that duplicated the existing dedicated /find/{area}/recently-inspected page — removed in favor of
+    // just showing each row's own last-inspection date (see ResultRowHtml) plus that existing page. A
+    // stray ?sort=recent on an old bookmarked/indexed URL silently normalizes to null (default sort), not
+    // an error.
+    internal static readonly string[] ValidSortValues = ["score_asc", "score_desc"];
 
     internal static string? NormalizeSort(string? sort) => ValidSortValues.Contains(sort) ? sort : null;
 

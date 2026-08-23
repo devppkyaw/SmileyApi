@@ -1235,6 +1235,7 @@ pre:not([class*="language-"]) strong {
 .find-result-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .find-result-name { font-weight: 600; }
 .find-result-address { color: var(--text-muted); font-size: 0.9rem; }
+.find-result-date { color: var(--text-muted); font-size: 0.8rem; }
 .find-result-score { display: inline-flex; align-items: center; gap: 9px; color: var(--text-muted); font-size: 0.9rem; white-space: nowrap; }
 
 .find-pager {

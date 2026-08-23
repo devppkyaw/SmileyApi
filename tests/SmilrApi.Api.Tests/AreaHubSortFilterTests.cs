@@ -7,7 +7,7 @@ public class AreaHubSortFilterTests
     [Theory]
     [InlineData("score_asc", "score_asc")]
     [InlineData("score_desc", "score_desc")]
-    [InlineData("recent", "recent")]
+    [InlineData("recent", null)] // removed — used to duplicate /recently-inspected, now unwhitelisted
     [InlineData("bogus", null)]
     [InlineData(null, null)]
     [InlineData("", null)]

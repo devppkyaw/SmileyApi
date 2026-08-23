@@ -196,10 +196,10 @@ public static class FindPageRenderer
             """;
     }
 
-    /// <summary>Sort/filter bar for the area hub listing — every link is a plain GET to the hub path with
-    /// query params, no JS required. Links intentionally omit any "page=" param: changing sort or the
-    /// unscored filter always resets back to page 1, since the previous page number likely no longer
-    /// makes sense under a different ordering/subset.</summary>
+    /// <summary>Sort/filter bar shared by the area hub and category hub listings — every link is a plain
+    /// GET to the given hub path with query params, no JS required. Links intentionally omit any "page="
+    /// param: changing sort or the unscored filter always resets back to page 1, since the previous page
+    /// number likely no longer makes sense under a different ordering/subset.</summary>
     private static string SortBarHtml(string hubPath, string? activeSort, bool hideUnscored)
     {
         string Href(string? sortValue, bool hideUnscoredValue)
@@ -219,8 +219,7 @@ public static class FindPageRenderer
         var sortLinks = string.Concat(
             SortLink("Name (A–Z)", null),
             SortLink("Best score first", "score_asc"),
-            SortLink("Worst score first", "score_desc"),
-            SortLink("Most recently inspected", "recent"));
+            SortLink("Worst score first", "score_desc"));
 
         var toggleActive = hideUnscored ? " find-sort-link--active" : "";
         var toggleLabel = hideUnscored ? "Show unscored" : "Hide unscored";
@@ -1185,8 +1184,8 @@ public static class FindPageRenderer
     /// <summary>Shared row used by the area hub, category hub, search results, and the CVR
     /// multi-location choice page — deliberately one method so all four keep the same visual language
     /// rather than drifting into near-duplicate implementations. Matches RecentlyInspectedRowHtml's
-    /// icon + colored smiley badge style (below), just without that page's leading rank number / date
-    /// grouping, which don't apply to a plain listing.</summary>
+    /// icon + colored smiley badge style (below), just without that page's leading rank number / full-width
+    /// date-header grouping — the inspection date is still shown, just inline per row rather than grouped.</summary>
     private static string ResultRowHtml(Establishment e)
     {
         var addressLine = string.Join(", ", new[] { e.Address, e.City }.Where(s => !string.IsNullOrWhiteSpace(s)));
@@ -1195,12 +1194,16 @@ public static class FindPageRenderer
             ? $"""<img src="{ScoreImagePath(score.Value, 32)}" alt="Inspection score {score}" width="32" height="32" style="border-radius:4px;object-fit:contain" />"""
             : "";
         var scoreLabel = score is not null ? $"Score {score}/4" : "No score yet";
+        var dateHtml = e.LatestScoreDate is { } d
+            ? $"""<span class="find-result-date">Inspected {FormatDate(d)}</span>"""
+            : "";
         return $"""
             <a class="find-result-row" href="{FindUrlBuilder.DetailPath(e)}">
               {CategoryIconHtml(e.Pixibranche)}
               <span class="find-result-main">
                 <span class="find-result-name">{E(e.Name)}</span>
                 <span class="find-result-address">{E(addressLine)}</span>
+                {dateHtml}
               </span>
               <span class="find-result-score">{badge}<span>{E(scoreLabel)}</span></span>
             </a>
