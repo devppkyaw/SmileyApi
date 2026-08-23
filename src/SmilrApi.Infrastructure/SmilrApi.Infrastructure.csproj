@@ -5,6 +5,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Lets the test project exercise AcsEmailService.ResolveRecipient (internal) directly, without a
+         live ACS connection. -->
+    <InternalsVisibleTo Include="SmilrApi.Api.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Azure.Communication.Email" Version="1.1.0" />
     <PackageReference Include="Hangfire.SqlServer" Version="1.8.23" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.*">

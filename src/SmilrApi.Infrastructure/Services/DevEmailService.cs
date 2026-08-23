@@ -8,9 +8,17 @@ namespace SmilrApi.Infrastructure.Services;
 public class DevEmailService(ILogger<DevEmailService> logger, IConfiguration config) : IEmailService
 {
     private string? Override => config["Email:OverrideAddress"] is { Length: > 0 } v ? v : null;
+    private string? SystemMonitor => config["Email:SystemMonitorAddress"] is { Length: > 0 } v ? v : null;
 
-    private string ToInfo(string originalTo) =>
-        Override is { } ov ? $"REDIRECTED to {ov} (originally {originalTo})" : originalTo;
+    private string ToInfo(string originalTo)
+    {
+        if (Override is { } ov)
+            return $"REDIRECTED to {ov} (originally {originalTo})";
+
+        return SystemMonitor is { } monitor && !string.Equals(monitor, originalTo, StringComparison.OrdinalIgnoreCase)
+            ? $"{originalTo} (cc {monitor})"
+            : originalTo;
+    }
 
     public Task SendVerificationEmailAsync(string to, string verifyUrl, CancellationToken ct = default)
     {

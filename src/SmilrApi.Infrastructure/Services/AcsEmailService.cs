@@ -26,51 +26,71 @@ public class AcsEmailService : IEmailService
         _systemMonitorAddress = config["Email:SystemMonitorAddress"];
     }
 
-    private (string recipient, string banner) ResolveRecipient(string originalTo)
+    /// <summary>
+    /// Where a given send should actually go. When Email:OverrideAddress is set (test/QA use), everything
+    /// is fully redirected there with a banner, same as always — no monitor CC on top, since the override
+    /// address is typically the monitor address anyway and CC'ing it too would just double-send. When
+    /// override is unset (the normal, real-recipient path), the real address is used and
+    /// Email:SystemMonitorAddress (if configured and not identical to the recipient) is CC'd so ops keeps
+    /// visibility into real outgoing mail without needing to hijack every send.
+    /// </summary>
+    internal readonly record struct RecipientPlan(string PrimaryRecipient, string Banner, IReadOnlyList<string> CcAddresses);
+
+    internal RecipientPlan ResolveRecipient(string originalTo)
     {
-        if (string.IsNullOrWhiteSpace(_overrideAddress))
-            return (originalTo, string.Empty);
-        return (_overrideAddress, $"[REDIRECT – originally for: {originalTo}]");
+        if (!string.IsNullOrWhiteSpace(_overrideAddress))
+            return new RecipientPlan(_overrideAddress, $"[REDIRECT – originally for: {originalTo}]", Array.Empty<string>());
+
+        var cc = !string.IsNullOrWhiteSpace(_systemMonitorAddress)
+                 && !string.Equals(_systemMonitorAddress, originalTo, StringComparison.OrdinalIgnoreCase)
+            ? new[] { _systemMonitorAddress! }
+            : Array.Empty<string>();
+
+        return new RecipientPlan(originalTo, string.Empty, cc);
     }
+
+    private static EmailMessage BuildMessage(string sender, RecipientPlan plan, EmailContent content) =>
+        new(senderAddress: sender,
+            recipients: new EmailRecipients(
+                to: new[] { new EmailAddress(plan.PrimaryRecipient) },
+                cc: plan.CcAddresses.Select(a => new EmailAddress(a)),
+                bcc: Array.Empty<EmailAddress>()),
+            content: content);
 
     public async Task SendVerificationEmailAsync(string to, string verifyUrl, CancellationToken ct = default)
     {
-        var (recipient, banner) = ResolveRecipient(to);
-        var message = new EmailMessage(
-            senderAddress: _sender,
-            recipientAddress: recipient,
-            content: new EmailContent("Verify your SmilrApi account")
-            {
-                Html = (banner.Length > 0 ? $"<p><strong>{banner}</strong></p>" : "") +
-                       "<p>Click the link below to verify your email and activate your SmilrApi account:</p>" +
-                       $"<p><a href=\"{verifyUrl}\">{verifyUrl}</a></p>" +
-                       "<p>This link expires in 24 hours.</p>",
-                PlainText = (banner.Length > 0 ? $"{banner}\n\n" : "") +
-                            $"Verify your SmilrApi account:\n{verifyUrl}\n\nThis link expires in 24 hours."
-            });
+        var plan = ResolveRecipient(to);
+        var banner = plan.Banner;
+        var message = BuildMessage(_sender, plan, new EmailContent("Verify your SmilrApi account")
+        {
+            Html = (banner.Length > 0 ? $"<p><strong>{banner}</strong></p>" : "") +
+                   "<p>Click the link below to verify your email and activate your SmilrApi account:</p>" +
+                   $"<p><a href=\"{verifyUrl}\">{verifyUrl}</a></p>" +
+                   "<p>This link expires in 24 hours.</p>",
+            PlainText = (banner.Length > 0 ? $"{banner}\n\n" : "") +
+                        $"Verify your SmilrApi account:\n{verifyUrl}\n\nThis link expires in 24 hours."
+        });
 
         var op = await _client.SendAsync(WaitUntil.Started, message, ct);
-        _logger.LogInformation("Verification email queued to {To}, operationId={Id}", recipient, op.Id);
+        _logger.LogInformation("Verification email queued to {To} (cc={Cc}), operationId={Id}", plan.PrimaryRecipient, string.Join(",", plan.CcAddresses), op.Id);
     }
 
     public async Task SendMagicLinkEmailAsync(string to, string loginUrl, CancellationToken ct = default)
     {
-        var (recipient, banner) = ResolveRecipient(to);
-        var message = new EmailMessage(
-            senderAddress: _sender,
-            recipientAddress: recipient,
-            content: new EmailContent("Your SmilrApi login link")
-            {
-                Html = (banner.Length > 0 ? $"<p><strong>{banner}</strong></p>" : "") +
-                       "<p>Click the link below to sign in to your SmilrApi dashboard:</p>" +
-                       $"<p><a href=\"{loginUrl}\">{loginUrl}</a></p>" +
-                       "<p>This link expires in 15 minutes. If you did not request this, you can ignore this email.</p>",
-                PlainText = (banner.Length > 0 ? $"{banner}\n\n" : "") +
-                            $"Sign in to SmilrApi:\n{loginUrl}\n\nExpires in 15 minutes. Ignore if you did not request this."
-            });
+        var plan = ResolveRecipient(to);
+        var banner = plan.Banner;
+        var message = BuildMessage(_sender, plan, new EmailContent("Your SmilrApi login link")
+        {
+            Html = (banner.Length > 0 ? $"<p><strong>{banner}</strong></p>" : "") +
+                   "<p>Click the link below to sign in to your SmilrApi dashboard:</p>" +
+                   $"<p><a href=\"{loginUrl}\">{loginUrl}</a></p>" +
+                   "<p>This link expires in 15 minutes. If you did not request this, you can ignore this email.</p>",
+            PlainText = (banner.Length > 0 ? $"{banner}\n\n" : "") +
+                        $"Sign in to SmilrApi:\n{loginUrl}\n\nExpires in 15 minutes. Ignore if you did not request this."
+        });
 
         var op = await _client.SendAsync(WaitUntil.Started, message, ct);
-        _logger.LogInformation("Magic link email queued to {To}, operationId={Id}", recipient, op.Id);
+        _logger.LogInformation("Magic link email queued to {To} (cc={Cc}), operationId={Id}", plan.PrimaryRecipient, string.Join(",", plan.CcAddresses), op.Id);
     }
 
     public async Task SendScoreAlertEmailAsync(string to, IReadOnlyList<ScoreAlertItem> changes, CancellationToken ct = default)
@@ -79,7 +99,8 @@ public class AcsEmailService : IEmailService
             ? $"Smilr score update: {changes[0].EstablishmentName}"
             : $"Smilr score update: {changes.Count} establishments changed";
 
-        var (recipient, banner) = ResolveRecipient(to);
+        var plan = ResolveRecipient(to);
+        var banner = plan.Banner;
 
         var rows = string.Concat(changes.Select(c =>
             $"<tr>" +
@@ -92,23 +113,20 @@ public class AcsEmailService : IEmailService
         var plainLines = string.Join("\n", changes.Select(c =>
             $"{c.CvrNumber ?? "—"} | {c.EstablishmentName} | {c.Address ?? "—"} | {c.OldScore} → {c.NewScore}"));
 
-        var message = new EmailMessage(
-            senderAddress: _sender,
-            recipientAddress: recipient,
-            content: new EmailContent(subject)
-            {
-                Html = (banner.Length > 0 ? $"<p><strong>{banner}</strong></p>" : "") +
-                       "<p>The following Smilr scores have changed:</p>" +
-                       "<table border=\"1\" cellpadding=\"6\" cellspacing=\"0\" style=\"border-collapse:collapse\">" +
-                       "<thead><tr><th>CVR</th><th>Name</th><th>Address</th><th>Score change</th></tr></thead>" +
-                       $"<tbody>{rows}</tbody></table>" +
-                       "<p>Log in to your <a href=\"https://smilrhq.dk/dashboard.html\">Smilr dashboard</a> for details.</p>",
-                PlainText = (banner.Length > 0 ? $"{banner}\n\n" : "") +
-                            $"Smilr score updates:\n\n{plainLines}"
-            });
+        var message = BuildMessage(_sender, plan, new EmailContent(subject)
+        {
+            Html = (banner.Length > 0 ? $"<p><strong>{banner}</strong></p>" : "") +
+                   "<p>The following Smilr scores have changed:</p>" +
+                   "<table border=\"1\" cellpadding=\"6\" cellspacing=\"0\" style=\"border-collapse:collapse\">" +
+                   "<thead><tr><th>CVR</th><th>Name</th><th>Address</th><th>Score change</th></tr></thead>" +
+                   $"<tbody>{rows}</tbody></table>" +
+                   "<p>Log in to your <a href=\"https://smilrhq.dk/dashboard.html\">Smilr dashboard</a> for details.</p>",
+            PlainText = (banner.Length > 0 ? $"{banner}\n\n" : "") +
+                        $"Smilr score updates:\n\n{plainLines}"
+        });
 
         var op = await _client.SendAsync(WaitUntil.Started, message, ct);
-        _logger.LogInformation("Score alert email queued to {To} ({Count} changes), operationId={Id}", recipient, changes.Count, op.Id);
+        _logger.LogInformation("Score alert email queued to {To} (cc={Cc}) ({Count} changes), operationId={Id}", plan.PrimaryRecipient, string.Join(",", plan.CcAddresses), changes.Count, op.Id);
     }
 
     public async Task SendSystemScoreDigestAsync(IReadOnlyList<ScoreAlertItem> changes, CancellationToken ct = default)
