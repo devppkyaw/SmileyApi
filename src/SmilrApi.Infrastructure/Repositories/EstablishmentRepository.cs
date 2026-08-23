@@ -126,28 +126,44 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
     }
 
     public async Task<IReadOnlyList<Establishment>> GetByCitiesAsync(
-        IReadOnlyList<string> cityValues, int page, int limit, CancellationToken ct = default)
+        IReadOnlyList<string> cityValues, int page, int limit,
+        string? sort = null, bool hideUnscored = false, CancellationToken ct = default)
     {
         if (cityValues.Count == 0) return [];
         page  = Math.Max(1, page);
         limit = Math.Clamp(limit, 1, 100);
 
-        return await db.Establishments
-            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City))
+        var query = db.Establishments
+            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City));
+
+        if (hideUnscored) query = query.Where(e => e.LatestScore != null);
+
+        // Unscored establishments (LatestScore/LatestScoreDate null) always sort last regardless of
+        // direction — the `== null ? 1 : 0` primary key pushes them to the end before the real ordering
+        // takes over. Name is always the final tie-break so paging stays stable page to page.
+        query = sort switch
+        {
+            "score_asc"  => query.OrderBy(e => e.LatestScore == null ? 1 : 0).ThenBy(e => e.LatestScore).ThenBy(e => e.Name),
+            "score_desc" => query.OrderBy(e => e.LatestScore == null ? 1 : 0).ThenByDescending(e => e.LatestScore).ThenBy(e => e.Name),
+            "recent"     => query.OrderBy(e => e.LatestScoreDate == null ? 1 : 0).ThenByDescending(e => e.LatestScoreDate).ThenBy(e => e.Name),
+            _            => query.OrderBy(e => e.Name)
+        };
+
+        return await query
             .Include(e => e.Inspections.OrderByDescending(i => i.InspectedOn).Take(1))
-            .OrderBy(e => e.Name)
             .Skip((page - 1) * limit)
             .Take(limit)
             .AsNoTracking()
             .ToListAsync(ct);
     }
 
-    public async Task<int> CountByCitiesAsync(IReadOnlyList<string> cityValues, CancellationToken ct = default)
+    public async Task<int> CountByCitiesAsync(IReadOnlyList<string> cityValues, bool hideUnscored = false, CancellationToken ct = default)
     {
         if (cityValues.Count == 0) return 0;
-        return await db.Establishments
-            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City))
-            .CountAsync(ct);
+        var query = db.Establishments
+            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City));
+        if (hideUnscored) query = query.Where(e => e.LatestScore != null);
+        return await query.CountAsync(ct);
     }
 
     public async Task<IReadOnlyList<(string Category, int Count)>> GetCategoryCountsAsync(CancellationToken ct = default)

@@ -26,11 +26,18 @@ public interface IEstablishmentRepository
     Task<IReadOnlyList<(string City, int Count)>> GetCityCountsAsync(CancellationToken ct = default);
 
     /// <summary>Paginated establishments whose City is one of the given raw values (already resolved from
-    /// an area-slug) — feeds the /find/{area-slug}/ hub page.</summary>
-    Task<IReadOnlyList<Establishment>> GetByCitiesAsync(IReadOnlyList<string> cityValues, int page, int limit, CancellationToken ct = default);
+    /// an area-slug) — feeds the /find/{area-slug}/ hub page. <paramref name="sort"/> is one of
+    /// FindEndpoints.ValidSortValues ("score_asc"/"score_desc"/"recent") or null for the default
+    /// alphabetical-by-name order; unscored establishments always sort last regardless of direction.
+    /// <paramref name="hideUnscored"/> excludes establishments with no LatestScore when true.</summary>
+    Task<IReadOnlyList<Establishment>> GetByCitiesAsync(
+        IReadOnlyList<string> cityValues, int page, int limit,
+        string? sort = null, bool hideUnscored = false, CancellationToken ct = default);
 
-    /// <summary>Total establishment count across the given raw City values, for hub-page pagination.</summary>
-    Task<int> CountByCitiesAsync(IReadOnlyList<string> cityValues, CancellationToken ct = default);
+    /// <summary>Total establishment count across the given raw City values, for hub-page pagination.
+    /// <paramref name="hideUnscored"/> must match whatever was passed to GetByCitiesAsync for the count
+    /// to agree with the page of results being paginated.</summary>
+    Task<int> CountByCitiesAsync(IReadOnlyList<string> cityValues, bool hideUnscored = false, CancellationToken ct = default);
 
     /// <summary>Distinct raw Pixibranche values (with counts, most-common first) among establishments that
     /// have a CVR and a non-empty, non-placeholder Pixibranche — source data for the /find category-slug

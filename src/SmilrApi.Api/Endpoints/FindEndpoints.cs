@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using SmilrApi.Api.Rendering;
 using SmilrApi.Core.Interfaces;
@@ -139,15 +140,27 @@ public static class FindEndpoints
         // cases are handled by one route, disambiguated at runtime by whether the segment ends in
         // "-{digits}" (the business-slug-navnelbnr shape).
         find.MapGet("/{segment}", (
-            string segment, int? page, HttpContext http,
+            string segment, int? page, string? sort,
+            [FromQuery(Name = "hide_unscored")] string? hideUnscored, HttpContext http,
             IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct) =>
                 DetailSlugPattern.IsMatch(segment)
                     ? DetailHandlerAsync(segment, http, cache, repo, ct)
-                    : AreaHubHandlerAsync(segment, page, http, cache, repo, ct));
+                    : AreaHubHandlerAsync(segment, page, sort, hideUnscored, http, cache, repo, ct));
     }
 
+    // Whitelist for the area hub's ?sort= query param — anything else (typo, probing, absent) is treated
+    // as "not set" and falls back to the default alphabetical-by-name order. internal so it's directly
+    // unit-testable without going through the full handler/HTTP pipeline.
+    internal static readonly string[] ValidSortValues = ["score_asc", "score_desc", "recent"];
+
+    internal static string? NormalizeSort(string? sort) => ValidSortValues.Contains(sort) ? sort : null;
+
+    // Only the literal "1" opts in — anything else (including "true", "yes", absent) is treated as off,
+    // matching the conservative whitelisting approach used for sort above.
+    internal static bool NormalizeHideUnscored(string? hideUnscored) => hideUnscored == "1";
+
     private static async Task<IResult> AreaHubHandlerAsync(
-        string areaSlug, int? page, HttpContext http,
+        string areaSlug, int? page, string? sort, string? hideUnscoredRaw, HttpContext http,
         IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct)
     {
         var areaIndex = await GetAreaIndexAsync(cache, repo, ct);
@@ -164,17 +177,24 @@ public static class FindEndpoints
             return Results.Redirect(canonicalPath + http.Request.QueryString, permanent: true);
 
         var pageNum = Math.Max(page ?? 1, 1);
-        var totalCount = await repo.CountByCitiesAsync(area.RawCityValues, ct);
-        var establishments = await repo.GetByCitiesAsync(area.RawCityValues, pageNum, HubPageSize, ct);
+        var sortNorm = NormalizeSort(sort);
+        var hideUnscored = NormalizeHideUnscored(hideUnscoredRaw);
+        var totalCount = await repo.CountByCitiesAsync(area.RawCityValues, hideUnscored, ct);
+        var establishments = await repo.GetByCitiesAsync(area.RawCityValues, pageNum, HubPageSize, sortNorm, hideUnscored, ct);
         var categoriesInArea = await GetCategoriesInAreaAsync(area.RawCityValues, cache, repo, ct);
 
-        // Page 1 is indexable once the area meets CategorySlugThreshold; page 2+ is noindex,follow —
-        // same philosophy as the category-hub/recently-inspected/changes pages below.
-        var noindex = pageNum > 1 || totalCount < CategorySlugThreshold;
+        // Page 1 is indexable once the area meets CategorySlugThreshold; page 2+ is noindex,follow — same
+        // philosophy as the category-hub/recently-inspected/changes pages below. A non-default sort or
+        // the unscored filter also forces noindex: these are alternate orderings/subsets of the same
+        // canonical page (which always points at the plain, unsorted/unfiltered URL — see
+        // FindPageRenderer.AreaHubPage), not distinct content worth their own index entry, but
+        // noindex,follow still lets crawlers reach the canonical page through the on-page links.
+        var noindex = pageNum > 1 || totalCount < CategorySlugThreshold || sortNorm is not null || hideUnscored;
 
         return Results.Content(
             FindPageRenderer.AreaHubPage(
-                area.DisplaySpelling, pageNum, HubPageSize, totalCount, noindex, establishments, categoriesInArea),
+                area.DisplaySpelling, pageNum, HubPageSize, totalCount, noindex, sortNorm, hideUnscored,
+                establishments, categoriesInArea),
             "text/html");
     }
 
@@ -268,7 +288,7 @@ public static class FindEndpoints
                 FindPageRenderer.NotFoundPage($"No inspection records found for '{areaSlug}'."),
                 "text/html", statusCode: 404);
 
-        var areaTotalCount = await repo.CountByCitiesAsync(area.RawCityValues, ct);
+        var areaTotalCount = await repo.CountByCitiesAsync(area.RawCityValues, ct: ct);
         var establishments = await repo.GetByCitiesOrderedByLatestInspectionAsync(area.RawCityValues, pageNum, RecentlyInspectedPageSize, ct);
         var categoriesInArea = await GetCategoriesInAreaAsync(area.RawCityValues, cache, repo, ct);
 

@@ -106,6 +106,7 @@ public static class FindPageRenderer
 
     public static string AreaHubPage(
         string displaySpelling, int page, int pageSize, int totalCount, bool noindex,
+        string? sort, bool hideUnscored,
         IReadOnlyList<Establishment> establishments,
         IReadOnlyList<(string Category, string CategorySlug, int Count)> categoriesInArea)
     {
@@ -116,9 +117,19 @@ public static class FindPageRenderer
         var hasMore = (long)page * pageSize < totalCount;
         var hubPath = FindUrlBuilder.HubPath(displaySpelling);
         var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
-        var pagerHtml = AreaHubPagerHtml($"{hubPath}?", page, totalPages, hasMore);
-        var (prevPath, nextPath) = PagerLinks($"{hubPath}?", page, hasMore);
+
+        // The pager stays unaware of sort/hide_unscored — it just builds "page=N" off whatever prefix
+        // it's handed — so preserving the active sort/filter across pagination is entirely a matter of
+        // composing that prefix here, once.
+        var extraQs = string.Concat(
+            sort is not null ? $"sort={sort}&" : "",
+            hideUnscored ? "hide_unscored=1&" : "");
+        var hubQueryPrefix = $"{hubPath}?{extraQs}";
+
+        var pagerHtml = AreaHubPagerHtml(hubQueryPrefix, page, totalPages, hasMore);
+        var (prevPath, nextPath) = PagerLinks(hubQueryPrefix, page, hasMore);
         var categoryNavHtml = CategoryNavHtml(displaySpelling, categoriesInArea);
+        var sortBarHtml = SortBarHtml(hubPath, sort, hideUnscored);
 
         var jsonLdCrumbs = new List<(string Name, string Path)>
         {
@@ -137,6 +148,7 @@ public static class FindPageRenderer
               <a href="{FindUrlBuilder.ChangesPath(displaySpelling)}" class="city-tag">Recent score changes in {E(displaySpelling)} →</a>
             </div>
             {categoryNavHtml}
+            {sortBarHtml}
             <div class="find-results">
             {rowsHtml}
             </div>
@@ -152,6 +164,46 @@ public static class FindPageRenderer
             extraHeadHtml: BreadcrumbJsonLd(jsonLdCrumbs) + ItemListJsonLd(establishments),
             prevPath: prevPath,
             nextPath: nextPath);
+    }
+
+    /// <summary>Sort/filter bar for the area hub listing — every link is a plain GET to the hub path with
+    /// query params, no JS required. Links intentionally omit any "page=" param: changing sort or the
+    /// unscored filter always resets back to page 1, since the previous page number likely no longer
+    /// makes sense under a different ordering/subset.</summary>
+    private static string SortBarHtml(string hubPath, string? activeSort, bool hideUnscored)
+    {
+        string Href(string? sortValue, bool hideUnscoredValue)
+        {
+            var qs = string.Concat(
+                sortValue is not null ? $"sort={sortValue}&" : "",
+                hideUnscoredValue ? "hide_unscored=1&" : "");
+            return qs.Length == 0 ? hubPath : $"{hubPath}?{qs.TrimEnd('&')}";
+        }
+
+        string SortLink(string label, string? sortValue)
+        {
+            var active = sortValue == activeSort ? " find-sort-link--active" : "";
+            return $"""<a class="find-sort-link{active}" href="{Href(sortValue, hideUnscored)}">{label}</a>""";
+        }
+
+        var sortLinks = string.Concat(
+            SortLink("Name (A–Z)", null),
+            SortLink("Best score first", "score_asc"),
+            SortLink("Worst score first", "score_desc"),
+            SortLink("Most recently inspected", "recent"));
+
+        var toggleActive = hideUnscored ? " find-sort-link--active" : "";
+        var toggleLabel = hideUnscored ? "Show unscored" : "Hide unscored";
+        var hideToggle = $"""<a class="find-sort-link{toggleActive}" href="{Href(activeSort, !hideUnscored)}">{toggleLabel}</a>""";
+
+        return $"""
+            <div class="find-sort-bar">
+              <span class="find-sort-bar-label">Sort:</span>
+              {sortLinks}
+              <span class="find-sort-bar-sep" aria-hidden="true"></span>
+              {hideToggle}
+            </div>
+            """;
     }
 
     public static string CategoryHubPage(

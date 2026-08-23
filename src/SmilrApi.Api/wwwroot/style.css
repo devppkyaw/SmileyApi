@@ -1153,6 +1153,39 @@ pre:not([class*="language-"]) strong {
   font-size: 0.95rem;
 }
 
+.find-sort-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0 4px;
+  font-size: 0.85rem;
+}
+
+.find-sort-bar-label {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.find-sort-bar-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--border);
+}
+
+.find-sort-link {
+  color: var(--text-muted);
+  padding: 4px 2px;
+}
+
+.find-sort-link:hover { color: var(--accent); text-decoration: underline; }
+
+.find-sort-link--active {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 .find-results {
   display: flex;
   flex-direction: column;
