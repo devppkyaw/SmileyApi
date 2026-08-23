@@ -47,6 +47,9 @@ param adminKey string = ''
 @description('Custom domain to bind to the Container App (e.g. "smilrhq.dk"). Left empty until DNS validation records exist externally — see infra/parameters/prod.bicepparam.')
 param customDomainName string = ''
 
+@description('Phase 2 of custom domain setup: create the managed TLS certificate for customDomainName and bind it. Must stay false on the first deploy after setting customDomainName (phase 1, just registers the hostname), then true on a follow-up deploy. See infra/parameters/prod.bicepparam and infra/modules/containerapps.bicep for why.')
+param provisionManagedCertificate bool = false
+
 
 // A short deterministic suffix scoped to this resource group avoids global naming conflicts
 // for App Service (*.azurewebsites.net) and Key Vault (globally unique).
@@ -113,6 +116,7 @@ module containerApp 'modules/containerapps.bicep' = {
     environment: environment
     imageName: imageName
     customDomainName: customDomainName
+    provisionManagedCertificate: provisionManagedCertificate
   }
 }
 
