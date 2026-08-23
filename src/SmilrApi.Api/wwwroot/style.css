@@ -341,6 +341,13 @@ section { padding: 80px 0; }
 }
 .city-tag:hover { background: var(--accent-dim); border-color: var(--accent); }
 
+.city-tag-count { opacity: 0.65; font-size: 0.85em; margin-left: 2px; }
+
+/* Heavier weight for a .city-tag representing a disproportionately common option (e.g. the dominant
+   category in an area's "Browse by category" list) — a border/weight change rather than literal font-size
+   scaling, so tap targets and wrapping stay consistent across the row. */
+.city-tag--featured { border-color: var(--accent); font-weight: 600; }
+
 /* ─── Examples ────────────────────────────────────────────── */
 
 .examples { background: var(--bg); }
@@ -1153,6 +1160,57 @@ pre:not([class*="language-"]) strong {
   font-size: 0.95rem;
 }
 
+.find-category-nav { margin: 20px 0; }
+
+.find-category-nav-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.find-category-nav-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.find-sort-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0 4px;
+  font-size: 0.85rem;
+}
+
+.find-sort-bar-label {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.find-sort-bar-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--border);
+}
+
+.find-sort-link {
+  color: var(--text-muted);
+  padding: 4px 2px;
+}
+
+.find-sort-link:hover { color: var(--accent); text-decoration: underline; }
+
+.find-sort-link--active {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 .find-results {
   display: flex;
   flex-direction: column;
@@ -1162,7 +1220,7 @@ pre:not([class*="language-"]) strong {
 
 .find-result-row {
   display: grid;
-  grid-template-columns: 2fr 2fr 1fr;
+  grid-template-columns: auto 2fr 1fr;
   gap: 12px;
   align-items: center;
   padding: 14px 16px;
@@ -1174,13 +1232,57 @@ pre:not([class*="language-"]) strong {
 
 .find-result-row:hover { border-color: var(--accent); text-decoration: none; }
 
+.find-result-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .find-result-name { font-weight: 600; }
-.find-result-address, .find-result-score { color: var(--text-muted); font-size: 0.9rem; }
+.find-result-address { color: var(--text-muted); font-size: 0.9rem; }
+.find-result-date { color: var(--text-muted); font-size: 0.8rem; }
+.find-result-score { display: inline-flex; align-items: center; gap: 9px; color: var(--text-muted); font-size: 0.9rem; white-space: nowrap; }
 
 .find-pager {
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 12px;
   margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+/* Numbered pagination (area hub only — the one /find listing with enough pages, up to ~90+ for a
+   large city, that jump-to-page links earn their keep over the other pages' plain Prev/Next). */
+.find-pager-numbers {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.find-pager-page {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+a.find-pager-page:hover { background: var(--surface-2); color: var(--accent); text-decoration: none; }
+
+.find-pager-page--current {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.find-pager-ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  color: var(--text-muted);
 }
 
 .find-detail {
@@ -1306,6 +1408,7 @@ pre:not([class*="language-"]) strong {
 .find-recent-row td.biz a { font-weight: 600; color: var(--text); }
 .find-recent-row td.biz a:hover { color: var(--accent); text-decoration: underline; }
 .find-recent-row .addr { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
+.find-recent-changed-on { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
 .find-recent-row td.cat-col { color: var(--text-muted); }
 .find-recent-row td.chev-col { text-align: right; color: var(--accent); }
 .find-recent-row td.chev-col a { color: inherit; }

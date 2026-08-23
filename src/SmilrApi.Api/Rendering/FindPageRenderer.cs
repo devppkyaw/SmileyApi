@@ -106,6 +106,7 @@ public static class FindPageRenderer
 
     public static string AreaHubPage(
         string displaySpelling, int page, int pageSize, int totalCount, bool noindex,
+        string? sort, bool hideUnscored, AreaScoreSnapshot snapshot,
         IReadOnlyList<Establishment> establishments,
         IReadOnlyList<(string Category, string CategorySlug, int Count)> categoriesInArea)
     {
@@ -115,18 +116,41 @@ public static class FindPageRenderer
 
         var hasMore = (long)page * pageSize < totalCount;
         var hubPath = FindUrlBuilder.HubPath(displaySpelling);
-        var pagerHtml = BuildPager($"{hubPath}?", page, hasMore);
-        var (prevPath, nextPath) = PagerLinks($"{hubPath}?", page, hasMore);
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+        // The pager stays unaware of sort/hide_unscored — it just builds "page=N" off whatever prefix
+        // it's handed — so preserving the active sort/filter across pagination is entirely a matter of
+        // composing that prefix here, once.
+        var extraQs = string.Concat(
+            sort is not null ? $"sort={sort}&" : "",
+            hideUnscored ? "hide_unscored=1&" : "");
+        var hubQueryPrefix = $"{hubPath}?{extraQs}";
+
+        var pagerHtml = AreaHubPagerHtml(hubQueryPrefix, page, totalPages, hasMore);
+        var (prevPath, nextPath) = PagerLinks(hubQueryPrefix, page, hasMore);
         var categoryNavHtml = CategoryNavHtml(displaySpelling, categoriesInArea);
+        var sortBarHtml = SortBarHtml(hubPath, sort, hideUnscored);
+        var snapshotHtml = HealthSnapshotHtml($"{displaySpelling} health snapshot", snapshot, displaySpelling);
+
+        var jsonLdCrumbs = new List<(string Name, string Path)>
+        {
+            ("Find", "/find"),
+            (displaySpelling, hubPath)
+        };
 
         var body = $"""
+            <nav aria-label="breadcrumb" style="margin-bottom:16px;font-size:0.9rem">
+              <a href="/find">Find</a> › {E(displaySpelling)}
+            </nav>
             <h1>Restaurants &amp; food businesses in {E(displaySpelling)}</h1>
             <p class="section-sub">{totalCount} registered establishment{(totalCount == 1 ? "" : "s")} with official Fødevarestyrelsen inspection scores.</p>
+            {snapshotHtml}
             <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px">
               <a href="{FindUrlBuilder.RecentlyInspectedPath(displaySpelling)}" class="city-tag">Recently inspected in {E(displaySpelling)} →</a>
               <a href="{FindUrlBuilder.ChangesPath(displaySpelling)}" class="city-tag">Recent score changes in {E(displaySpelling)} →</a>
             </div>
             {categoryNavHtml}
+            {sortBarHtml}
             <div class="find-results">
             {rowsHtml}
             </div>
@@ -139,13 +163,86 @@ public static class FindPageRenderer
             canonicalPath: hubPath,
             bodyHtml: body,
             noindex: noindex,
+            extraHeadHtml: BreadcrumbJsonLd(jsonLdCrumbs) + ItemListJsonLd(establishments),
             prevPath: prevPath,
             nextPath: nextPath);
     }
 
+    /// <summary>"Health snapshot" stat strip — a live score-distribution stat ("X% currently have the top
+    /// smiley"), reusing the .find-stats-card shape already used by RecentlyInspectedPage/ChangesPage/
+    /// DetailPage. Shared by the area hub (whole-area snapshot) and category hub (area×category
+    /// snapshot) — <paramref name="label"/> and the CTA text are supplied by the caller so each can word
+    /// it correctly (e.g. "Aarhus health snapshot" vs. "Restauranter in Aarhus health snapshot"); the CTA
+    /// link itself always points at the area's own /changes page since no category-scoped changes page
+    /// exists. Renders nothing if there are no scored establishments in scope yet, rather than showing a
+    /// meaningless 0%.</summary>
+    private static string HealthSnapshotHtml(string label, AreaScoreSnapshot snapshot, string displaySpelling)
+    {
+        if (snapshot.TotalScored == 0) return "";
+
+        return $"""
+            <div class="find-stats-card">
+              <div class="find-stats-label">{E(label)}</div>
+              <div class="find-stats-grid">
+                <div class="find-stat">
+                  <div class="find-stat-value">{snapshot.TopSharePercent.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)}%</div>
+                  <div class="find-stat-label">have the top smiley score</div>
+                </div>
+                <div class="find-stat">
+                  <div class="find-stat-value">{snapshot.TopScoreCount}</div>
+                  <div class="find-stat-label">of {snapshot.TotalScored} scored establishments</div>
+                </div>
+              </div>
+              <div style="margin-top:14px">
+                <a href="{FindUrlBuilder.ChangesPath(displaySpelling)}" class="city-tag">See recent score changes in {E(displaySpelling)} →</a>
+              </div>
+            </div>
+            """;
+    }
+
+    /// <summary>Sort/filter bar shared by the area hub and category hub listings — every link is a plain
+    /// GET to the given hub path with query params, no JS required. Links intentionally omit any "page="
+    /// param: changing sort or the unscored filter always resets back to page 1, since the previous page
+    /// number likely no longer makes sense under a different ordering/subset.</summary>
+    private static string SortBarHtml(string hubPath, string? activeSort, bool hideUnscored)
+    {
+        string Href(string? sortValue, bool hideUnscoredValue)
+        {
+            var qs = string.Concat(
+                sortValue is not null ? $"sort={sortValue}&" : "",
+                hideUnscoredValue ? "hide_unscored=1&" : "");
+            return qs.Length == 0 ? hubPath : $"{hubPath}?{qs.TrimEnd('&')}";
+        }
+
+        string SortLink(string label, string? sortValue)
+        {
+            var active = sortValue == activeSort ? " find-sort-link--active" : "";
+            return $"""<a class="find-sort-link{active}" href="{Href(sortValue, hideUnscored)}">{label}</a>""";
+        }
+
+        var sortLinks = string.Concat(
+            SortLink("Name (A–Z)", null),
+            SortLink("Best score first", "score_asc"),
+            SortLink("Worst score first", "score_desc"));
+
+        var toggleActive = hideUnscored ? " find-sort-link--active" : "";
+        var toggleLabel = hideUnscored ? "Show unscored" : "Hide unscored";
+        var hideToggle = $"""<a class="find-sort-link{toggleActive}" href="{Href(activeSort, !hideUnscored)}">{toggleLabel}</a>""";
+
+        return $"""
+            <div class="find-sort-bar">
+              <span class="find-sort-bar-label">Sort:</span>
+              {sortLinks}
+              <span class="find-sort-bar-sep" aria-hidden="true"></span>
+              {hideToggle}
+            </div>
+            """;
+    }
+
     public static string CategoryHubPage(
         string displayCity, string displayCategory, string areaSlug, string categorySlug,
-        int page, int pageSize, int totalCount, bool noindex, IReadOnlyList<Establishment> establishments)
+        int page, int pageSize, int totalCount, bool noindex, string? sort, bool hideUnscored,
+        AreaScoreSnapshot snapshot, IReadOnlyList<Establishment> establishments)
     {
         var rowsHtml = establishments.Count == 0
             ? "<p>No establishments found for this category in this area yet.</p>"
@@ -153,8 +250,18 @@ public static class FindPageRenderer
 
         var hasMore = (long)page * pageSize < totalCount;
         var categoryPath = FindUrlBuilder.CategoryHubPath(displayCity, displayCategory);
-        var pagerHtml = BuildPager($"{categoryPath}?", page, hasMore);
-        var (prevPath, nextPath) = PagerLinks($"{categoryPath}?", page, hasMore);
+
+        // Same composed-prefix technique as the area hub: BuildPager/PagerLinks stay unaware of
+        // sort/hide_unscored, they just build "page=N" off whatever prefix they're handed.
+        var extraQs = string.Concat(
+            sort is not null ? $"sort={sort}&" : "",
+            hideUnscored ? "hide_unscored=1&" : "");
+        var categoryQueryPrefix = $"{categoryPath}?{extraQs}";
+
+        var pagerHtml = BuildPager(categoryQueryPrefix, page, hasMore);
+        var (prevPath, nextPath) = PagerLinks(categoryQueryPrefix, page, hasMore);
+        var sortBarHtml = SortBarHtml(categoryPath, sort, hideUnscored);
+        var snapshotHtml = HealthSnapshotHtml($"{displayCategory} in {displayCity} health snapshot", snapshot, displayCity);
 
         var jsonLdCrumbs = new List<(string Name, string Path)>
         {
@@ -169,6 +276,8 @@ public static class FindPageRenderer
             </nav>
             <h1>{E(displayCategory)} in {E(displayCity)}</h1>
             <p class="section-sub">{totalCount} registered establishment{(totalCount == 1 ? "" : "s")} with official Fødevarestyrelsen inspection scores.</p>
+            {snapshotHtml}
+            {sortBarHtml}
             <div class="find-results">
             {rowsHtml}
             </div>
@@ -186,18 +295,28 @@ public static class FindPageRenderer
             nextPath: nextPath);
     }
 
+    /// <summary>"Browse by category" pills, shared by the area hub and recently-inspected pages.
+    /// categoriesInArea is already ordered by count desc (GetCategoriesInAreaAsync), so the dominant
+    /// category naturally renders first; "featured" (visually heavier) styling is layered on top for
+    /// categories at least half as common as the top one, rather than re-deriving the order here.</summary>
     private static string CategoryNavHtml(
         string displayCity, IReadOnlyList<(string Category, string CategorySlug, int Count)> categoriesInArea)
     {
         if (categoriesInArea.Count == 0) return "";
 
+        var maxCount = categoriesInArea[0].Count;
         var links = categoriesInArea.Select(c =>
-            $"""<a href="{FindUrlBuilder.CategoryHubPath(displayCity, c.Category)}">{E(c.Category)} ({c.Count})</a>""");
+        {
+            var featured = maxCount > 0 && c.Count >= maxCount * 0.5 ? " city-tag--featured" : "";
+            return $"""<a href="{FindUrlBuilder.CategoryHubPath(displayCity, c.Category)}" class="city-tag{featured}">{E(c.Category)} <span class="city-tag-count">{c.Count}</span></a>""";
+        });
 
         return $"""
             <div class="find-category-nav">
-              <span class="find-category-nav-label">Browse by category:</span>
+              <span class="find-category-nav-label">Browse by category</span>
+              <div class="find-category-nav-pills">
               {string.Join("\n  ", links)}
+              </div>
             </div>
             """;
     }
@@ -586,6 +705,7 @@ public static class FindPageRenderer
                   <span>
                     <a href="{path}">{E(e.Name)}</a>
                     <div class="addr">{E(addressLine)}</div>
+                    <div class="find-recent-changed-on">Changed {FormatDate(row.ChangeDate)}</div>
                   </span>
                 </div>
               </td>
@@ -942,6 +1062,29 @@ public static class FindPageRenderer
         return $"""<script type="application/ld+json">{JsonSerializer.Serialize(schema)}</script>""";
     }
 
+    /// <summary>Renders a schema.org ItemList JSON-LD block for the establishments shown on the current
+    /// page of a listing — position is per-page (1..N of what's rendered), matching how ItemList is
+    /// conventionally used for a paginated result set rather than a global cross-page rank.</summary>
+    private static string ItemListJsonLd(IReadOnlyList<Establishment> establishments)
+    {
+        var itemListElement = establishments.Select((e, i) => new Dictionary<string, object?>
+        {
+            ["@type"] = "ListItem",
+            ["position"] = i + 1,
+            ["url"] = SiteOrigin + FindUrlBuilder.DetailPath(e),
+            ["name"] = e.Name
+        });
+
+        var schema = new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "ItemList",
+            ["itemListElement"] = itemListElement
+        };
+
+        return $"""<script type="application/ld+json">{JsonSerializer.Serialize(schema)}</script>""";
+    }
+
     public static string NotFoundPage(string message)
     {
         var body = $"""
@@ -1056,15 +1199,31 @@ public static class FindPageRenderer
         return sb.ToString();
     }
 
+    /// <summary>Shared row used by the area hub, category hub, search results, and the CVR
+    /// multi-location choice page — deliberately one method so all four keep the same visual language
+    /// rather than drifting into near-duplicate implementations. Matches RecentlyInspectedRowHtml's
+    /// icon + colored smiley badge style (below), just without that page's leading rank number / full-width
+    /// date-header grouping — the inspection date is still shown, just inline per row rather than grouped.</summary>
     private static string ResultRowHtml(Establishment e)
     {
         var addressLine = string.Join(", ", new[] { e.Address, e.City }.Where(s => !string.IsNullOrWhiteSpace(s)));
-        var scoreLabel = e.LatestScore is not null ? $"Score {e.LatestScore}/4" : "No score yet";
+        var score = e.LatestScore;
+        var badge = score is not null
+            ? $"""<img src="{ScoreImagePath(score.Value, 32)}" alt="Inspection score {score}" width="32" height="32" style="border-radius:4px;object-fit:contain" />"""
+            : "";
+        var scoreLabel = score is not null ? $"Score {score}/4" : "No score yet";
+        var dateHtml = e.LatestScoreDate is { } d
+            ? $"""<span class="find-result-date">Inspected {FormatDate(d)}</span>"""
+            : "";
         return $"""
             <a class="find-result-row" href="{FindUrlBuilder.DetailPath(e)}">
-              <span class="find-result-name">{E(e.Name)}</span>
-              <span class="find-result-address">{E(addressLine)}</span>
-              <span class="find-result-score">{E(scoreLabel)}</span>
+              {CategoryIconHtml(e.Pixibranche)}
+              <span class="find-result-main">
+                <span class="find-result-name">{E(e.Name)}</span>
+                <span class="find-result-address">{E(addressLine)}</span>
+                {dateHtml}
+              </span>
+              <span class="find-result-score">{badge}<span>{E(scoreLabel)}</span></span>
             </a>
             """;
     }
@@ -1097,6 +1256,63 @@ public static class FindPageRenderer
         page > 1 ? $"{basePathWithTrailingSeparator}page={page - 1}" : null,
         hasMore ? $"{basePathWithTrailingSeparator}page={page + 1}" : null
     );
+
+    /// <summary>Pure page-range calculator for numbered pagination: current page ± <paramref name="window"/>,
+    /// always including page 1 and the last page, with a null entry marking a gap (rendered as an
+    /// ellipsis). internal so it's directly unit-testable without going through HTML rendering.</summary>
+    internal static IReadOnlyList<int?> BuildPageNumbers(int currentPage, int totalPages, int window = 2)
+    {
+        if (totalPages <= 1) return [];
+
+        var pages = new SortedSet<int> { 1, totalPages };
+        for (var p = currentPage - window; p <= currentPage + window; p++)
+            if (p >= 1 && p <= totalPages) pages.Add(p);
+
+        var result = new List<int?>();
+        int? prev = null;
+        foreach (var p in pages)
+        {
+            if (prev is not null)
+            {
+                var gap = p - prev.Value;
+                if (gap == 2) result.Add(prev.Value + 1);  // exactly one hidden page — just show it, an
+                                                            // ellipsis standing in for one page saves no
+                                                            // space and reads as broken
+                else if (gap > 2) result.Add(null);        // two+ hidden pages — collapse to an ellipsis
+            }
+            result.Add(p);
+            prev = p;
+        }
+        return result;
+    }
+
+    private static string NumberedPagerHtml(string basePathWithTrailingSeparator, int page, int totalPages)
+    {
+        var numbers = BuildPageNumbers(page, totalPages);
+        if (numbers.Count == 0) return "";
+
+        var items = numbers.Select(n => n is null
+            ? """<span class="find-pager-ellipsis">…</span>"""
+            : n == page
+                ? $"""<span class="find-pager-page find-pager-page--current" aria-current="page">{n}</span>"""
+                : $"""<a class="find-pager-page" href="{basePathWithTrailingSeparator}page={n}">{n}</a>""");
+
+        return $"""<div class="find-pager-numbers">{string.Join("", items)}</div>""";
+    }
+
+    /// <summary>Prev | numbered pages | Next pager for the area hub — the one /find listing with enough
+    /// pages (up to ~90+ for a large city) that jump-to-page links earn their keep over the plain
+    /// Prev/Next BuildPager renders for the other, smaller-paginated /find pages.</summary>
+    private static string AreaHubPagerHtml(string basePathWithTrailingSeparator, int page, int totalPages, bool hasMore)
+    {
+        var (prevUrl, nextUrl) = PagerLinks(basePathWithTrailingSeparator, page, hasMore);
+        var numbersHtml = NumberedPagerHtml(basePathWithTrailingSeparator, page, totalPages);
+        if (prevUrl is null && nextUrl is null && numbersHtml.Length == 0) return "";
+
+        var prev = prevUrl is not null ? $"""<a href="{prevUrl}">← Previous</a>""" : "<span></span>";
+        var next = nextUrl is not null ? $"""<a href="{nextUrl}">Next →</a>""" : "<span></span>";
+        return $"""<div class="find-pager">{prev}{numbersHtml}{next}</div>""";
+    }
 
     private static string ScoreBadgeHtml(int? score, string? virksomhedsType)
     {
