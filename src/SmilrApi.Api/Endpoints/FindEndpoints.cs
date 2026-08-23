@@ -182,6 +182,7 @@ public static class FindEndpoints
         var totalCount = await repo.CountByCitiesAsync(area.RawCityValues, hideUnscored, ct);
         var establishments = await repo.GetByCitiesAsync(area.RawCityValues, pageNum, HubPageSize, sortNorm, hideUnscored, ct);
         var categoriesInArea = await GetCategoriesInAreaAsync(area.RawCityValues, cache, repo, ct);
+        var snapshot = await repo.GetAreaScoreSnapshotAsync(area.RawCityValues, ct);
 
         // Page 1 is indexable once the area meets CategorySlugThreshold; page 2+ is noindex,follow — same
         // philosophy as the category-hub/recently-inspected/changes pages below. A non-default sort or
@@ -194,7 +195,7 @@ public static class FindEndpoints
         return Results.Content(
             FindPageRenderer.AreaHubPage(
                 area.DisplaySpelling, pageNum, HubPageSize, totalCount, noindex, sortNorm, hideUnscored,
-                establishments, categoriesInArea),
+                snapshot, establishments, categoriesInArea),
             "text/html");
     }
 

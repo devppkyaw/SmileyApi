@@ -89,6 +89,12 @@ public interface IEstablishmentRepository
     /// the /changes sitemap entries' per-area indexability check.</summary>
     Task<IReadOnlyList<(string City, int Count)>> GetChangeCountsByCityAsync(
         DateOnly windowStart, CancellationToken ct = default);
+
+    /// <summary>Live score-distribution snapshot for the given raw City values — feeds the area hub
+    /// page's "area health snapshot" stat ("X% currently have the top smiley"). Deliberately a separate
+    /// query from GetChangesSummaryAsync: this answers "how healthy is this area's food scene right now",
+    /// GetChangesSummaryAsync answers "what changed recently" — different questions, not interchangeable.</summary>
+    Task<AreaScoreSnapshot> GetAreaScoreSnapshotAsync(IReadOnlyList<string> cityValues, CancellationToken ct = default);
 }
 
 public record SitemapEntry(string Name, string? City, int Navnelbnr, DateTime UpdatedAt, bool HasInspectionDate);
@@ -98,3 +104,13 @@ public record RecentlyInspectedSummary(int TotalWithInspection, DateOnly? Latest
 public record ScoreChangeRow(Establishment Establishment, int PreviousScore, int NewScore, DateOnly ChangeDate);
 
 public record ChangesSummary(int TotalChanges, int ImprovedCount, int DowngradedCount, DateOnly? MostRecentChangeDate);
+
+/// <summary>TopScoreCount / TotalScored of establishments currently holding the best possible score
+/// (LatestScore == 1 — lower is better, per ScoreChangeCalculator's convention). TotalScored deliberately
+/// excludes establishments with no recorded score yet ("kontrol på vej"), since including them would
+/// dilute the percentage with businesses that simply haven't been inspected, misrepresenting how healthy
+/// the area's already-inspected businesses actually are.</summary>
+public record AreaScoreSnapshot(int TotalScored, int TopScoreCount)
+{
+    public double TopSharePercent => TotalScored == 0 ? 0 : Math.Round(100.0 * TopScoreCount / TotalScored, 1);
+}

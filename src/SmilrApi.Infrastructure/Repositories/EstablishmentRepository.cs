@@ -321,4 +321,16 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
             .Select(g => (City: g.Key, Count: g.Count()))
             .ToList();
     }
+
+    public async Task<AreaScoreSnapshot> GetAreaScoreSnapshotAsync(IReadOnlyList<string> cityValues, CancellationToken ct = default)
+    {
+        if (cityValues.Count == 0) return new AreaScoreSnapshot(0, 0);
+
+        var scored = db.Establishments
+            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City) && e.LatestScore != null);
+
+        var total = await scored.CountAsync(ct);
+        var top = await scored.CountAsync(e => e.LatestScore == 1, ct);
+        return new AreaScoreSnapshot(total, top);
+    }
 }

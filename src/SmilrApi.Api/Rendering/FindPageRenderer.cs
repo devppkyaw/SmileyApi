@@ -106,7 +106,7 @@ public static class FindPageRenderer
 
     public static string AreaHubPage(
         string displaySpelling, int page, int pageSize, int totalCount, bool noindex,
-        string? sort, bool hideUnscored,
+        string? sort, bool hideUnscored, AreaScoreSnapshot snapshot,
         IReadOnlyList<Establishment> establishments,
         IReadOnlyList<(string Category, string CategorySlug, int Count)> categoriesInArea)
     {
@@ -130,6 +130,7 @@ public static class FindPageRenderer
         var (prevPath, nextPath) = PagerLinks(hubQueryPrefix, page, hasMore);
         var categoryNavHtml = CategoryNavHtml(displaySpelling, categoriesInArea);
         var sortBarHtml = SortBarHtml(hubPath, sort, hideUnscored);
+        var snapshotHtml = AreaScoreSnapshotHtml(displaySpelling, snapshot);
 
         var jsonLdCrumbs = new List<(string Name, string Path)>
         {
@@ -143,6 +144,7 @@ public static class FindPageRenderer
             </nav>
             <h1>Restaurants &amp; food businesses in {E(displaySpelling)}</h1>
             <p class="section-sub">{totalCount} registered establishment{(totalCount == 1 ? "" : "s")} with official Fødevarestyrelsen inspection scores.</p>
+            {snapshotHtml}
             <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px">
               <a href="{FindUrlBuilder.RecentlyInspectedPath(displaySpelling)}" class="city-tag">Recently inspected in {E(displaySpelling)} →</a>
               <a href="{FindUrlBuilder.ChangesPath(displaySpelling)}" class="city-tag">Recent score changes in {E(displaySpelling)} →</a>
@@ -164,6 +166,34 @@ public static class FindPageRenderer
             extraHeadHtml: BreadcrumbJsonLd(jsonLdCrumbs) + ItemListJsonLd(establishments),
             prevPath: prevPath,
             nextPath: nextPath);
+    }
+
+    /// <summary>"Area health snapshot" stat strip — a live score-distribution stat ("X% currently have
+    /// the top smiley"), reusing the .find-stats-card shape already used by RecentlyInspectedPage/
+    /// ChangesPage/DetailPage. Renders nothing if the area has no scored establishments yet, rather than
+    /// showing a meaningless 0%.</summary>
+    private static string AreaScoreSnapshotHtml(string displaySpelling, AreaScoreSnapshot snapshot)
+    {
+        if (snapshot.TotalScored == 0) return "";
+
+        return $"""
+            <div class="find-stats-card">
+              <div class="find-stats-label">{E(displaySpelling)} health snapshot</div>
+              <div class="find-stats-grid">
+                <div class="find-stat">
+                  <div class="find-stat-value">{snapshot.TopSharePercent.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)}%</div>
+                  <div class="find-stat-label">have the top smiley score</div>
+                </div>
+                <div class="find-stat">
+                  <div class="find-stat-value">{snapshot.TopScoreCount}</div>
+                  <div class="find-stat-label">of {snapshot.TotalScored} scored establishments</div>
+                </div>
+              </div>
+              <div style="margin-top:14px">
+                <a href="{FindUrlBuilder.ChangesPath(displaySpelling)}" class="city-tag">See recent score changes in {E(displaySpelling)} →</a>
+              </div>
+            </div>
+            """;
     }
 
     /// <summary>Sort/filter bar for the area hub listing — every link is a plain GET to the hub path with
