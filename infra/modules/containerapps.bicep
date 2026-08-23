@@ -12,6 +12,15 @@ param imageName string
 // domain-related resources at all.
 param customDomainName string = ''
 
+// Custom domain setup is a required two-phase deploy, confirmed via a deploy failure (2026-08-23,
+// RequireCustomHostnameInEnvironment): Azure won't create a managed certificate for a hostname until
+// that hostname is already bound to a container app/route in the environment — but binding with
+// bindingType 'SniEnabled' requires a certificateId that must already exist. So: phase 1 (this false)
+// binds the hostname with bindingType 'Disabled' and no managed cert at all, just to register it in the
+// environment; phase 2 (redeploy with this true, after phase 1 succeeds) creates the managed cert — which
+// validates ownership via the TXT record — and switches the binding to 'SniEnabled' referencing it.
+param provisionManagedCertificate bool = false
+
 resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: 'cae-${name}'
   location: location
@@ -26,14 +35,15 @@ resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
-// Managed certificate for the custom domain, only created once customDomainName is set (see its param
-// comment above). Azure validates domain ownership via a TXT record (asuid.<domain>) you add at the DNS
-// provider — not part of this deployment; see infra/parameters/prod.bicepparam for the follow-up steps.
-// Must be TXT (not CNAME): CNAME domain control validation isn't supported for apex/root domains, since
-// the apex CNAME is already used to point the domain at the Container App itself — confirmed via a
-// deploy failure (2026-08-23) where Azure returned "Supported validation method(s) for the domain are:
-// HTTP,TXT" for the apex domain smilrhq.dk.
-resource managedCert 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(customDomainName)) {
+// Managed certificate for the custom domain — only created in phase 2 (see provisionManagedCertificate
+// above), once customDomainName is set AND the hostname is already bound to the container app below.
+// Azure validates domain ownership via a TXT record (asuid.<domain>) you add at the DNS provider — not
+// part of this deployment; see infra/parameters/prod.bicepparam for the follow-up steps. Must be TXT (not
+// CNAME): CNAME domain control validation isn't supported for apex/root domains, since the apex CNAME is
+// already used to point the domain at the Container App itself — confirmed via a deploy failure
+// (2026-08-23) where Azure returned "Supported validation method(s) for the domain are: HTTP,TXT" for the
+// apex domain smilrhq.dk.
+resource managedCert 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(customDomainName) && provisionManagedCertificate) {
   parent: containerAppsEnv
   name: 'cert-${replace(customDomainName, '.', '-')}'
   location: location
@@ -41,6 +51,11 @@ resource managedCert 'Microsoft.App/managedEnvironments/managedCertificates@2024
     subjectName: customDomainName
     domainControlValidation: 'TXT'
   }
+  // Must wait for the container app's hostname binding to exist first — see provisionManagedCertificate
+  // comment above and the RequireCustomHostnameInEnvironment failure it documents.
+  dependsOn: [
+    containerApp
+  ]
 }
 
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
@@ -49,14 +64,6 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   identity: {
     type: 'SystemAssigned'
   }
-  // Explicit dependency on managedCert: the customDomains binding below references it via resourceId()
-  // rather than a symbolic reference (see comment there), which means ARM won't infer the ordering on
-  // its own — without this, a first-time cert creation can race the container app's binding to it and
-  // fail with CertificateNotFound. Safe to depend on even when customDomainName is empty and managedCert
-  // isn't deployed at all; Bicep just skips the wait in that case.
-  dependsOn: [
-    managedCert
-  ]
   properties: {
     managedEnvironmentId: containerAppsEnv.id
     configuration: {
@@ -64,14 +71,20 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         external: true
         targetPort: 8080
         transport: 'auto'
+        // Phase 1 (provisionManagedCertificate = false): bind the hostname with no cert, just to
+        // register it in the environment. Phase 2 (true): switch to SniEnabled referencing the now
+        // (about to be, on this same deploy) created managed cert. See provisionManagedCertificate above.
         customDomains: !empty(customDomainName) ? [
-          {
+          provisionManagedCertificate ? {
             name: customDomainName
             bindingType: 'SniEnabled'
-            // Built via resourceId() rather than a symbolic reference to managedCert (below), since that
+            // Built via resourceId() rather than a symbolic reference to managedCert (above), since that
             // resource is itself conditional on the same customDomainName — referencing it symbolically
             // here would make Bicep try to resolve it even in the empty-string/no-op case.
             certificateId: resourceId('Microsoft.App/managedEnvironments/managedCertificates', containerAppsEnv.name, 'cert-${replace(customDomainName, '.', '-')}')
+          } : {
+            name: customDomainName
+            bindingType: 'Disabled'
           }
         ] : []
       }
