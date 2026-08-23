@@ -27,15 +27,19 @@ resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
 }
 
 // Managed certificate for the custom domain, only created once customDomainName is set (see its param
-// comment above). Azure validates domain ownership via a CNAME/TXT record you add at the DNS provider —
-// not part of this deployment; see infra/parameters/prod.bicepparam for the follow-up steps.
+// comment above). Azure validates domain ownership via a TXT record (asuid.<domain>) you add at the DNS
+// provider — not part of this deployment; see infra/parameters/prod.bicepparam for the follow-up steps.
+// Must be TXT (not CNAME): CNAME domain control validation isn't supported for apex/root domains, since
+// the apex CNAME is already used to point the domain at the Container App itself — confirmed via a
+// deploy failure (2026-08-23) where Azure returned "Supported validation method(s) for the domain are:
+// HTTP,TXT" for the apex domain smilrhq.dk.
 resource managedCert 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(customDomainName)) {
   parent: containerAppsEnv
   name: 'cert-${replace(customDomainName, '.', '-')}'
   location: location
   properties: {
     subjectName: customDomainName
-    domainControlValidation: 'CNAME'
+    domainControlValidation: 'TXT'
   }
 }
 
@@ -45,6 +49,14 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   identity: {
     type: 'SystemAssigned'
   }
+  // Explicit dependency on managedCert: the customDomains binding below references it via resourceId()
+  // rather than a symbolic reference (see comment there), which means ARM won't infer the ordering on
+  // its own — without this, a first-time cert creation can race the container app's binding to it and
+  // fail with CertificateNotFound. Safe to depend on even when customDomainName is empty and managedCert
+  // isn't deployed at all; Bicep just skips the wait in that case.
+  dependsOn: [
+    managedCert
+  ]
   properties: {
     managedEnvironmentId: containerAppsEnv.id
     configuration: {
