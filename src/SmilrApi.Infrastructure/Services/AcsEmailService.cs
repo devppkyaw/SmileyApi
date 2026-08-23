@@ -1,3 +1,5 @@
+using System.Net;
+using System.Reflection;
 using Azure;
 using Azure.Communication.Email;
 using Microsoft.Extensions.Configuration;
@@ -9,6 +11,9 @@ namespace SmilrApi.Infrastructure.Services;
 
 public class AcsEmailService : IEmailService
 {
+    private static readonly Lazy<string> LoginLinkTemplate = new(() => LoadTemplate("login-link-email.html"));
+    private static readonly Lazy<string> VerifyAccountTemplate = new(() => LoadTemplate("verify-account-email.html"));
+
     private readonly EmailClient _client;
     private readonly string _sender;
     private readonly string? _overrideAddress;
@@ -24,6 +29,18 @@ public class AcsEmailService : IEmailService
         _sender = config["Acs:SenderAddress"] ?? "donotreply@smilrhq.dk";
         _overrideAddress = config["Email:OverrideAddress"];
         _systemMonitorAddress = config["Email:SystemMonitorAddress"];
+    }
+
+    private static string LoadTemplate(string fileName)
+    {
+        var assembly = typeof(AcsEmailService).Assembly;
+        var resourceName = assembly.GetManifestResourceNames()
+            .FirstOrDefault(n => n.EndsWith("." + fileName, StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException($"Embedded email template '{fileName}' not found.");
+
+        using var stream = assembly.GetManifestResourceStream(resourceName)!;
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
     }
 
     /// <summary>
@@ -57,36 +74,42 @@ public class AcsEmailService : IEmailService
                 bcc: Array.Empty<EmailAddress>()),
             content: content);
 
-    public async Task SendVerificationEmailAsync(string to, string verifyUrl, CancellationToken ct = default)
+    public async Task SendVerificationEmailAsync(string to, string companyName, string verifyUrl, CancellationToken ct = default)
     {
         var plan = ResolveRecipient(to);
         var banner = plan.Banner;
+        var html = VerifyAccountTemplate.Value
+            .Replace("{{UserName}}", WebUtility.HtmlEncode(companyName))
+            .Replace("{{VerificationUrl}}", WebUtility.HtmlEncode(verifyUrl));
+        if (banner.Length > 0)
+            html = $"<p><strong>{banner}</strong></p>" + html;
+
         var message = BuildMessage(_sender, plan, new EmailContent("Verify your SmilrApi account")
         {
-            Html = (banner.Length > 0 ? $"<p><strong>{banner}</strong></p>" : "") +
-                   "<p>Click the link below to verify your email and activate your SmilrApi account:</p>" +
-                   $"<p><a href=\"{verifyUrl}\">{verifyUrl}</a></p>" +
-                   "<p>This link expires in 24 hours.</p>",
+            Html = html,
             PlainText = (banner.Length > 0 ? $"{banner}\n\n" : "") +
-                        $"Verify your SmilrApi account:\n{verifyUrl}\n\nThis link expires in 24 hours."
+                        $"Hello {companyName},\n\nVerify your SmilrApi account:\n{verifyUrl}\n\nThis link expires in 24 hours."
         });
 
         var op = await _client.SendAsync(WaitUntil.Started, message, ct);
         _logger.LogInformation("Verification email queued to {To} (cc={Cc}), operationId={Id}", plan.PrimaryRecipient, string.Join(",", plan.CcAddresses), op.Id);
     }
 
-    public async Task SendMagicLinkEmailAsync(string to, string loginUrl, CancellationToken ct = default)
+    public async Task SendMagicLinkEmailAsync(string to, string companyName, string loginUrl, CancellationToken ct = default)
     {
         var plan = ResolveRecipient(to);
         var banner = plan.Banner;
+        var html = LoginLinkTemplate.Value
+            .Replace("{{UserName}}", WebUtility.HtmlEncode(companyName))
+            .Replace("{{LoginUrl}}", WebUtility.HtmlEncode(loginUrl));
+        if (banner.Length > 0)
+            html = $"<p><strong>{banner}</strong></p>" + html;
+
         var message = BuildMessage(_sender, plan, new EmailContent("Your SmilrApi login link")
         {
-            Html = (banner.Length > 0 ? $"<p><strong>{banner}</strong></p>" : "") +
-                   "<p>Click the link below to sign in to your SmilrApi dashboard:</p>" +
-                   $"<p><a href=\"{loginUrl}\">{loginUrl}</a></p>" +
-                   "<p>This link expires in 15 minutes. If you did not request this, you can ignore this email.</p>",
+            Html = html,
             PlainText = (banner.Length > 0 ? $"{banner}\n\n" : "") +
-                        $"Sign in to SmilrApi:\n{loginUrl}\n\nExpires in 15 minutes. Ignore if you did not request this."
+                        $"Hi {companyName},\n\nSign in to SmilrApi:\n{loginUrl}\n\nExpires in 15 minutes. Ignore if you did not request this."
         });
 
         var op = await _client.SendAsync(WaitUntil.Started, message, ct);
