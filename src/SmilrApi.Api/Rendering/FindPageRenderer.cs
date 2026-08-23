@@ -120,7 +120,16 @@ public static class FindPageRenderer
         var (prevPath, nextPath) = PagerLinks($"{hubPath}?", page, hasMore);
         var categoryNavHtml = CategoryNavHtml(displaySpelling, categoriesInArea);
 
+        var jsonLdCrumbs = new List<(string Name, string Path)>
+        {
+            ("Find", "/find"),
+            (displaySpelling, hubPath)
+        };
+
         var body = $"""
+            <nav aria-label="breadcrumb" style="margin-bottom:16px;font-size:0.9rem">
+              <a href="/find">Find</a> › {E(displaySpelling)}
+            </nav>
             <h1>Restaurants &amp; food businesses in {E(displaySpelling)}</h1>
             <p class="section-sub">{totalCount} registered establishment{(totalCount == 1 ? "" : "s")} with official Fødevarestyrelsen inspection scores.</p>
             <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px">
@@ -140,6 +149,7 @@ public static class FindPageRenderer
             canonicalPath: hubPath,
             bodyHtml: body,
             noindex: noindex,
+            extraHeadHtml: BreadcrumbJsonLd(jsonLdCrumbs) + ItemListJsonLd(establishments),
             prevPath: prevPath,
             nextPath: nextPath);
     }
@@ -940,6 +950,29 @@ public static class FindPageRenderer
 
         // Default JsonSerializer escaping is HTML-safe (escapes <, >, &), so this is safe to embed
         // directly inside a <script> tag even if a business name contains those characters.
+        return $"""<script type="application/ld+json">{JsonSerializer.Serialize(schema)}</script>""";
+    }
+
+    /// <summary>Renders a schema.org ItemList JSON-LD block for the establishments shown on the current
+    /// page of a listing — position is per-page (1..N of what's rendered), matching how ItemList is
+    /// conventionally used for a paginated result set rather than a global cross-page rank.</summary>
+    private static string ItemListJsonLd(IReadOnlyList<Establishment> establishments)
+    {
+        var itemListElement = establishments.Select((e, i) => new Dictionary<string, object?>
+        {
+            ["@type"] = "ListItem",
+            ["position"] = i + 1,
+            ["url"] = SiteOrigin + FindUrlBuilder.DetailPath(e),
+            ["name"] = e.Name
+        });
+
+        var schema = new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "ItemList",
+            ["itemListElement"] = itemListElement
+        };
+
         return $"""<script type="application/ld+json">{JsonSerializer.Serialize(schema)}</script>""";
     }
 
