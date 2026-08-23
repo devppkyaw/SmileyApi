@@ -38,19 +38,22 @@ resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
 // Managed certificate for the custom domain — only created in phase 2 (see provisionManagedCertificate
 // above). By phase 2, the hostname is already bound to the container app live in Azure (from the phase 1
 // deploy that ran first), which is what Microsoft.App/managedCertificates actually checks — so this
-// resource doesn't need to depend on anything in *this* deployment for that. Azure validates domain
-// ownership via a TXT record (asuid.<domain>) you add at the DNS provider — not part of this deployment;
-// see infra/parameters/prod.bicepparam for the follow-up steps. Must be TXT (not CNAME): CNAME domain
-// control validation isn't supported for apex/root domains, since the apex CNAME is already used to point
-// the domain at the Container App itself — confirmed via a deploy failure (2026-08-23) where Azure
-// returned "Supported validation method(s) for the domain are: HTTP,TXT" for the apex domain smilrhq.dk.
+// resource doesn't need to depend on anything in *this* deployment for that. Must be HTTP validation, not
+// TXT or CNAME — confirmed via two deploy failures (2026-08-23): CNAME isn't accepted for apex/root
+// domains at all (Azure returned "Supported validation method(s) for the domain are: HTTP,TXT"), and TXT
+// got accepted but then hung indefinitely at provisioningState 'Pending' — Microsoft's own docs
+// (custom-domains-managed-certificates) pair apex/A-record domains with HTTP validation specifically, not
+// TXT, and HTTP needs no extra DNS record (unlike TXT, which turned out to require a second, undocumented
+// TXT record beyond the asuid ownership one, containing a validationToken Azure only exposes after the
+// fact on the stuck resource). HTTP just needs the domain to already be reachable over plain HTTP, which
+// it is (verified via curl against the phase 1 deploy).
 resource managedCert 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(customDomainName) && provisionManagedCertificate) {
   parent: containerAppsEnv
   name: 'cert-${replace(customDomainName, '.', '-')}'
   location: location
   properties: {
     subjectName: customDomainName
-    domainControlValidation: 'TXT'
+    domainControlValidation: 'HTTP'
   }
 }
 
