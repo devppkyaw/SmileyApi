@@ -159,6 +159,16 @@ public static class FindEndpoints
     // matching the conservative whitelisting approach used for sort above.
     internal static bool NormalizeHideUnscored(string? hideUnscored) => hideUnscored == "1";
 
+    // Page 1 is indexable once the area meets CategorySlugThreshold; page 2+ is noindex,follow — same
+    // philosophy as the category-hub/recently-inspected/changes pages elsewhere in this file. A non-default
+    // sort or the unscored filter also forces noindex: these are alternate orderings/subsets of the same
+    // canonical page (which always points at the plain, unsorted/unfiltered URL — see
+    // FindPageRenderer.AreaHubPage), not distinct content worth their own index entry, but noindex,follow
+    // still lets crawlers reach the canonical page through the on-page links. internal + pure so this exact
+    // condition is directly unit-testable without a live DB/HTTP call.
+    internal static bool ComputeAreaHubNoindex(int pageNum, int totalCount, string? sortNorm, bool hideUnscored) =>
+        pageNum > 1 || totalCount < CategorySlugThreshold || sortNorm is not null || hideUnscored;
+
     private static async Task<IResult> AreaHubHandlerAsync(
         string areaSlug, int? page, string? sort, string? hideUnscoredRaw, HttpContext http,
         IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct)
@@ -184,13 +194,7 @@ public static class FindEndpoints
         var categoriesInArea = await GetCategoriesInAreaAsync(area.RawCityValues, cache, repo, ct);
         var snapshot = await repo.GetAreaScoreSnapshotAsync(area.RawCityValues, ct);
 
-        // Page 1 is indexable once the area meets CategorySlugThreshold; page 2+ is noindex,follow — same
-        // philosophy as the category-hub/recently-inspected/changes pages below. A non-default sort or
-        // the unscored filter also forces noindex: these are alternate orderings/subsets of the same
-        // canonical page (which always points at the plain, unsorted/unfiltered URL — see
-        // FindPageRenderer.AreaHubPage), not distinct content worth their own index entry, but
-        // noindex,follow still lets crawlers reach the canonical page through the on-page links.
-        var noindex = pageNum > 1 || totalCount < CategorySlugThreshold || sortNorm is not null || hideUnscored;
+        var noindex = ComputeAreaHubNoindex(pageNum, totalCount, sortNorm, hideUnscored);
 
         return Results.Content(
             FindPageRenderer.AreaHubPage(
