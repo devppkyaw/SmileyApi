@@ -45,7 +45,7 @@ public class BusinessService(SmilrDbContext db, IEmailService emailService) : IB
 
         await db.SaveChangesAsync(ct);
         await emailService.SendVerificationEmailAsync(
-            existing.Email, $"{baseUrl}/v1/business/verify?token={token}", ct);
+            existing.Email, existing.CompanyName, $"{baseUrl}/v1/business/verify?token={token}", ct);
 
         return existing;
     }
@@ -80,14 +80,14 @@ public class BusinessService(SmilrDbContext db, IEmailService emailService) : IB
             business.MagicLinkTokenExpiry = DateTime.UtcNow.AddHours(24);
             await db.SaveChangesAsync(ct);
             await emailService.SendVerificationEmailAsync(
-                business.Email, $"{baseUrl}/v1/business/verify?token={token}", ct);
+                business.Email, business.CompanyName, $"{baseUrl}/v1/business/verify?token={token}", ct);
             return true;
         }
 
         business.MagicLinkTokenExpiry = DateTime.UtcNow.AddMinutes(15);
         await db.SaveChangesAsync(ct);
         await emailService.SendMagicLinkEmailAsync(
-            business.Email, $"{baseUrl}/v1/business/login/verify?token={token}", ct);
+            business.Email, business.CompanyName, $"{baseUrl}/v1/business/login/verify?token={token}", ct);
         return true;
     }
 

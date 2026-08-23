@@ -20,15 +20,15 @@ public class DevEmailService(ILogger<DevEmailService> logger, IConfiguration con
             : originalTo;
     }
 
-    public Task SendVerificationEmailAsync(string to, string verifyUrl, CancellationToken ct = default)
+    public Task SendVerificationEmailAsync(string to, string companyName, string verifyUrl, CancellationToken ct = default)
     {
-        logger.LogInformation("[DEV EMAIL] Verification → {To} | {Url}", ToInfo(to), verifyUrl);
+        logger.LogInformation("[DEV EMAIL] Verification → {To} (Hello {Name}) | {Url}", ToInfo(to), companyName, verifyUrl);
         return Task.CompletedTask;
     }
 
-    public Task SendMagicLinkEmailAsync(string to, string loginUrl, CancellationToken ct = default)
+    public Task SendMagicLinkEmailAsync(string to, string companyName, string loginUrl, CancellationToken ct = default)
     {
-        logger.LogInformation("[DEV EMAIL] Magic link → {To} | {Url}", ToInfo(to), loginUrl);
+        logger.LogInformation("[DEV EMAIL] Magic link → {To} (Hi {Name}) | {Url}", ToInfo(to), companyName, loginUrl);
         return Task.CompletedTask;
     }
 
