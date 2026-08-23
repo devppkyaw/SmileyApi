@@ -249,18 +249,28 @@ public static class FindPageRenderer
             nextPath: nextPath);
     }
 
+    /// <summary>"Browse by category" pills, shared by the area hub and recently-inspected pages.
+    /// categoriesInArea is already ordered by count desc (GetCategoriesInAreaAsync), so the dominant
+    /// category naturally renders first; "featured" (visually heavier) styling is layered on top for
+    /// categories at least half as common as the top one, rather than re-deriving the order here.</summary>
     private static string CategoryNavHtml(
         string displayCity, IReadOnlyList<(string Category, string CategorySlug, int Count)> categoriesInArea)
     {
         if (categoriesInArea.Count == 0) return "";
 
+        var maxCount = categoriesInArea[0].Count;
         var links = categoriesInArea.Select(c =>
-            $"""<a href="{FindUrlBuilder.CategoryHubPath(displayCity, c.Category)}">{E(c.Category)} ({c.Count})</a>""");
+        {
+            var featured = maxCount > 0 && c.Count >= maxCount * 0.5 ? " city-tag--featured" : "";
+            return $"""<a href="{FindUrlBuilder.CategoryHubPath(displayCity, c.Category)}" class="city-tag{featured}">{E(c.Category)} <span class="city-tag-count">{c.Count}</span></a>""";
+        });
 
         return $"""
             <div class="find-category-nav">
-              <span class="find-category-nav-label">Browse by category:</span>
+              <span class="find-category-nav-label">Browse by category</span>
+              <div class="find-category-nav-pills">
               {string.Join("\n  ", links)}
+              </div>
             </div>
             """;
     }
