@@ -1142,15 +1142,27 @@ public static class FindPageRenderer
         return sb.ToString();
     }
 
+    /// <summary>Shared row used by the area hub, category hub, search results, and the CVR
+    /// multi-location choice page — deliberately one method so all four keep the same visual language
+    /// rather than drifting into near-duplicate implementations. Matches RecentlyInspectedRowHtml's
+    /// icon + colored smiley badge style (below), just without that page's leading rank number / date
+    /// grouping, which don't apply to a plain listing.</summary>
     private static string ResultRowHtml(Establishment e)
     {
         var addressLine = string.Join(", ", new[] { e.Address, e.City }.Where(s => !string.IsNullOrWhiteSpace(s)));
-        var scoreLabel = e.LatestScore is not null ? $"Score {e.LatestScore}/4" : "No score yet";
+        var score = e.LatestScore;
+        var badge = score is not null
+            ? $"""<img src="{ScoreImagePath(score.Value, 32)}" alt="Inspection score {score}" width="32" height="32" style="border-radius:4px;object-fit:contain" />"""
+            : "";
+        var scoreLabel = score is not null ? $"Score {score}/4" : "No score yet";
         return $"""
             <a class="find-result-row" href="{FindUrlBuilder.DetailPath(e)}">
-              <span class="find-result-name">{E(e.Name)}</span>
-              <span class="find-result-address">{E(addressLine)}</span>
-              <span class="find-result-score">{E(scoreLabel)}</span>
+              {CategoryIconHtml(e.Pixibranche)}
+              <span class="find-result-main">
+                <span class="find-result-name">{E(e.Name)}</span>
+                <span class="find-result-address">{E(addressLine)}</span>
+              </span>
+              <span class="find-result-score">{badge}<span>{E(scoreLabel)}</span></span>
             </a>
             """;
     }
