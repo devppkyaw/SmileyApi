@@ -1179,8 +1179,49 @@ pre:not([class*="language-"]) strong {
 
 .find-pager {
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 12px;
   margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+/* Numbered pagination (area hub only — the one /find listing with enough pages, up to ~90+ for a
+   large city, that jump-to-page links earn their keep over the other pages' plain Prev/Next). */
+.find-pager-numbers {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.find-pager-page {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+a.find-pager-page:hover { background: var(--surface-2); color: var(--accent); text-decoration: none; }
+
+.find-pager-page--current {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.find-pager-ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  color: var(--text-muted);
 }
 
 .find-detail {

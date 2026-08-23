@@ -115,7 +115,8 @@ public static class FindPageRenderer
 
         var hasMore = (long)page * pageSize < totalCount;
         var hubPath = FindUrlBuilder.HubPath(displaySpelling);
-        var pagerHtml = BuildPager($"{hubPath}?", page, hasMore);
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+        var pagerHtml = AreaHubPagerHtml($"{hubPath}?", page, totalPages, hasMore);
         var (prevPath, nextPath) = PagerLinks($"{hubPath}?", page, hasMore);
         var categoryNavHtml = CategoryNavHtml(displaySpelling, categoriesInArea);
 
@@ -1097,6 +1098,63 @@ public static class FindPageRenderer
         page > 1 ? $"{basePathWithTrailingSeparator}page={page - 1}" : null,
         hasMore ? $"{basePathWithTrailingSeparator}page={page + 1}" : null
     );
+
+    /// <summary>Pure page-range calculator for numbered pagination: current page ± <paramref name="window"/>,
+    /// always including page 1 and the last page, with a null entry marking a gap (rendered as an
+    /// ellipsis). internal so it's directly unit-testable without going through HTML rendering.</summary>
+    internal static IReadOnlyList<int?> BuildPageNumbers(int currentPage, int totalPages, int window = 2)
+    {
+        if (totalPages <= 1) return [];
+
+        var pages = new SortedSet<int> { 1, totalPages };
+        for (var p = currentPage - window; p <= currentPage + window; p++)
+            if (p >= 1 && p <= totalPages) pages.Add(p);
+
+        var result = new List<int?>();
+        int? prev = null;
+        foreach (var p in pages)
+        {
+            if (prev is not null)
+            {
+                var gap = p - prev.Value;
+                if (gap == 2) result.Add(prev.Value + 1);  // exactly one hidden page — just show it, an
+                                                            // ellipsis standing in for one page saves no
+                                                            // space and reads as broken
+                else if (gap > 2) result.Add(null);        // two+ hidden pages — collapse to an ellipsis
+            }
+            result.Add(p);
+            prev = p;
+        }
+        return result;
+    }
+
+    private static string NumberedPagerHtml(string basePathWithTrailingSeparator, int page, int totalPages)
+    {
+        var numbers = BuildPageNumbers(page, totalPages);
+        if (numbers.Count == 0) return "";
+
+        var items = numbers.Select(n => n is null
+            ? """<span class="find-pager-ellipsis">…</span>"""
+            : n == page
+                ? $"""<span class="find-pager-page find-pager-page--current" aria-current="page">{n}</span>"""
+                : $"""<a class="find-pager-page" href="{basePathWithTrailingSeparator}page={n}">{n}</a>""");
+
+        return $"""<div class="find-pager-numbers">{string.Join("", items)}</div>""";
+    }
+
+    /// <summary>Prev | numbered pages | Next pager for the area hub — the one /find listing with enough
+    /// pages (up to ~90+ for a large city) that jump-to-page links earn their keep over the plain
+    /// Prev/Next BuildPager renders for the other, smaller-paginated /find pages.</summary>
+    private static string AreaHubPagerHtml(string basePathWithTrailingSeparator, int page, int totalPages, bool hasMore)
+    {
+        var (prevUrl, nextUrl) = PagerLinks(basePathWithTrailingSeparator, page, hasMore);
+        var numbersHtml = NumberedPagerHtml(basePathWithTrailingSeparator, page, totalPages);
+        if (prevUrl is null && nextUrl is null && numbersHtml.Length == 0) return "";
+
+        var prev = prevUrl is not null ? $"""<a href="{prevUrl}">← Previous</a>""" : "<span></span>";
+        var next = nextUrl is not null ? $"""<a href="{nextUrl}">Next →</a>""" : "<span></span>";
+        return $"""<div class="find-pager">{prev}{numbersHtml}{next}</div>""";
+    }
 
     private static string ScoreBadgeHtml(int? score, string? virksomhedsType)
     {
