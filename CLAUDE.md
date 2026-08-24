@@ -46,3 +46,8 @@ dotnet test
 
 ## Roadmap Note (2026-08-18)
 Priority after MVP: a public, no-login directory site ("Smilr Finder") as a top-of-funnel for Business subscriptions — reuses existing `/search`, `/nearby`, `/{cvr}/history` logic behind a new anonymous/cached route group, with a "Claim this listing" CTA into the registration flow. Depends on Phase H static pages shipping first. Full plan in `docs/business-opportunities.md`. API marketplace listing (RapidAPI-style) is a separate, lower-priority idea — do not build unless explicitly asked.
+
+## Multi-Session Editing (2026-08-19)
+This project is worked on from two places at once, often around the same time: Claude Code (this CLI, local) and a separate Claude session in the Cowork/desktop app. Both can edit files in this repo independently — most often `docs/business-opportunities.md`, which is the shared planning/roadmap doc for both.
+
+**Rule: never blind-overwrite a shared doc.** Before writing to `docs/business-opportunities.md` (or any file either side edits regularly), re-read its current on-disk content first — it may have changed since you last saw it. If it has, merge your update into the current version rather than replacing it wholesale, the same way you'd resolve a merge conflict. This applies in both directions: Claude Code should assume Cowork may have added a decision or competitive note since the last local read, and vice versa.
