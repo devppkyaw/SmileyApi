@@ -1,5 +1,7 @@
 # Smilr — Business Opportunities & Positioning
 
+> **Before editing this file:** it's actively updated from two places — Claude Code (local CLI) and a Cowork session in the Claude desktop app — often around the same time. Re-read the current on-disk content before writing; merge your changes into it rather than overwriting wholesale.
+
 Ideas for growing Smilr beyond the core widget. Captured 2026-08-11, revised 2026-08-18, 2026-08-19.
 
 ## Decision (2026-08-18, revised): API + Business analytics first, directory repositioned as SEO/acquisition channel
@@ -44,7 +46,7 @@ Both slugs are computed on the fly from `Name`/`City` (never persisted) via `Fin
 
 **Correction to the original routing plan:** the trailing-slash disambiguation originally proposed (distinguishing `/find/{area-slug}/` from a bare `/find/{business-slug}-{navnelbnr}` by the presence of a trailing slash) does not work in ASP.NET Core — confirmed via `AmbiguousMatchException` during implementation. The router treats a literal-trailing-slash template and a single-parameter template as equally-specific candidates for the same request, not as distinguishable.
 
-**What actually works, and is now the standard pattern for this kind of ambiguity in this codebase:** merge the conflicting routes into one (`/find/{segment}`) and disambiguate at runtime by whether the segment matches the `{business-slug}-{navnelbnr}` shape (ends in `-{digits}`, via regex). If it matches, it's a detail page; otherwise it's treated as an area slug. This is the pattern to reuse for any future routing-shape conflict at the same URL depth — see category hub pages below.
+**What actually works, and is now the standard pattern for this kind of ambiguity in this codebase:** merge the conflicting routes into one (`/find/{segment}`) and disambiguate at runtime by whether the segment matches the `{business-slug}-{navnelbnr}` shape (ends in `-{digits}`, via regex). If it matches, it's a detail page; otherwise it's treated as an area slug. This is the pattern reused for category hub pages below.
 
 CVR is no longer part of any `/find` URL. It survives only as a `/find/search?q={8-digit-cvr}` convenience shortcut (people know their CVR, not their Navnelbnr) that resolves and 301-redirects to the real canonical detail path. An optional chain hub page (`/kaede/{cvr}/`, listing all locations under one CVR) remains a possible future addition, not yet built.
 
@@ -52,7 +54,7 @@ This shipped before broad indexing, so no legacy-URL redirect layer was needed.
 
 ---
 
-## Category hub pages — decision (2026-08-19)
+## Category hub pages — decision and implementation (2026-08-19)
 
 **Data constraint found first:** there is no cuisine-level data anywhere in the Fødevarestyrelsen source (checked both `Pixibranche` and the more granular `branche` field directly against the XML). The largest category, `Restauranter, pizzeriaer, kantiner m.m.`, lumps restaurants, pizzerias, and canteens into one bucket of 23,200 establishments (~40% of the dataset) — there is no field distinguishing a pizza place from a sushi place. A `/find/{area-slug}/pizza`-style page is **not buildable from official data** without either guessing from business names (unreliable) or pulling in a second, non-government data source — which would undercut Smilr's "100% public, officially-sourced, no scraping risk" positioning. Cuisine-level search/browsing is out of scope unless that tradeoff is deliberately revisited later.
 
@@ -64,23 +66,23 @@ This shipped before broad indexing, so no legacy-URL redirect layer was needed.
 - Bagere og bagerafdelinger (bakeries) — 1,167
 - Slagtere, slagterafdelinger (butchers) — 968
 - Fiske- og vildtforretninger (fishmongers) — 343
-- (full list of 26 in `docs/Smiley_xml.xml` — re-derive per sync in case Fødevarestyrelsen adds/renames a value)
+- (full list of 26 in `docs/Smiley_xml.xml` — re-derived per sync, not hardcoded — see below)
 
 **Route:** `/find/{area-slug}/{category-slug}` — a listing/hub page only, filtered by area + Pixibranche category.
 
-**Decided: no nested detail URL.** `/find/{area-slug}/{category-slug}/{business-slug}-{navnelbnr}` will not exist. The category hub links out to the existing flat canonical detail page (`/find/{area-slug}/{business-slug}-{navnelbnr}`) — it never hosts its own copy of the establishment page. Reasoning:
+**Decided: no nested detail URL.** `/find/{area-slug}/{category-slug}/{business-slug}-{navnelbnr}` does not exist. The category hub links out to the existing flat canonical detail page (`/find/{area-slug}/{business-slug}-{navnelbnr}`) — it never hosts its own copy of the establishment page. Reasoning:
 - **Identity vs. classification.** A URL should encode "which business, where" (stable identity), not "which browsing path was used to find it." Category is metadata about a business, not part of what makes it that business.
 - **Category is measurably less stable than City.** The source data includes transitional/unresolved values (`Virksomheder, detail-branche endnu ikke tildelt` — "not yet assigned"; ownership-change states) — real evidence that category reclassification happens. Baking it into the canonical path would mean every reclassification breaks the business's permanent URL, stacking a second, more volatile source of redirect churn on top of the one already accepted for City.
 - **Future-proofing.** Every establishment has exactly one `Pixibranche` value today, but if the taxonomy is ever split finer (or a second dimension like price tier is added later), a flat canonical URL doesn't care how many ways a business can be classified — each new dimension just becomes another hub page linking to the same one URL, rather than requiring a redesign.
 - **Keeps canonical-redirect logic simple.** `DetailHandlerAsync`'s canonical check only has to reason about City + Name today; making category part of the canonical path would add Pixibranche as a second, independent trigger for that same redirect logic.
 
-Category context (breadcrumb: Area → Category → Business Name) can still appear in the UI and in `BreadcrumbList` structured data on the detail page for SEO rich-snippet purposes — that's a presentation/schema concern, not a URL concern.
+Category context (breadcrumb: Area → Category → Business Name) appears in the UI and in `BreadcrumbList` structured data on the detail page for SEO rich-snippet purposes — a presentation/schema concern, not a URL concern.
 
-**Routing implementation (shipped):** `/find/{area-slug}/{business-slug}-{navnelbnr}` (existing) and `/find/{area-slug}/{category-slug}` (new) are the same two-segment route shape — the same `AmbiguousMatchException` risk already hit once at the one-segment level. Fix: merged into one route, `GET /find/{areaSlug}/{segment}`, reusing the proven disambiguation pattern — if `segment` matches the `-{digits}` suffix shape, it's a detail page; else it's looked up against a live category-slug index (`GetCategoryCountsAsync` → `FindEndpoints.GetCategoryIndexAsync`, cached 12h) built fresh from the DB every cache cycle, never hardcoded — so it self-corrects if Fødevarestyrelsen adds/renames/retires a Pixibranche value; an unrecognized segment 404s.
+**Routing implementation (shipped):** `/find/{area-slug}/{business-slug}-{navnelbnr}` and `/find/{area-slug}/{category-slug}` are the same two-segment route shape — the same `AmbiguousMatchException` risk already hit once at the one-segment level. Fix: merged into one route, `GET /find/{areaSlug}/{segment}`, reusing the proven disambiguation pattern — if `segment` matches the `-{digits}` suffix shape, it's a detail page; else it's looked up against a live category-slug index (`GetCategoryCountsAsync` → `FindEndpoints.GetCategoryIndexAsync`, cached 12h) built fresh from the DB every cache cycle, never hardcoded — so it self-corrects if Fødevarestyrelsen adds/renames/retires a Pixibranche value; an unrecognized segment 404s.
 
-**Minimum-establishment-count guard — resolved and implemented (2026-08-19):** render whenever count ≥ 1 (still useful to a direct visitor); add `<meta name="robots" content="noindex,follow">` and exclude from `sitemap.xml` when count < 3; 404 only when count = 0 (`CategorySlugThreshold` in `FindEndpoints.cs`). Verified against real data: a thin combo (count 2) renders with `noindex` and is absent from the sitemap; a combo ≥ 3 is indexed and included; a genuine zero-count combo 404s.
+**Minimum-establishment-count guard — resolved and implemented:** render whenever count ≥ 1 (still useful to a direct visitor); add `<meta name="robots" content="noindex,follow">` and exclude from `sitemap.xml` when count < 3; 404 only when count = 0 (`CategorySlugThreshold` in `FindEndpoints.cs`). Verified against real data: a thin combo (count 2) renders with `noindex` and is absent from the sitemap; a combo ≥ 3 is indexed and included; a genuine zero-count combo 404s.
 
-Also implemented: the detail page's Category breadcrumb segment + `BreadcrumbList` JSON-LD (Find → Area → Category → Name), and an area hub "Browse by category" nav section — both described above as intended, both live. Category hub pages are fully shipped; the directory now supports area hubs, area×category hubs, and canonical establishment detail pages.
+Also implemented: the detail page's Category breadcrumb segment + `BreadcrumbList` JSON-LD (Find → Area → Category → Name), and an area hub "Browse by category" nav section. **Category hub pages are fully shipped** — the directory now supports area hubs, area×category hubs, and canonical establishment detail pages.
 
 ---
 
@@ -98,6 +100,8 @@ Reuses existing `/v1/establishments/search`, `/nearby`, `/{cvr}/history`, and th
 
 The real value proposition for the paid Business tier, since visibility alone is already free via findsmiley.dk. Concrete ideas, informed by the Ecolab HDI reference above: score trend charts over time, benchmarking against nearby/similar establishments, a multi-location dashboard for chains (using the existing multi-CVR Pro support), a widget with brand customization instead of the standard government styling. Depends on Phase G (tier field) and Phase I (session-based Pro webhooks) from the existing roadmap to fully build out.
 
+**Keep this scoped to monitoring/benchmarking the published result — see eSmiley competitive note below.** Do not drift into internal compliance/HACCP tooling (self-inspection checklists, audit prep, staff training) — that's a different, already-owned lane.
+
 ## 3. Consumer-facing directory site ("Smilr Finder") — SECONDARY, SEO/acquisition role
 
 See URL structure and category hub sections above — both implemented and shipped. Each page needs differentiated content beyond a plain score mirror to be worth ranking. "Claim this listing" CTA still funnels into Business registration. Chrome extension idea remains a later, optional addition.
@@ -109,6 +113,15 @@ Low-effort, high-differentiation: the webhook system already detects `smiley_sco
 - Area health snapshot — aggregate stats per area ("87% of restaurants in Nørrebro currently have a green smiley").
 
 All three reuse the same trend-data capability that also feeds the Business analytics dashboard (#2) — one data layer, two audiences.
+
+**Design spec received (2026-08-19):** a detailed spec + mockups for a related but distinct page, `/find/{area-slug}/recently-inspected` (ordered by latest inspection date, not score change), found in `docs/Design/Recently Inspected/`. Recommends building this before the score-change feed above, since it needs no dependency on the webhook change-detection logic (just `ORDER BY LatestInspectionDate DESC`) while validating the same routing/caching/structured-data architecture the `changes` page will reuse. Extends the reserved-segment routing pattern with `recently-inspected` and `changes` as literal segments checked before category-slug matching (same shape as the shipped category disambiguation above). Not yet implemented — pending decision on adoption and sequencing.
+
+**Design spec drafted for `/find/{area-slug}/changes` (2026-08-22):** written for Claude Design to mock up, found in `docs/Design/Changes/`. Follows the same section structure and depth as the `recently-inspected` spec above, adapted for score-change semantics. Key points not shared with `recently-inspected`:
+- A business appears **only** if its score changed between two consecutive inspections — a first-ever inspection or a same-score re-inspection does not qualify (that's `recently-inspected` territory).
+- **Real data dependency found while writing the spec, worth flagging before estimating effort:** `recently-inspected` only needs `LatestInspectionDate`, a property of current state. `changes` needs the *previous* score too, not just the new one. The webhook system's `MERGE OUTPUT` diff already computes old-vs-new, but likely only as a transient payload for the webhook dispatcher — confirm whether it's persisted anywhere queryable. If not, this page depends on adding a small persisted `ScoreChangeLog` (Navnelbnr, PreviousScore, NewScore, ChangeDate), populated by the same `MERGE OUTPUT` step that already fires the webhook. Small addition, but a real prerequisite, not just a query-writing task.
+- Uses a rolling 90-day window (not "most recent N ever") so a city doesn't keep showing one stale change indefinitely.
+- Flags a tone consideration `recently-inspected` didn't need: "downgraded" is the closest thing on the site to public bad news about a named business — spec calls for neutral, non-ranked, non-leaderboard framing (no "worst restaurants"), with "most improved"/"recently downgraded" rankings explicitly deferred as separate future pages needing their own tone decision.
+- Not yet implemented — pending the same adoption/sequencing decision as `recently-inspected`, plus resolving the `ScoreChangeLog` dependency above.
 
 ## 4. API marketplace listing (e.g. RapidAPI) — SECONDARY
 
@@ -123,6 +136,14 @@ Packaging work on top of #1. Distribution channel for developer audience, not a 
 - "Hent Smiley-data" offers raw data download (XML), not a polished/documented developer API.
 - findsmiley.dk has no trend/change feed, no leaderboard, no area aggregate stats, and no category browsing — static per-establishment lookup only. This is the gap both the category hub pages and the "Recently changed" feed are designed to exploit.
 
+## Competitive note: eSmiley (confirmed 2026-08-19)
+
+[eSmiley](https://www.esmiley.dk/) is a large, established Danish/Nordic SaaS company — 17,000+ kitchens, enterprise clients including ISS, Danish Crown, and Coop, subscription/quote-based pricing. Sells digital self-inspection and compliance tooling: HACCP checklists, automatic temperature monitoring, cleaning schedules, food-waste tracking, staff training, and consultant guidance. Markets a "Smiley Garanti" — explicitly positioned around helping kitchens achieve a good smiley score.
+
+**Key distinction from Smilr:** eSmiley is preventive/internal — it's the paperwork and process *before* an inspection, aimed at making sure a kitchen passes. It does not display, track, or publish the *official* smiley score itself. Smilr's territory (the widget, the API, the directory, the Business analytics tier) is entirely about the *published result* — after the fact, public-facing, tracked and benchmarked over time. Different points in the same lifecycle, same customer base, similar "smiley" branding, but not the same job — a restaurant could plausibly use both.
+
+**Why this matters for positioning:** eSmiley's scale confirms Danish food businesses genuinely pay for smiley-related tooling (bullish for the Business tier thesis generally), but it also means "help you get a good smiley" is already owned by a well-resourced incumbent with real enterprise relationships. Smilr's Business analytics tier (#2 above) should stay scoped to monitoring/benchmarking the published result, not drift into internal compliance/HACCP territory — that's eSmiley's defended lane, not an open one.
+
 ---
 
 ## Relationship to existing roadmap (Phases G–I)
@@ -132,12 +153,15 @@ Phase G (registered widget tier field) and Phase I (session-based Pro webhooks) 
 **Open decisions:**
 - Exact set of analytics features for the Business dashboard (trend charts, benchmarking, multi-location view — prioritize which ships first)
 - Caching/infra approach to keep public anonymous directory traffic from hitting Azure SQL directly at scale
+- Whether/how to adopt the `/find/{area-slug}/recently-inspected` design spec, and its suggested build-before-`changes` sequencing
+- Whether a persisted `ScoreChangeLog` already exists or needs to be added before `/find/{area-slug}/changes` can be built (see design spec note above, `docs/Design/Changes/`)
 
 **Resolved:**
 - Area-slug taxonomy: City name only (not postcode), raw/unnormalized, grouped by identical slugified text (2026-08-19)
 - Category taxonomy: 26 Pixibranche-derived categories, no cuisine-level granularity possible from official data (2026-08-19)
 - URL structure and routing-disambiguation pattern for both area/detail and category/detail conflicts (2026-08-19)
 - Search UX: no on-site query-parsing investment; category/area hub pages carry that job via SEO instead (2026-08-19)
-- Minimum-establishment-count guard for area × category hub pages: threshold 3, render/noindex/404 tiering (2026-08-19) — see Category hub pages section
+- Minimum-establishment-count guard for area × category hub pages: threshold 3, render/noindex/404 tiering (2026-08-19)
+- Business analytics tier scope: monitoring/benchmarking the published result only, not internal compliance/HACCP tooling (2026-08-19)
 
-**Shipped (2026-08-19):** area hub pages, area × category hub pages, canonical establishment detail pages with Area/Category breadcrumbs and `BreadcrumbList` JSON-LD, and `sitemap.xml` covering all three page types. Next up per the sequencing above: the "Recently changed" trend feed (§3).
+**Shipped (2026-08-19):** area hub pages, area × category hub pages, canonical establishment detail pages with Area/Category breadcrumbs and `BreadcrumbList` JSON-LD, and `sitemap.xml` covering all three page types. Next up per the sequencing above: either the "Recently changed" trend feed or the "Recently inspected" page (§3) — sequencing decision still open.
