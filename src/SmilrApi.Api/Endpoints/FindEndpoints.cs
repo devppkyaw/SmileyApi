@@ -197,18 +197,30 @@ public static class FindEndpoints
         var pageNum = Math.Max(page ?? 1, 1);
         var sortNorm = NormalizeSort(sort);
         var hideUnscored = NormalizeHideUnscored(hideUnscoredRaw);
-        var totalCount = await repo.CountByCitiesAsync(area.RawCityValues, hideUnscored, ct);
-        var establishments = await repo.GetByCitiesAsync(area.RawCityValues, pageNum, HubPageSize, sortNorm, hideUnscored, ct);
-        var categoriesInArea = await GetCategoriesInAreaAsync(area.RawCityValues, cache, repo, ct);
-        var snapshot = await repo.GetAreaScoreSnapshotAsync(area.RawCityValues, ct);
 
-        var noindex = ComputeHubListingNoindex(pageNum, totalCount, sortNorm, hideUnscored);
+        // Full-page cache, same shape/TTL as sitemap.xml/the detail page above — establishment data
+        // only changes once per sync cycle, so re-running these 4 queries on every single request
+        // (this page's actual perf cost) buys nothing. Keyed on areaSlug (already forced canonical
+        // by the redirect check above) + the fully-normalized page/sort/hideUnscored, so the key
+        // space stays small and bounded no matter what a crawler throws at the query string.
+        var cacheKey = $"find:hub:area:{areaSlug}:{pageNum}:{sortNorm ?? "-"}:{hideUnscored}";
+        var html = await cache.GetOrCreateAsync(cacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = CacheTtl;
 
-        return Results.Content(
-            FindPageRenderer.AreaHubPage(
+            var totalCount = await repo.CountByCitiesAsync(area.RawCityValues, hideUnscored, ct);
+            var establishments = await repo.GetByCitiesAsync(area.RawCityValues, pageNum, HubPageSize, sortNorm, hideUnscored, ct);
+            var categoriesInArea = await GetCategoriesInAreaAsync(area.RawCityValues, cache, repo, ct);
+            var snapshot = await repo.GetAreaScoreSnapshotAsync(area.RawCityValues, ct);
+
+            var noindex = ComputeHubListingNoindex(pageNum, totalCount, sortNorm, hideUnscored);
+
+            return FindPageRenderer.AreaHubPage(
                 area.DisplaySpelling, pageNum, HubPageSize, totalCount, noindex, sortNorm, hideUnscored,
-                snapshot, establishments, categoriesInArea),
-            "text/html");
+                snapshot, establishments, categoriesInArea);
+        });
+
+        return Results.Content(html!, "text/html");
     }
 
     /// <summary>Categories present anywhere in this area (raw category value + its category-slug + count),
@@ -263,26 +275,35 @@ public static class FindEndpoints
         // Unfiltered count decides whether this area/category combination exists at all (404 if not) —
         // a valid category filtered down to zero visible rows by hide_unscored is a normal "no results
         // with this filter" state, not a 404, same philosophy as the area hub. Only re-query when the
-        // filter is actually active, to avoid a second COUNT on the common unfiltered path.
+        // filter is actually active, to avoid a second COUNT on the common unfiltered path. Deliberately
+        // kept outside the cache below (live on every request): it's cheap, and an area/category that
+        // goes from empty to non-empty between syncs would otherwise serve a stale 404 for up to CacheTtl.
         var unfilteredTotalCount = await repo.CountByCitiesAndCategoryAsync(area.RawCityValues, category, ct: ct);
         if (unfilteredTotalCount == 0)
             return Results.Content(
                 FindPageRenderer.NotFoundPage($"No establishments found for '{categorySlug}' in '{areaSlug}'."),
                 "text/html", statusCode: 404);
 
-        var totalCount = hideUnscored
-            ? await repo.CountByCitiesAndCategoryAsync(area.RawCityValues, category, hideUnscored: true, ct: ct)
-            : unfilteredTotalCount;
-        var establishments = await repo.GetByCitiesAndCategoryAsync(area.RawCityValues, category, pageNum, HubPageSize, sortNorm, hideUnscored, ct);
-        var snapshot = await repo.GetCategoryScoreSnapshotAsync(area.RawCityValues, category, ct);
+        // Full-page cache, same shape/TTL/reasoning as the area hub above.
+        var cacheKey = $"find:hub:category:{areaSlug}:{categorySlug}:{pageNum}:{sortNorm ?? "-"}:{hideUnscored}";
+        var html = await cache.GetOrCreateAsync(cacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = CacheTtl;
 
-        var noindex = ComputeHubListingNoindex(pageNum, totalCount, sortNorm, hideUnscored);
+            var totalCount = hideUnscored
+                ? await repo.CountByCitiesAndCategoryAsync(area.RawCityValues, category, hideUnscored: true, ct: ct)
+                : unfilteredTotalCount;
+            var establishments = await repo.GetByCitiesAndCategoryAsync(area.RawCityValues, category, pageNum, HubPageSize, sortNorm, hideUnscored, ct);
+            var snapshot = await repo.GetCategoryScoreSnapshotAsync(area.RawCityValues, category, ct);
 
-        return Results.Content(
-            FindPageRenderer.CategoryHubPage(
+            var noindex = ComputeHubListingNoindex(pageNum, totalCount, sortNorm, hideUnscored);
+
+            return FindPageRenderer.CategoryHubPage(
                 area.DisplaySpelling, category, areaSlug, categorySlug,
-                pageNum, HubPageSize, totalCount, noindex, sortNorm, hideUnscored, snapshot, establishments),
-            "text/html");
+                pageNum, HubPageSize, totalCount, noindex, sortNorm, hideUnscored, snapshot, establishments);
+        });
+
+        return Results.Content(html!, "text/html");
     }
 
     private static async Task<IResult> RecentlyInspectedHandlerAsync(
@@ -303,26 +324,41 @@ public static class FindEndpoints
             return Results.Redirect(canonicalPath + http.Request.QueryString, permanent: true);
 
         var pageNum = Math.Max(page ?? 1, 1);
+
+        // Live, like the category hub's empty-check above: an area's first-ever inspection landing
+        // shouldn't wait up to CacheTtl to stop 404ing. Cheap — GetRecentlyInspectedSummaryAsync is
+        // one query, not three (see EstablishmentRepository).
         var summary = await repo.GetRecentlyInspectedSummaryAsync(area.RawCityValues, ct);
         if (summary.TotalWithInspection == 0)
             return Results.Content(
                 FindPageRenderer.NotFoundPage($"No inspection records found for '{areaSlug}'."),
                 "text/html", statusCode: 404);
 
-        var areaTotalCount = await repo.CountByCitiesAsync(area.RawCityValues, ct: ct);
-        var establishments = await repo.GetByCitiesOrderedByLatestInspectionAsync(area.RawCityValues, pageNum, RecentlyInspectedPageSize, ct);
-        var categoriesInArea = await GetCategoriesInAreaAsync(area.RawCityValues, cache, repo, ct);
+        // Full-page cache, same shape/TTL/reasoning as the area/category hubs above. `summary` is
+        // captured from the live call above rather than re-fetched inside the factory — same
+        // pattern as CategoryHubHandlerAsync's unfilteredTotalCount reuse: the headline stat is
+        // always current, only the establishment listing/count below it can lag up to CacheTtl.
+        var cacheKey = $"find:hub:recently-inspected:{areaSlug}:{pageNum}";
+        var html = await cache.GetOrCreateAsync(cacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = CacheTtl;
 
-        // Page 1 is indexable once the area meets CategorySlugThreshold (1-2 establishments still
-        // render, just noindexed); page 2+ is always noindex,follow — same as the category-hub
-        // philosophy, just with a 1-2 noindex band instead of a 0-2 one (0 already 404'd above).
-        var noindex = pageNum > 1 || summary.TotalWithInspection < CategorySlugThreshold;
+            var areaTotalCount = await repo.CountByCitiesAsync(area.RawCityValues, ct: ct);
+            var establishments = await repo.GetByCitiesOrderedByLatestInspectionAsync(area.RawCityValues, pageNum, RecentlyInspectedPageSize, ct);
+            var categoriesInArea = await GetCategoriesInAreaAsync(area.RawCityValues, cache, repo, ct);
 
-        return Results.Content(
-            FindPageRenderer.RecentlyInspectedPage(
+            // Page 1 is indexable once the area meets CategorySlugThreshold (1-2 establishments
+            // still render, just noindexed); page 2+ is always noindex,follow — same as the
+            // category-hub philosophy, just with a 1-2 noindex band instead of a 0-2 one (0
+            // already 404'd above).
+            var noindex = pageNum > 1 || summary.TotalWithInspection < CategorySlugThreshold;
+
+            return FindPageRenderer.RecentlyInspectedPage(
                 area.DisplaySpelling, pageNum, RecentlyInspectedPageSize, areaTotalCount, summary,
-                noindex, establishments, categoriesInArea),
-            "text/html");
+                noindex, establishments, categoriesInArea);
+        });
+
+        return Results.Content(html!, "text/html");
     }
 
     private static async Task<IResult> ChangesHandlerAsync(
@@ -344,21 +380,37 @@ public static class FindEndpoints
 
         var pageNum = Math.Max(page ?? 1, 1);
         var windowStart = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-ChangesWindowDays));
-        var summary = await repo.GetChangesSummaryAsync(area.RawCityValues, windowStart, ct);
 
-        // Unlike RecentlyInspectedHandlerAsync, a zero result here is a normal, honest state (spec §14)
-        // — a quiet city, not a 404 — so ChangesPage renders its own empty-state block instead.
-        var changes = summary.TotalChanges == 0
-            ? Array.Empty<ScoreChangeRow>()
-            : await repo.GetRecentChangesByCitiesAsync(area.RawCityValues, windowStart, pageNum, ChangesPageSize, ct);
-        var categoriesInArea = await GetCategoriesInAreaAsync(area.RawCityValues, cache, repo, ct);
+        // Full-page cache, same shape/TTL as the area hub above — no live precheck needed here
+        // (unlike recently-inspected/category-hub): a zero-changes result is a normal, honest
+        // state (spec §14), a quiet city, not a 404, so ChangesPage's own empty-state block is
+        // just as cacheable as a populated page. windowStart shifts by less than a day within one
+        // CacheTtl window and isn't part of the key — same non-issue as sitemap.xml, which already
+        // embeds an equivalent window-start value inside its own 12h-cached output today. This is
+        // also the heaviest query on the whole /find surface (loads every establishment + all its
+        // inspections per area to compute score deltas), so caching it matters most here.
+        var cacheKey = $"find:hub:changes:{areaSlug}:{pageNum}";
+        var html = await cache.GetOrCreateAsync(cacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = CacheTtl;
 
-        var noindex = pageNum > 1 || summary.TotalChanges < CategorySlugThreshold;
+            var summary = await repo.GetChangesSummaryAsync(area.RawCityValues, windowStart, ct);
 
-        return Results.Content(
-            FindPageRenderer.ChangesPage(
-                area.DisplaySpelling, pageNum, ChangesPageSize, summary, noindex, changes, categoriesInArea),
-            "text/html");
+            // Unlike RecentlyInspectedHandlerAsync, a zero result here is a normal, honest state
+            // (spec §14) — a quiet city, not a 404 — so ChangesPage renders its own empty-state
+            // block instead.
+            var changes = summary.TotalChanges == 0
+                ? Array.Empty<ScoreChangeRow>()
+                : await repo.GetRecentChangesByCitiesAsync(area.RawCityValues, windowStart, pageNum, ChangesPageSize, ct);
+            var categoriesInArea = await GetCategoriesInAreaAsync(area.RawCityValues, cache, repo, ct);
+
+            var noindex = pageNum > 1 || summary.TotalChanges < CategorySlugThreshold;
+
+            return FindPageRenderer.ChangesPage(
+                area.DisplaySpelling, pageNum, ChangesPageSize, summary, noindex, changes, categoriesInArea);
+        });
+
+        return Results.Content(html!, "text/html");
     }
 
     private static async Task<IResult> DetailHandlerAsync(
