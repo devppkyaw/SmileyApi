@@ -263,10 +263,21 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
             .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City)
                      && e.LatestScoreDate != null);
 
-        return new RecentlyInspectedSummary(
-            await q.CountAsync(ct),
-            await q.MaxAsync(e => (DateOnly?)e.LatestScoreDate, ct),
-            await q.CountAsync(e => e.LatestScoreDate >= cutoff, ct));
+        // Single conditional-aggregation query instead of 3 sequential round trips — this call
+        // stays live on every request (it's RecentlyInspectedHandlerAsync's 404 gate), so shrinking
+        // it directly shrinks the page's worst-case latency, not just the cache-miss path.
+        var result = await q
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Total = g.Count(),
+                MaxDate = g.Max(e => (DateOnly?)e.LatestScoreDate),
+                Recent = g.Count(e => e.LatestScoreDate >= cutoff)
+            })
+            .SingleOrDefaultAsync(ct);
+        return result is null
+            ? new RecentlyInspectedSummary(0, null, 0)
+            : new RecentlyInspectedSummary(result.Total, result.MaxDate, result.Recent);
     }
 
     public async Task<IReadOnlyList<ScoreChangeRow>> GetRecentChangesByCitiesAsync(
@@ -341,9 +352,14 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
         var scored = db.Establishments
             .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City) && e.LatestScore != null);
 
-        var total = await scored.CountAsync(ct);
-        var top = await scored.CountAsync(e => e.LatestScore == 1, ct);
-        return new AreaScoreSnapshot(total, top);
+        // Single conditional-aggregation query instead of two sequential COUNTs — same result, half
+        // the DB round trips. GroupBy(_ => 1) always yields at most one group, so SingleOrDefaultAsync
+        // is safe (null only when `scored` itself is empty).
+        var counts = await scored
+            .GroupBy(_ => 1)
+            .Select(g => new { Total = g.Count(), Top = g.Count(e => e.LatestScore == 1) })
+            .SingleOrDefaultAsync(ct);
+        return counts is null ? new AreaScoreSnapshot(0, 0) : new AreaScoreSnapshot(counts.Total, counts.Top);
     }
 
     public async Task<AreaScoreSnapshot> GetCategoryScoreSnapshotAsync(IReadOnlyList<string> cityValues, string category, CancellationToken ct = default)
@@ -354,8 +370,11 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
             .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City)
                      && e.Pixibranche == category && e.LatestScore != null);
 
-        var total = await scored.CountAsync(ct);
-        var top = await scored.CountAsync(e => e.LatestScore == 1, ct);
-        return new AreaScoreSnapshot(total, top);
+        // Same single-query combination as GetAreaScoreSnapshotAsync above.
+        var counts = await scored
+            .GroupBy(_ => 1)
+            .Select(g => new { Total = g.Count(), Top = g.Count(e => e.LatestScore == 1) })
+            .SingleOrDefaultAsync(ct);
+        return counts is null ? new AreaScoreSnapshot(0, 0) : new AreaScoreSnapshot(counts.Total, counts.Top);
     }
 }

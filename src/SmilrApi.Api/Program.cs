@@ -3,6 +3,7 @@ using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Scalar.AspNetCore;
@@ -60,6 +61,18 @@ builder.Services.AddDistributedMemoryCache();
 // state. In-process is sufficient at the current scale — the Container App runs a single replica
 // (minReplicas = maxReplicas = 1), so there's no multi-instance cache-coherency concern.
 builder.Services.AddMemoryCache();
+
+// Compresses response bodies (Brotli preferred, Gzip fallback) — currently off entirely, so
+// Accept-Encoding: gzip,br is silently ignored and hub/sitemap/detail pages ship uncompressed.
+// Safe over HTTPS here: these are anonymous, no-auth pages/JSON with no secret (session ID, CSRF
+// token, etc.) echoed back in the response body — the session cookie is HttpOnly and never appears
+// in the body — so there's no BREACH-style compression-oracle target for this content.
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<BrotliCompressionProvider>();
+    options.Providers.Add<GzipCompressionProvider>();
+});
 
 builder.Services.AddSession(options =>
 {
@@ -187,6 +200,7 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
 }
+app.UseResponseCompression();
 app.UseMiddleware<CanonicalHostMiddleware>();
 
 app.UseExceptionHandler(errorApp =>
