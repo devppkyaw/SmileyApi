@@ -37,6 +37,7 @@ dotnet test
 - **Geo (MVP):** lat/lng stored as `float` columns, Haversine in raw SQL. Do not add `geography` column yet.
 - **Error responses:** always return `{ "error": { "code": "...", "message": "..." } }` — no other shape
 - **No frontend framework:** landing page is plain HTML/CSS in `wwwroot/` — do not introduce React or similar
+- **Cookie consent:** whenever a change adds/removes a cookie, client-side storage, tracking pixel, or third-party script (analytics, embeds, ads, etc.), check whether `src/SmilrApi.Api/wwwroot/privacy.html` (Cookies + Legal basis sections) still accurately describes it, and update it in the same change. If the new tech is NOT cookie-free/strictly-necessary/otherwise consent-exempt, it needs a real opt-in consent banner before shipping — don't just add a disclosure sentence and call it done.
 
 ## What Is Post-MVP (Do Not Build Yet)
 - Postal-code neighbourhood scores
