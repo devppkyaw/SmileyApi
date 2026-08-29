@@ -280,6 +280,57 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
             : new RecentlyInspectedSummary(result.Total, result.MaxDate, result.Recent);
     }
 
+    // establishmentFilterSql is appended verbatim after "WHERE e.CvrNumber IS NOT NULL" — either the
+    // nationwide non-empty-City filter, or a parameterized "AND e.City IN (...)" from
+    // BuildCityInClause. Never raw, unparameterized city text.
+    //
+    // Pushes ScoreChangeCalculator.LatestChange's "walk newest->oldest, return the first score
+    // divergence" semantics into SQL: LAG(SmileyScore) OVER (PARTITION BY EstablishmentId ORDER BY
+    // InspectedOn) (chronological) marks every row whose score differs from its immediate
+    // predecessor as a transition point; ROW_NUMBER() OVER (PARTITION BY EstablishmentId ORDER BY
+    // ChangeDate DESC) = 1 among transition points only then picks the most recent one — equivalent
+    // to LatestChange's backward walk, not merely "compare the two newest rows" (a same-score
+    // re-inspection after a real change does not erase that change, in either formulation).
+    private static string BuildCurrentTransitionsCte(string establishmentFilterSql) => $"""
+        WITH Deltas AS (
+            SELECT
+                i.EstablishmentId,
+                i.SmileyScore AS NewScore,
+                LAG(i.SmileyScore) OVER (PARTITION BY i.EstablishmentId ORDER BY i.InspectedOn) AS PreviousScore,
+                i.InspectedOn AS ChangeDate
+            FROM Inspections i
+            INNER JOIN Establishments e ON e.Id = i.EstablishmentId
+            WHERE e.CvrNumber IS NOT NULL {establishmentFilterSql}
+        ),
+        TransitionPoints AS (
+            SELECT EstablishmentId, PreviousScore, NewScore, ChangeDate
+            FROM Deltas
+            WHERE PreviousScore IS NOT NULL AND PreviousScore <> NewScore
+        ),
+        CurrentTransitions AS (
+            SELECT EstablishmentId, PreviousScore, NewScore, ChangeDate,
+                   ROW_NUMBER() OVER (PARTITION BY EstablishmentId ORDER BY ChangeDate DESC) AS rn
+            FROM TransitionPoints
+        )
+        """;
+
+    // City values travel as SqlParameters, never concatenated into SQL text — only placeholder names
+    // (@city0, @city1, ...) go into the string. FromSqlInterpolated can't parameterize a
+    // variable-length list the way EF's .Contains() LINQ translation does, hence FromSqlRaw +
+    // explicit SqlParameter[] (the same idiom GetNearbyAsync above already uses).
+    private static (string Sql, List<SqlParameter> Parameters) BuildCityInClause(IReadOnlyList<string> cityValues)
+    {
+        var names = new List<string>(cityValues.Count);
+        var parameters = new List<SqlParameter>(cityValues.Count);
+        for (var i = 0; i < cityValues.Count; i++)
+        {
+            var name = $"@city{i}";
+            names.Add(name);
+            parameters.Add(new SqlParameter(name, cityValues[i]));
+        }
+        return ($"AND e.City IN ({string.Join(", ", names)})", parameters);
+    }
+
     public async Task<IReadOnlyList<ScoreChangeRow>> GetRecentChangesByCitiesAsync(
         IReadOnlyList<string> cityValues, DateOnly windowStart, int page, int limit, CancellationToken ct = default)
     {
@@ -287,20 +338,41 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
         page  = Math.Max(1, page);
         limit = Math.Clamp(limit, 1, 100);
 
-        var establishments = await db.Establishments
-            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City))
-            .Include(e => e.Inspections.OrderByDescending(i => i.InspectedOn))
-            .AsNoTracking()
+        var (cityFilterSql, cityParams) = BuildCityInClause(cityValues);
+        var sql = BuildCurrentTransitionsCte(cityFilterSql) + """
+            SELECT ct.EstablishmentId AS EstablishmentId, ct.PreviousScore AS PreviousScore,
+                   ct.NewScore AS NewScore, ct.ChangeDate AS ChangeDate
+            FROM CurrentTransitions ct
+            INNER JOIN Establishments e ON e.Id = ct.EstablishmentId
+            WHERE ct.rn = 1 AND ct.ChangeDate >= @windowStart
+            ORDER BY ct.ChangeDate DESC, e.Name ASC
+            OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+            """;
+
+        var parameters = new List<SqlParameter>(cityParams)
+        {
+            new("@windowStart", windowStart),
+            new("@offset", (page - 1) * limit),
+            new("@limit", limit),
+        };
+
+        var rows = await db.Set<ScoreChangeSqlRow>()
+            .FromSqlRaw(sql, parameters.ToArray())
             .ToListAsync(ct);
 
-        return establishments
-            .Select(e => (Establishment: e, Change: ScoreChangeCalculator.LatestChange(e.Inspections)))
-            .Where(x => x.Change is { } c && c.ChangeDate >= windowStart)
-            .Select(x => new ScoreChangeRow(x.Establishment, x.Change!.Value.PreviousScore, x.Change.Value.NewScore, x.Change.Value.ChangeDate))
-            .OrderByDescending(r => r.ChangeDate)
-            .ThenBy(r => r.Establishment.Name)
-            .Skip((page - 1) * limit)
-            .Take(limit)
+        if (rows.Count == 0) return [];
+
+        var ids = rows.Select(r => r.EstablishmentId).ToList();
+        var establishments = await db.Establishments
+            .Where(e => ids.Contains(e.Id))
+            .AsNoTracking()
+            .ToDictionaryAsync(e => e.Id, ct);
+
+        // Re-zip in the SQL-determined order — the follow-up lookup is O(1) per row, bounded to
+        // `limit` (<=100) entries, so this doesn't reintroduce the original unbounded-materialization
+        // cost this method used to have.
+        return rows
+            .Select(r => new ScoreChangeRow(establishments[r.EstablishmentId], r.PreviousScore, r.NewScore, r.ChangeDate))
             .ToList();
     }
 
@@ -309,40 +381,48 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
     {
         if (cityValues.Count == 0) return new ChangesSummary(0, 0, 0, null);
 
-        var establishments = await db.Establishments
-            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City))
-            .Include(e => e.Inspections.OrderByDescending(i => i.InspectedOn))
-            .AsNoTracking()
-            .ToListAsync(ct);
+        var (cityFilterSql, cityParams) = BuildCityInClause(cityValues);
+        var sql = BuildCurrentTransitionsCte(cityFilterSql) + """
+            SELECT
+                COUNT(*) AS TotalChanges,
+                ISNULL(SUM(CASE WHEN ct.NewScore < ct.PreviousScore THEN 1 ELSE 0 END), 0) AS ImprovedCount,
+                ISNULL(SUM(CASE WHEN ct.NewScore > ct.PreviousScore THEN 1 ELSE 0 END), 0) AS DowngradedCount,
+                MAX(ct.ChangeDate) AS MostRecentChangeDate
+            FROM CurrentTransitions ct
+            WHERE ct.rn = 1 AND ct.ChangeDate >= @windowStart
+            """;
 
-        var inWindow = establishments
-            .Select(e => ScoreChangeCalculator.LatestChange(e.Inspections))
-            .Where(c => c is { } cc && cc.ChangeDate >= windowStart)
-            .Select(c => c!.Value)
-            .ToList();
+        var parameters = new List<SqlParameter>(cityParams) { new("@windowStart", windowStart) };
 
-        return new ChangesSummary(
-            inWindow.Count,
-            inWindow.Count(c => c.NewScore < c.PreviousScore),
-            inWindow.Count(c => c.NewScore > c.PreviousScore),
-            inWindow.Count > 0 ? inWindow.Max(c => c.ChangeDate) : null);
+        // No GROUP BY -> always exactly one row, even over zero matches (COUNT=0, SUM->NULL hence
+        // ISNULL, MAX->NULL = the desired "no changes" sentinel). Materialize with ToListAsync and
+        // take Single() client-side rather than SingleAsync directly on the FromSqlRaw query — EF
+        // Core needs to compose extra SQL around a query operator like SingleAsync (e.g. to cap the
+        // row count), and SQL Server rejects composing on top of raw SQL that contains a CTE.
+        var row = (await db.Set<ChangesSummaryRow>()
+            .FromSqlRaw(sql, parameters.ToArray())
+            .ToListAsync(ct))
+            .Single();
+
+        return new ChangesSummary(row.TotalChanges, row.ImprovedCount, row.DowngradedCount, row.MostRecentChangeDate);
     }
 
     public async Task<IReadOnlyList<(string City, int Count)>> GetChangeCountsByCityAsync(
         DateOnly windowStart, CancellationToken ct = default)
     {
-        var establishments = await db.Establishments
-            .Where(e => e.CvrNumber != null && e.City != null && e.City != "")
-            .Include(e => e.Inspections.OrderByDescending(i => i.InspectedOn))
-            .AsNoTracking()
+        var sql = BuildCurrentTransitionsCte("AND e.City IS NOT NULL AND e.City <> ''") + """
+            SELECT e.City AS City, COUNT(*) AS Count
+            FROM CurrentTransitions ct
+            INNER JOIN Establishments e ON e.Id = ct.EstablishmentId
+            WHERE ct.rn = 1 AND ct.ChangeDate >= @windowStart
+            GROUP BY e.City
+            """;
+
+        var rows = await db.Set<CityChangeCountRow>()
+            .FromSqlRaw(sql, new SqlParameter("@windowStart", windowStart))
             .ToListAsync(ct);
 
-        return establishments
-            .Select(e => (e.City, Change: ScoreChangeCalculator.LatestChange(e.Inspections)))
-            .Where(x => x.Change is { } c && c.ChangeDate >= windowStart)
-            .GroupBy(x => x.City!)
-            .Select(g => (City: g.Key, Count: g.Count()))
-            .ToList();
+        return rows.Select(r => (r.City, r.Count)).ToList();
     }
 
     public async Task<AreaScoreSnapshot> GetAreaScoreSnapshotAsync(IReadOnlyList<string> cityValues, CancellationToken ct = default)
