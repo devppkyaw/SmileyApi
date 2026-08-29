@@ -45,6 +45,13 @@ public class SmilrDbContext(DbContextOptions<SmilrDbContext> options) : DbContex
              .HasForeignKey(x => x.EstablishmentId);
         });
 
+        // Keyless DTOs used only as FromSqlRaw result shapes for the score-transition queries in
+        // EstablishmentRepository — never a real table/view, so ToView(null) keeps them out of
+        // migrations.
+        modelBuilder.Entity<ScoreChangeSqlRow>(e => { e.HasNoKey(); e.ToView(null); });
+        modelBuilder.Entity<CityChangeCountRow>(e => { e.HasNoKey(); e.ToView(null); });
+        modelBuilder.Entity<ChangesSummaryRow>(e => { e.HasNoKey(); e.ToView(null); });
+
         modelBuilder.Entity<ApiKey>(e =>
         {
             e.Property(x => x.KeyHash).HasMaxLength(64);
