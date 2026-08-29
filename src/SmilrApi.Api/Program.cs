@@ -234,8 +234,26 @@ app.UseStaticFiles(new StaticFileOptions
 {
     OnPrepareResponse = ctx =>
     {
-        if (ctx.File.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
+        var fileName = ctx.File.Name;
+        if (fileName.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
+        {
             ctx.Context.Response.Headers["Cache-Control"] = "no-cache";
+        }
+        else if (fileName.EndsWith(".css", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".js", StringComparison.OrdinalIgnoreCase)
+            || fileName.Equals("robots.txt", StringComparison.OrdinalIgnoreCase))
+        {
+            // No cache-busting (hashed filename/query string) exists yet for these hand-edited
+            // files, so avoid a full year of immutable caching — 1 day bounds staleness to a
+            // single day without giving up most of the win on repeat visits within that window.
+            ctx.Context.Response.Headers["Cache-Control"] = "public, max-age=86400";
+        }
+        else
+        {
+            // Images, icons, fonts, etc. — filenames don't change in place today, safe to cache
+            // aggressively for a full year.
+            ctx.Context.Response.Headers["Cache-Control"] = "public, max-age=31536000, immutable";
+        }
     }
 });
 app.UseCors();

@@ -7,10 +7,17 @@ public class ApiKeyMiddleware(RequestDelegate next, IServiceScopeFactory scopeFa
 {
     private static readonly string[] PublicPaths = ["/health", "/openapi", "/scalar", "/admin", "/v1/leads", "/v1/business", "/v1/stripe", "/widget", "/find"];
 
+    // Requests reaching this middleware with one of these extensions have already fallen through
+    // UseStaticFiles unmatched (no such file exists) — let them pass through so they resolve to the
+    // framework's normal terminal 404 instead of a misleading 401.
+    private static readonly string[] StaticFileExtensions =
+        [".ico", ".css", ".js", ".png", ".jpg", ".jpeg", ".svg", ".txt", ".webmanifest", ".woff", ".woff2"];
+
     public async Task InvokeAsync(HttpContext context)
     {
         var path = context.Request.Path.Value ?? string.Empty;
-        if (PublicPaths.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+        if (PublicPaths.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase))
+            || StaticFileExtensions.Any(ext => path.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
         {
             await next(context);
             return;
