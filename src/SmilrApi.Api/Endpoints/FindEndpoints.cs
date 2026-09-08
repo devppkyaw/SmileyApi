@@ -74,6 +74,11 @@ public static class FindEndpoints
     // below this count).
     private const int CategorySlugThreshold = 3;
 
+    // The sitemap protocol caps a single sitemap file at 50,000 URLs; this site's detail-page count alone
+    // is already well past that. Kept safely under the cap (not right up against it) so ordinary growth
+    // between deploys doesn't require revisiting this number.
+    private const int SitemapChunkSize = 45_000;
+
     public static void MapFindEndpoints(this WebApplication app)
     {
         var find = app.MapGroup("/find")
@@ -102,17 +107,26 @@ public static class FindEndpoints
             return Results.Content(FindPageRenderer.SearchResultsPage(q, pageNum, SearchPageSize, results), "text/html");
         });
 
+        // Sitemap index — lists the chunk files below rather than URLs directly (see SitemapChunkSize).
+        // This is what robots.txt's "Sitemap:" line and Search Console's submitted sitemap should point at.
         find.MapGet("/sitemap.xml", async (IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct) =>
         {
-            var xml = await cache.GetOrCreateAsync("find:sitemap", async entry =>
-            {
-                entry.AbsoluteExpirationRelativeToNow = CacheTtl;
-                var entries = await repo.GetAllForSitemapAsync(ct);
-                var categoryCounts = await repo.GetCityCategoryCountsAsync(ct);
-                var changeWindowStart = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-ChangesWindowDays));
-                var changeCounts = await repo.GetChangeCountsByCityAsync(changeWindowStart, ct);
-                return FindPageRenderer.SitemapXml(entries, categoryCounts, changeCounts, CategorySlugThreshold);
-            });
+            var urls = await GetSitemapUrlsAsync(cache, repo, ct);
+            var xml = FindPageRenderer.SitemapIndexXml(urls.Count, SitemapChunkSize);
+            return Results.Content(xml, "application/xml");
+        });
+
+        // One chunk of the sitemap (n is 1-indexed, matching the URLs SitemapIndexXml hands out above).
+        // Reuses the same cached URL list as the index; slicing/rendering a chunk is pure in-memory work
+        // (no DB access), so unlike the underlying list itself, the rendered chunk isn't cached separately.
+        find.MapGet("/sitemap-{n:int}.xml", async (int n, IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct) =>
+        {
+            var urls = await GetSitemapUrlsAsync(cache, repo, ct);
+            var chunkCount = urls.Count == 0 ? 0 : (int)Math.Ceiling(urls.Count / (double)SitemapChunkSize);
+            if (n < 1 || n > chunkCount)
+                return Results.NotFound();
+
+            var xml = FindPageRenderer.SitemapChunkXml(urls, n - 1, SitemapChunkSize);
             return Results.Content(xml, "application/xml");
         });
 
@@ -499,6 +513,23 @@ public static class FindEndpoints
         return Results.Content(
             FindPageRenderer.NotFoundPage($"No establishments found for CVR '{cvr}'."),
             "text/html", statusCode: 404);
+    }
+
+    // Shared by both sitemap routes above — the expensive part (three repo calls + BuildSitemapUrls'
+    // flattening over tens of thousands of establishments) is cached once per CacheTtl window; each chunk
+    // request then just slices the same in-memory list.
+    private static async Task<IReadOnlyList<FindPageRenderer.SitemapUrl>> GetSitemapUrlsAsync(
+        IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct)
+    {
+        return (await cache.GetOrCreateAsync("find:sitemap:urls", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = CacheTtl;
+            var entries = await repo.GetAllForSitemapAsync(ct);
+            var categoryCounts = await repo.GetCityCategoryCountsAsync(ct);
+            var changeWindowStart = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-ChangesWindowDays));
+            var changeCounts = await repo.GetChangeCountsByCityAsync(changeWindowStart, ct);
+            return FindPageRenderer.BuildSitemapUrls(entries, categoryCounts, changeCounts, CategorySlugThreshold);
+        }))!;
     }
 
     private static async Task<IReadOnlyDictionary<string, AreaInfo>> GetAreaIndexAsync(
