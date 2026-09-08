@@ -204,7 +204,7 @@
       </div>
       <pre><code class="language-javascript">navigator.geolocation.getCurrentPosition(pos => {
   const { latitude, longitude } = pos.coords;
-  fetch(`https://api.smilrhq.dk/v1/establishments/nearby?lat=${latitude}&lng=${longitude}&radius=2`, {
+  fetch(`https://smilrhq.dk/v1/establishments/nearby?lat=${latitude}&lng=${longitude}&radius=2`, {
     headers: { 'X-Api-Key': 'YOUR_API_KEY' }
   })
   .then(r => r.json())
@@ -224,7 +224,7 @@ const [place] = await geo.json();
 
 // Step 2: use the coordinates with Smilr
 const data = await fetch(
-  `https://api.smilrhq.dk/v1/establishments/nearby?lat=${place.lat}&lng=${place.lon}&radius=2`,
+  `https://smilrhq.dk/v1/establishments/nearby?lat=${place.lat}&lng=${place.lon}&radius=2`,
   { headers: { 'X-Api-Key': 'YOUR_API_KEY' } }
 ).then(r => r.json());
 console.log(data.results);</code></pre>

@@ -1095,25 +1095,27 @@ public static class FindPageRenderer
         return Layout("Not found — SmilrHQ", "The requested page could not be found.", "/find", body);
     }
 
-    public static string SitemapXml(
+    /// <summary>One &lt;loc&gt;+&lt;lastmod&gt; pair destined for a sitemap file — the unit both
+    /// SitemapChunkXml (a paginated &lt;urlset&gt; file) and SitemapIndexXml (the index pointing at all of
+    /// them) operate on. Built once per sitemap cache window by BuildSitemapUrls below, then sliced per
+    /// chunk request — no DB access needed to render an individual chunk.</summary>
+    internal readonly record struct SitemapUrl(string Loc, DateTime Lastmod);
+
+    /// <summary>Flattens establishment/hub/category data into the full ordered list of sitemap URLs:
+    /// one per establishment detail page, plus one per area hub, recently-inspected page, changes page,
+    /// and indexable area x category hub. Returned as data rather than written straight to XML so
+    /// FindEndpoints can chunk it across multiple sitemap files — the sitemap protocol caps a single file
+    /// at 50,000 URLs, and detail pages alone are already well past that.</summary>
+    internal static IReadOnlyList<SitemapUrl> BuildSitemapUrls(
         IReadOnlyList<SitemapEntry> entries,
         IReadOnlyList<(string City, string Category, int Count)> categoryCounts,
         IReadOnlyList<(string City, int Count)> changeCounts,
         int categorySlugThreshold)
     {
-        var sb = new StringBuilder();
-        sb.Append("""<?xml version="1.0" encoding="UTF-8"?>""").Append('\n');
-        sb.Append("""<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">""").Append('\n');
+        var urls = new List<SitemapUrl>(entries.Count + 64);
 
         foreach (var e in entries)
-        {
-            var path = FindUrlBuilder.DetailPath(e.Name, e.City, e.Navnelbnr);
-            sb.Append("  <url><loc>")
-              .Append(SiteOrigin).Append(path)
-              .Append("</loc><lastmod>")
-              .Append(e.UpdatedAt.ToString("yyyy-MM-dd"))
-              .Append("</lastmod></url>\n");
-        }
+            urls.Add(new SitemapUrl(FindUrlBuilder.DetailPath(e.Name, e.City, e.Navnelbnr), e.UpdatedAt));
 
         // One hub-page entry per area, derived from the same projection — no extra repository call needed.
         var hubGroups = entries
@@ -1127,11 +1129,7 @@ public static class FindPageRenderer
             var displaySpelling = group.First().City!;
             var lastmod = group.Max(e => e.UpdatedAt);
             areaLastmod[group.Key] = lastmod;
-            sb.Append("  <url><loc>")
-              .Append(SiteOrigin).Append(FindUrlBuilder.HubPath(displaySpelling))
-              .Append("</loc><lastmod>")
-              .Append(lastmod.ToString("yyyy-MM-dd"))
-              .Append("</lastmod></url>\n");
+            urls.Add(new SitemapUrl(FindUrlBuilder.HubPath(displaySpelling), lastmod));
         }
 
         // One recently-inspected entry per area whose count of establishments with a recorded inspection
@@ -1142,12 +1140,7 @@ public static class FindPageRenderer
             var withInspectionCount = group.Count(e => e.HasInspectionDate);
             if (withInspectionCount < categorySlugThreshold) continue;
 
-            var displaySpelling = group.First().City!;
-            sb.Append("  <url><loc>")
-              .Append(SiteOrigin).Append(FindUrlBuilder.RecentlyInspectedPath(displaySpelling))
-              .Append("</loc><lastmod>")
-              .Append(areaLastmod[group.Key].ToString("yyyy-MM-dd"))
-              .Append("</lastmod></url>\n");
+            urls.Add(new SitemapUrl(FindUrlBuilder.RecentlyInspectedPath(group.First().City!), areaLastmod[group.Key]));
         }
 
         // One changes entry per area whose count of establishments with an in-window score transition
@@ -1163,12 +1156,7 @@ public static class FindPageRenderer
             if (!changeCountByAreaSlug.TryGetValue(group.Key, out var changeCount) || changeCount < categorySlugThreshold)
                 continue;
 
-            var displaySpelling = group.First().City!;
-            sb.Append("  <url><loc>")
-              .Append(SiteOrigin).Append(FindUrlBuilder.ChangesPath(displaySpelling))
-              .Append("</loc><lastmod>")
-              .Append(areaLastmod[group.Key].ToString("yyyy-MM-dd"))
-              .Append("</lastmod></url>\n");
+            urls.Add(new SitemapUrl(FindUrlBuilder.ChangesPath(group.First().City!), areaLastmod[group.Key]));
         }
 
         // Area x category entries, only for combinations meeting the minimum-establishment-count indexing
@@ -1186,16 +1174,53 @@ public static class FindPageRenderer
             if (!areaLastmod.TryGetValue(areaGroup.Key, out var lastmod)) continue;
             var displayCity = areaGroup.First().City;
             foreach (var t in areaGroup)
-            {
-                sb.Append("  <url><loc>")
-                  .Append(SiteOrigin).Append(FindUrlBuilder.CategoryHubPath(displayCity, t.Category))
-                  .Append("</loc><lastmod>")
-                  .Append(lastmod.ToString("yyyy-MM-dd"))
-                  .Append("</lastmod></url>\n");
-            }
+                urls.Add(new SitemapUrl(FindUrlBuilder.CategoryHubPath(displayCity, t.Category), lastmod));
+        }
+
+        return urls;
+    }
+
+    /// <summary>Renders one sitemap file (a plain &lt;urlset&gt;) covering URLs
+    /// [chunkIndex*chunkSize, (chunkIndex+1)*chunkSize) of the full list — chunkIndex is 0-based.
+    /// Pure slicing over an already-built list, so this is cheap enough to run per-request uncached even
+    /// though the underlying urls list itself is cached (see FindEndpoints).</summary>
+    internal static string SitemapChunkXml(IReadOnlyList<SitemapUrl> urls, int chunkIndex, int chunkSize)
+    {
+        var sb = new StringBuilder();
+        sb.Append("""<?xml version="1.0" encoding="UTF-8"?>""").Append('\n');
+        sb.Append("""<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">""").Append('\n');
+
+        foreach (var u in urls.Skip(chunkIndex * chunkSize).Take(chunkSize))
+        {
+            sb.Append("  <url><loc>")
+              .Append(SiteOrigin).Append(u.Loc)
+              .Append("</loc><lastmod>")
+              .Append(u.Lastmod.ToString("yyyy-MM-dd"))
+              .Append("</lastmod></url>\n");
         }
 
         sb.Append("</urlset>");
+        return sb.ToString();
+    }
+
+    /// <summary>Renders the top-level sitemap index — what robots.txt's "Sitemap:" line and Search
+    /// Console's submitted-sitemap both point at (see FindEndpoints). One &lt;sitemap&gt; entry per chunk
+    /// of up to chunkSize URLs, per the sitemap protocol's 50,000-URL-per-file cap; chunk files are served
+    /// at /find/sitemap-{n}.xml, 1-indexed to match the URLs handed out here.</summary>
+    internal static string SitemapIndexXml(int urlCount, int chunkSize)
+    {
+        var chunkCount = urlCount == 0 ? 0 : (int)Math.Ceiling(urlCount / (double)chunkSize);
+
+        var sb = new StringBuilder();
+        sb.Append("""<?xml version="1.0" encoding="UTF-8"?>""").Append('\n');
+        sb.Append("""<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">""").Append('\n');
+
+        for (var i = 1; i <= chunkCount; i++)
+            sb.Append("  <sitemap><loc>")
+              .Append(SiteOrigin).Append("/find/sitemap-").Append(i).Append(".xml")
+              .Append("</loc></sitemap>\n");
+
+        sb.Append("</sitemapindex>");
         return sb.ToString();
     }
 
