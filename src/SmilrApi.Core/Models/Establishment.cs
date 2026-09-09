@@ -22,5 +22,10 @@ public class Establishment
     public DateTime FirstSeenAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
+    // Set when this establishment first falls out of the Fødevarestyrelsen XML feed (closed/delisted),
+    // cleared back to null if it reappears in a later sync. Tracking only for now — no behavior driven
+    // off this yet (still shown in /find, on dashboards, etc.).
+    public DateTime? DelistedAt { get; set; }
+
     public ICollection<Inspection> Inspections { get; set; } = new List<Inspection>();
 }

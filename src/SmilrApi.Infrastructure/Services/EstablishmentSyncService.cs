@@ -86,7 +86,8 @@ public class EstablishmentSyncService(SmilrDbContext db, IEmailService emailServ
                     ISNULL(T.VirksomhedsType, '')        <> ISNULL(S.VirksomhedsType, '') OR
                     ISNULL(T.Pixibranche,     '')        <> ISNULL(S.Pixibranche,     '') OR
                     ISNULL(CAST(T.LatestScoreDate AS NVARCHAR(10)),'') <> ISNULL(CAST(S.LatestScoreDate AS NVARCHAR(10)),'') OR
-                    ISNULL(T.PNumber,         '')        <> ISNULL(S.PNumber,         '')
+                    ISNULL(T.PNumber,         '')        <> ISNULL(S.PNumber,         '') OR
+                    T.DelistedAt IS NOT NULL
                 ) THEN UPDATE SET
                     T.CvrNumber       = S.CvrNumber,
                     T.Name            = S.Name,
@@ -103,6 +104,7 @@ public class EstablishmentSyncService(SmilrDbContext db, IEmailService emailServ
                     T.Pixibranche     = S.Pixibranche,
                     T.LatestScoreDate = S.LatestScoreDate,
                     T.PNumber         = S.PNumber,
+                    T.DelistedAt      = NULL,
                     T.UpdatedAt       = GETUTCDATE()
                 WHEN NOT MATCHED THEN INSERT (
                     Navnelbnr, CvrNumber, Name, Address, PostalCode, City,
@@ -120,10 +122,14 @@ public class EstablishmentSyncService(SmilrDbContext db, IEmailService emailServ
                 -- this clause. ReportUrl is a pure function of Navnelbnr (see FodevareXmlParser), so it's
                 -- safe — and necessary — to keep it correct here even without fresh source data, instead
                 -- of leaving it frozen at whatever it was the last time this establishment was in the feed.
-                WHEN NOT MATCHED BY SOURCE AND
-                    ISNULL(T.ReportUrl, '') <> 'https://www.findsmiley.dk/app/' + CAST(T.Navnelbnr AS NVARCHAR(20))
-                THEN UPDATE SET
-                    T.ReportUrl = 'https://www.findsmiley.dk/app/' + CAST(T.Navnelbnr AS NVARCHAR(20))
+                -- DelistedAt is set once (first time a row falls out of the feed) and left alone on
+                -- subsequent syncs — tracking only for now, no behavior reads it yet.
+                WHEN NOT MATCHED BY SOURCE AND (
+                    ISNULL(T.ReportUrl, '') <> 'https://www.findsmiley.dk/app/' + CAST(T.Navnelbnr AS NVARCHAR(20)) OR
+                    T.DelistedAt IS NULL
+                ) THEN UPDATE SET
+                    T.ReportUrl  = 'https://www.findsmiley.dk/app/' + CAST(T.Navnelbnr AS NVARCHAR(20)),
+                    T.DelistedAt = ISNULL(T.DelistedAt, GETUTCDATE())
                 OUTPUT $action, INSERTED.Id, DELETED.LatestScore, INSERTED.LatestScore
                 INTO @out (action, EstId, OldScore, NewScore);
 
