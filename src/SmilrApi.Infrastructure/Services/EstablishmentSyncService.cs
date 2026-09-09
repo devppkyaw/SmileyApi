@@ -115,6 +115,15 @@ public class EstablishmentSyncService(SmilrDbContext db, IEmailService emailServ
                     S.LatestScore, S.VirksomhedsType, S.Pixibranche, S.LatestScoreDate, S.PNumber,
                     GETUTCDATE(), GETUTCDATE()
                 )
+                -- Establishments no longer present in the feed (closed/delisted) are never touched by
+                -- the branches above — MERGE has no notion of 'this key vanished from source' other than
+                -- this clause. ReportUrl is a pure function of Navnelbnr (see FodevareXmlParser), so it's
+                -- safe — and necessary — to keep it correct here even without fresh source data, instead
+                -- of leaving it frozen at whatever it was the last time this establishment was in the feed.
+                WHEN NOT MATCHED BY SOURCE AND
+                    ISNULL(T.ReportUrl, '') <> 'https://www.findsmiley.dk/app/' + CAST(T.Navnelbnr AS NVARCHAR(20))
+                THEN UPDATE SET
+                    T.ReportUrl = 'https://www.findsmiley.dk/app/' + CAST(T.Navnelbnr AS NVARCHAR(20))
                 OUTPUT $action, INSERTED.Id, DELETED.LatestScore, INSERTED.LatestScore
                 INTO @out (action, EstId, OldScore, NewScore);
 
