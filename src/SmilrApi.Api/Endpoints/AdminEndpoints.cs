@@ -56,6 +56,33 @@ public static class AdminEndpoints
             return Results.Json(new { status = "started" }, statusCode: 202);
         });
 
+        // One-off migration helper for the findsmiley.dk URL format change (old:
+        // ".../da-DK/Searching/DetailsView.htm?virk={navnelbnr}" -> new: ".../app/{navnelbnr}").
+        // The regular /admin/sync MERGE only touches rows present in the current XML feed pull, so
+        // establishments no longer listed there (delisted/closed) never get their ReportUrl refreshed
+        // by sync alone. Safe to call more than once — only rewrites rows not already in the new format.
+        // Can be removed once run in every environment; the format itself is set going forward by
+        // FodevareXmlParser regardless of this endpoint.
+        app.MapPost("/admin/backfill-report-urls", async (HttpContext ctx, IConfiguration cfg, SmilrDbContext db, CancellationToken ct) =>
+        {
+            var adminKey = cfg["Admin:Key"];
+            if (!string.IsNullOrEmpty(adminKey))
+            {
+                var provided = ctx.Request.Headers["X-Admin-Key"].FirstOrDefault();
+                if (provided != adminKey)
+                    return Results.Json(Error("unauthorized", "Invalid admin key."), statusCode: 401);
+            }
+
+            var updated = await db.Database.ExecuteSqlRawAsync(
+                """
+                UPDATE Establishments
+                SET ReportUrl = 'https://www.findsmiley.dk/app/' + CAST(Navnelbnr AS NVARCHAR(20))
+                WHERE ReportUrl IS NULL OR ReportUrl NOT LIKE 'https://www.findsmiley.dk/app/%'
+                """, ct);
+
+            return Results.Json(new { status = "done", rowsUpdated = updated });
+        });
+
         app.MapPost("/admin/verify", (HttpContext ctx, IConfiguration cfg) =>
         {
             var adminKey = cfg["Admin:Key"];

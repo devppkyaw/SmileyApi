@@ -71,7 +71,9 @@ public class FodevareXmlParser(IHttpClientFactory httpClientFactory, ILogger<Fod
             NullIfEmpty(e.Element("branche")?.Value),
             TryParseDouble(e.Element("Geo_Lat")?.Value ?? ""),
             TryParseDouble(e.Element("Geo_Lng")?.Value ?? ""),
-            NullIfEmpty(e.Element("URL")?.Value),
+            // Built from navnelbnr rather than trusting the XML feed's own "URL" element,
+            // which still emits the old findsmiley.dk link format.
+            $"https://www.findsmiley.dk/app/{navnelbnr}",
             NullIfEmpty(e.Element("virksomhedstype")?.Value),
             NullIfEmpty(e.Element("Pixibranche")?.Value),
             latestScoreDate,
