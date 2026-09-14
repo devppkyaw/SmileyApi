@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using SmilrApi.Core.Interfaces;
 using SmilrApi.Core.Models;
+using SmilrApi.Core.Utils;
 
 namespace SmilrApi.Infrastructure.Services;
 
@@ -187,5 +188,40 @@ public class AcsEmailService : IEmailService
 
         var op = await _client.SendAsync(WaitUntil.Started, message, ct);
         _logger.LogInformation("System score digest email queued to {To} ({Count} changes), operationId={Id}", _systemMonitorAddress, changes.Count, op.Id);
+    }
+
+    public async Task SendFeedHealthAlertAsync(FeedHealthAlertKind kind, string? fieldName, FeedHealthAlertStatus status,
+        string summary, DateTime? firstDetectedAt, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_systemMonitorAddress))
+        {
+            _logger.LogDebug("Email:SystemMonitorAddress is not configured; skipping feed health alert ({Kind}/{Field}, {Status}).",
+                kind, fieldName, status);
+            return;
+        }
+
+        var label = fieldName is null ? kind.ToString() : $"{kind} ({fieldName})";
+        var subject = status switch
+        {
+            FeedHealthAlertStatus.Detected => $"Smilr feed health alert: {label}",
+            FeedHealthAlertStatus.StillUnresolved => $"Smilr feed health — still unresolved: {label}",
+            FeedHealthAlertStatus.Recovered => $"Smilr feed health recovered: {label}",
+            _ => $"Smilr feed health: {label}",
+        };
+        var since = firstDetectedAt is { } dt ? $" (ongoing since {dt:u})" : "";
+        var body = $"{summary}{since}";
+
+        var message = new EmailMessage(
+            senderAddress: _sender,
+            recipientAddress: _systemMonitorAddress,
+            content: new EmailContent(subject)
+            {
+                Html = $"<p>{body}</p>",
+                PlainText = body
+            });
+
+        var op = await _client.SendAsync(WaitUntil.Started, message, ct);
+        _logger.LogInformation("Feed health alert email queued to {To} ({Kind}/{Field}, {Status}), operationId={Id}",
+            _systemMonitorAddress, kind, fieldName, status, op.Id);
     }
 }

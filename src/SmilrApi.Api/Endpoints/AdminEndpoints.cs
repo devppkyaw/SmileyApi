@@ -34,8 +34,20 @@ public static class AdminEndpoints
                 try
                 {
                     using var scope = scopeFactory.CreateScope();
-                    var rows = await parser.ParseAsync(CancellationToken.None);
-                    var syncRows = rows.Select(r => new SyncRow(
+                    var feedResult = await parser.ParseAsync(CancellationToken.None);
+
+                    try
+                    {
+                        var healthSvc = scope.ServiceProvider.GetRequiredService<FeedHealthCheckService>();
+                        await healthSvc.CheckAndAlertAsync(XmlSyncWorker.BuildHealthMetrics(feedResult), CancellationToken.None);
+                    }
+                    catch (Exception ex)
+                    {
+                        scope.ServiceProvider.GetRequiredService<ILogger<XmlSyncWorker>>()
+                            .LogError(ex, "/admin/sync: feed health check failed.");
+                    }
+
+                    var syncRows = feedResult.Rows.Select(r => new SyncRow(
                         r.Navnelbnr, r.CvrNumber, r.Name, r.Address, r.PostalCode,
                         r.City, r.IndustryCode, r.IndustryName, r.GeoLat, r.GeoLng,
                         r.ReportUrl, r.VirksomhedsType, r.Pixibranche, r.LatestScoreDate, r.PNumber,

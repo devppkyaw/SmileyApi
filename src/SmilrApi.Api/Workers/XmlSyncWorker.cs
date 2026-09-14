@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SmilrApi.Core.Models;
 using SmilrApi.Infrastructure.Data;
 using SmilrApi.Infrastructure.Services;
 
@@ -54,9 +55,23 @@ public class XmlSyncWorker(
 
         logger.LogInformation("XmlSyncWorker: starting sync.");
 
-        var rows = await parser.ParseAsync(ct);
+        var feedResult = await parser.ParseAsync(ct);
 
-        var syncRows = rows.Select(r => new SyncRow(
+        // Wrapped separately so a bug in this new-ish feature can never abort the real sync below —
+        // same defensive posture EstablishmentSyncService.SendScoreAlertsAsync already uses for its
+        // own emails. Runs even when feedResult.Rows.Count == 0: a total collapse is the most
+        // important case to catch.
+        try
+        {
+            var healthSvc = scope.ServiceProvider.GetRequiredService<FeedHealthCheckService>();
+            await healthSvc.CheckAndAlertAsync(BuildHealthMetrics(feedResult), ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "XmlSyncWorker: feed health check failed.");
+        }
+
+        var syncRows = feedResult.Rows.Select(r => new SyncRow(
             r.Navnelbnr, r.CvrNumber, r.Name, r.Address, r.PostalCode,
             r.City, r.IndustryCode, r.IndustryName, r.GeoLat, r.GeoLng,
             r.ReportUrl, r.VirksomhedsType, r.Pixibranche, r.LatestScoreDate, r.PNumber,
@@ -73,5 +88,24 @@ public class XmlSyncWorker(
                 .ToList();
             await webhookSvc.EnqueueDeliveriesAsync(webhookChanges, ct);
         }
+    }
+
+    // Tracked fields are hardcoded (paired 1:1 with EstablishmentSyncRow properties) rather than
+    // config-driven, and chosen because they're normally near-always populated in the real feed —
+    // GeoLat/GeoLng are deliberately excluded here since they're legitimately sparse today and
+    // would cause false positives. Internal (not private) so AdminEndpoints' manual /admin/sync
+    // trigger — which duplicates this worker's sync logic for on-demand use — can reuse it too.
+    internal static FeedHealthMetrics BuildHealthMetrics(FodevareFeedResult result)
+    {
+        var rows = result.Rows;
+        var nullCounts = new Dictionary<string, int>
+        {
+            ["Address"] = rows.Count(r => r.Address is null),
+            ["PostalCode"] = rows.Count(r => r.PostalCode is null),
+            ["City"] = rows.Count(r => r.City is null),
+            ["LatestScoreDate"] = rows.Count(r => r.LatestScoreDate is null),
+        };
+
+        return new FeedHealthMetrics(result.ETag, result.LastModified, result.TotalRowsSeen, rows.Count, nullCounts);
     }
 }
