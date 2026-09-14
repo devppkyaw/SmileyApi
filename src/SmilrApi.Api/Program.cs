@@ -52,6 +52,8 @@ else
 builder.Services.AddScoped<EstablishmentSyncService>();
 builder.Services.AddScoped<WebhookService>();
 builder.Services.AddScoped<WebhookDeliveryJob>();
+builder.Services.AddScoped<FeedHealthCheckService>();
+builder.Services.Configure<FeedHealthOptions>(builder.Configuration.GetSection("FeedHealth"));
 builder.Services.AddScoped<IStripeService, StripeService>();
 
 builder.Services.AddDistributedMemoryCache();

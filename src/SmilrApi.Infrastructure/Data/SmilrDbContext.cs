@@ -12,6 +12,8 @@ public class SmilrDbContext(DbContextOptions<SmilrDbContext> options) : DbContex
     public DbSet<AccessRequest> AccessRequests => Set<AccessRequest>();
     public DbSet<Business> Businesses => Set<Business>();
     public DbSet<BusinessLocation> BusinessLocations => Set<BusinessLocation>();
+    public DbSet<FeedHealthSnapshot> FeedHealthSnapshots => Set<FeedHealthSnapshot>();
+    public DbSet<FeedHealthAnomaly> FeedHealthAnomalies => Set<FeedHealthAnomaly>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -109,6 +111,20 @@ public class SmilrDbContext(DbContextOptions<SmilrDbContext> options) : DbContex
              .WithMany(x => x.Locations)
              .HasForeignKey(x => x.BusinessId)
              .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<FeedHealthSnapshot>(e =>
+        {
+            e.Property(x => x.LastEtag).HasMaxLength(256);
+            e.Property(x => x.FieldNullCountsJson).HasColumnType("nvarchar(max)");
+        });
+
+        modelBuilder.Entity<FeedHealthAnomaly>(e =>
+        {
+            e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(64);
+            e.Property(x => x.FieldName).HasMaxLength(64);
+            e.Property(x => x.LastObservedSummary).HasMaxLength(512);
+            e.HasIndex(x => new { x.Kind, x.FieldName }).IsUnique();
         });
     }
 }

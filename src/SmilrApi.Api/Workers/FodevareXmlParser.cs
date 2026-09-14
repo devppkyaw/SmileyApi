@@ -7,21 +7,33 @@ public class FodevareXmlParser(IHttpClientFactory httpClientFactory, ILogger<Fod
 {
     private const string XmlUrl = "https://www.foedevarestyrelsen.dk/Media/638212360788086849/Smiley_xml.xml";
 
-    public async Task<IReadOnlyList<EstablishmentSyncRow>> ParseAsync(CancellationToken ct)
+    public async Task<FodevareFeedResult> ParseAsync(CancellationToken ct)
     {
         logger.LogInformation("Downloading Smiley XML from Fødevarestyrelsen...");
 
         var client = httpClientFactory.CreateClient("fodevarestyrelsen");
-        await using var xmlStream = await client.GetStreamAsync(XmlUrl, ct);
+        // GetAsync + ResponseHeadersRead (rather than GetStreamAsync) so the response headers are
+        // visible below — FeedHealthCheckService uses ETag/Last-Modified to detect an upstream
+        // feed that has stopped being regenerated. The body is still streamed, not buffered.
+        using var response = await client.GetAsync(XmlUrl, HttpCompletionOption.ResponseHeadersRead, ct);
+        response.EnsureSuccessStatusCode();
+
+        var etag = response.Headers.ETag?.Tag;
+        var lastModified = response.Content.Headers.LastModified;
+
+        await using var xmlStream = await response.Content.ReadAsStreamAsync(ct);
 
         var rows = new List<EstablishmentSyncRow>(57_000);
         var settings = new XmlReaderSettings { Async = true };
         using var reader = XmlReader.Create(xmlStream, settings);
 
+        var totalRowsSeen = 0;
         while (await reader.ReadAsync())
         {
             if (reader.NodeType != XmlNodeType.Element || reader.Name != "row")
                 continue;
+
+            totalRowsSeen++;
 
             // XNode.ReadFrom consumes the entire <row>...</row> at once,
             // avoiding the double-advance bug that occurs with ReadElementContentAsStringAsync
@@ -32,8 +44,10 @@ public class FodevareXmlParser(IHttpClientFactory httpClientFactory, ILogger<Fod
                 rows.Add(row);
         }
 
-        logger.LogInformation("Parsed {Count} establishments from XML.", rows.Count);
-        return rows;
+        logger.LogInformation(
+            "Parsed {Count}/{Total} establishments from XML (ETag={ETag}, LastModified={LastModified}).",
+            rows.Count, totalRowsSeen, etag, lastModified);
+        return new FodevareFeedResult(rows, totalRowsSeen, etag, lastModified);
     }
 
     private static EstablishmentSyncRow? ReadRow(XElement e)

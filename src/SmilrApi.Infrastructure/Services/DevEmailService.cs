@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using SmilrApi.Core.Interfaces;
 using SmilrApi.Core.Models;
+using SmilrApi.Core.Utils;
 
 namespace SmilrApi.Infrastructure.Services;
 
@@ -50,6 +51,20 @@ public class DevEmailService(ILogger<DevEmailService> logger, IConfiguration con
 
         var detail = string.Join(", ", changes.Select(c => $"{c.EstablishmentName} ({c.OldScore}→{c.NewScore})"));
         logger.LogInformation("[DEV EMAIL] System score digest → {To} | {Count} change(s): {Detail}", systemAddress, changes.Count, detail);
+        return Task.CompletedTask;
+    }
+
+    public Task SendFeedHealthAlertAsync(FeedHealthAlertKind kind, string? fieldName, FeedHealthAlertStatus status,
+        string summary, DateTime? firstDetectedAt, CancellationToken ct = default)
+    {
+        if (SystemMonitor is null)
+        {
+            logger.LogInformation("[DEV EMAIL] Email:SystemMonitorAddress not configured; skipping feed health alert ({Kind}/{Field}, {Status}).",
+                kind, fieldName, status);
+            return Task.CompletedTask;
+        }
+
+        logger.LogInformation("[DEV EMAIL] Feed health {Status} → {Kind}/{Field} | {Summary}", status, kind, fieldName, summary);
         return Task.CompletedTask;
     }
 }
