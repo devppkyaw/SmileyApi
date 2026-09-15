@@ -9,14 +9,15 @@ namespace SmilrApi.Infrastructure.Repositories;
 
 public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentRepository
 {
-    public async Task<IReadOnlyList<Establishment>> GetByCvrAsync(string cvr, CancellationToken ct = default)
+    public async Task<IReadOnlyList<Establishment>> GetByCvrAsync(
+        string cvr, bool includeHistory = false, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(cvr)) return [];
-        return await db.Establishments
-            .Where(e => e.CvrNumber == cvr)
-            .Include(e => e.Inspections.OrderByDescending(i => i.InspectedOn).Take(1))
-            .AsNoTracking()
-            .ToListAsync(ct);
+        var query = db.Establishments.Where(e => e.CvrNumber == cvr);
+        query = includeHistory
+            ? query.Include(e => e.Inspections.OrderByDescending(i => i.InspectedOn))
+            : query.Include(e => e.Inspections.OrderByDescending(i => i.InspectedOn).Take(1));
+        return await query.AsNoTracking().ToListAsync(ct);
     }
 
     public async Task<IReadOnlyList<Establishment>> SearchAsync(

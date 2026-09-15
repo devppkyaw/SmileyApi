@@ -20,12 +20,12 @@ public static class EstablishmentEndpoints
                     .WithTags("Public")
                     .RequireRateLimiting("api-key-tier");
 
-        v1.MapGet("/{cvr}", async (string cvr, IEstablishmentRepository repo, CancellationToken ct) =>
+        v1.MapGet("/{cvr}", async (string cvr, IEstablishmentRepository repo, CancellationToken ct, bool includeHistory = false) =>
         {
-            var establishments = await repo.GetByCvrAsync(cvr, ct);
+            var establishments = await repo.GetByCvrAsync(cvr, includeHistory, ct);
             return establishments.Count == 0
                 ? Error(404, "not_found", $"No establishments found for CVR '{cvr}'.")
-                : Results.Ok(establishments.Select(ToDto));
+                : Results.Ok(establishments.Select(e => ToDto(e, includeHistory)));
         });
 
         v1.MapGet("/search", async (
@@ -74,12 +74,17 @@ public static class EstablishmentEndpoints
     private static IResult Error(int status, string code, string message) =>
         Results.Json(new { error = new { code, message } }, statusCode: status);
 
-    private static EstablishmentDto ToDto(Establishment e) => new(
+    private static EstablishmentDto ToDto(Establishment e, bool includeHistory) => new(
         e.Navnelbnr, e.CvrNumber, e.Name, e.Address, e.PostalCode, e.City,
         e.IndustryCode, e.IndustryName, e.GeoLat, e.GeoLng, e.ReportUrl, e.LatestScore,
         e.Inspections.OrderByDescending(i => i.InspectedOn)
                      .Select(i => new InspectionDto(i.SmileyScore, i.InspectedOn))
-                     .FirstOrDefault());
+                     .FirstOrDefault(),
+        includeHistory
+            ? e.Inspections.OrderByDescending(i => i.InspectedOn)
+                           .Select(i => new InspectionDto(i.SmileyScore, i.InspectedOn))
+                           .ToList()
+            : null);
 
     private static EstablishmentSummaryDto ToSummaryDto(Establishment e) => new(
         e.Navnelbnr, e.CvrNumber, e.Name, e.Address, e.PostalCode, e.City, e.LatestScore);
@@ -91,7 +96,7 @@ public record EstablishmentDto(
     int Navnelbnr, string? CvrNumber, string Name, string? Address,
     string? PostalCode, string? City, string? IndustryCode, string? IndustryName,
     double? GeoLat, double? GeoLng, string? ReportUrl, int? LatestScore,
-    InspectionDto? LatestInspection);
+    InspectionDto? LatestInspection, IReadOnlyList<InspectionDto>? History = null);
 public record EstablishmentSummaryDto(
     int Navnelbnr, string? CvrNumber, string Name, string? Address,
     string? PostalCode, string? City, int? LatestScore);

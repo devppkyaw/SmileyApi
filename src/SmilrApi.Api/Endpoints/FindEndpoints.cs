@@ -494,7 +494,7 @@ public static class FindEndpoints
         var result = await cache.GetOrCreateAsync($"find:cvr:{cvr}", async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = CacheTtl;
-            var locations = await repo.GetByCvrAsync(cvr, ct);
+            var locations = await repo.GetByCvrAsync(cvr, ct: ct);
 
             return locations.Count switch
             {
