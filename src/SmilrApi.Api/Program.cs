@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
 using SmilrApi.Api.Endpoints;
 using SmilrApi.Api.Middleware;
@@ -123,6 +124,25 @@ builder.Services.AddOpenApi("public", options =>
             .ToList();
         foreach (var path in toRemove)
             doc.Paths.Remove(path);
+
+        // Every operation left after the filter above is API-key-authenticated (ApiKeyMiddleware,
+        // requires the literal "X-Api-Key" header) — declaring the scheme here just lets Scalar (and
+        // any other OpenAPI tooling) render a real "Authorize" field instead of developers having to
+        // discover the header name from developers.html's prose and wire it in by hand.
+        var scheme = new OpenApiSecurityScheme
+        {
+            Type        = SecuritySchemeType.ApiKey,
+            In          = ParameterLocation.Header,
+            Name        = "X-Api-Key",
+            Description = "Your Smilr API key — generate one from the dashboard's Developer API tab.",
+            Reference   = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "ApiKey" }
+        };
+        doc.Components ??= new OpenApiComponents();
+        doc.Components.SecuritySchemes["ApiKey"] = scheme;
+
+        foreach (var op in doc.Paths.Values.SelectMany(p => p.Operations.Values))
+            op.Security.Add(new OpenApiSecurityRequirement { [scheme] = [] });
+
         return Task.CompletedTask;
     });
 });
