@@ -103,7 +103,7 @@ public static class FindEndpoints
                 return await ResolveCvrAsync(q, cache, repo, ct);
 
             var pageNum = Math.Max(page ?? 1, 1);
-            var results = await repo.SearchAsync(q, pageNum, SearchPageSize, ct);
+            var results = await repo.SearchAsync(q, pageNum, SearchPageSize, excludeDelisted: true, ct: ct);
             return Results.Content(FindPageRenderer.SearchResultsPage(q, pageNum, SearchPageSize, results), "text/html");
         });
 

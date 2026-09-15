@@ -20,7 +20,7 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
     }
 
     public async Task<IReadOnlyList<Establishment>> SearchAsync(
-        string query, int page, int limit, CancellationToken ct = default)
+        string query, int page, int limit, bool excludeDelisted = false, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(query)) return [];
         page  = Math.Max(1, page);
@@ -28,11 +28,15 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
 
         var pattern = "%" + query.Replace("[", "[[]").Replace("%", "[%]").Replace("_", "[_]") + "%";
 
-        return await db.Establishments
+        var matches = db.Establishments
             .Where(e =>
                 EF.Functions.Like(e.Name, pattern) ||
                 EF.Functions.Like(e.Address ?? "", pattern) ||
-                EF.Functions.Like(e.City ?? "", pattern))
+                EF.Functions.Like(e.City ?? "", pattern));
+
+        if (excludeDelisted) matches = matches.Where(e => e.DelistedAt == null);
+
+        return await matches
             .OrderBy(e => e.Name)
             .Skip((page - 1) * limit)
             .Take(limit)
@@ -106,7 +110,7 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
     public async Task<IReadOnlyList<SitemapEntry>> GetAllForSitemapAsync(CancellationToken ct = default)
     {
         return await db.Establishments
-            .Where(e => e.CvrNumber != null)
+            .Where(e => e.CvrNumber != null && e.DelistedAt == null)
             .Select(e => new SitemapEntry(e.Name, e.City, e.Navnelbnr, e.UpdatedAt, e.LatestScoreDate != null))
             .AsNoTracking()
             .ToListAsync(ct);
@@ -115,7 +119,7 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
     public async Task<IReadOnlyList<(string City, int Count)>> GetCityCountsAsync(CancellationToken ct = default)
     {
         var rows = await db.Establishments
-            .Where(e => e.CvrNumber != null && e.City != null && e.City != "")
+            .Where(e => e.CvrNumber != null && e.City != null && e.City != "" && e.DelistedAt == null)
             .GroupBy(e => e.City)
             .Select(g => new { City = g.Key!, Count = g.Count() })
             .OrderByDescending(g => g.Count)
@@ -134,7 +138,7 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
         limit = Math.Clamp(limit, 1, 100);
 
         var query = db.Establishments
-            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City));
+            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City) && e.DelistedAt == null);
 
         if (hideUnscored) query = query.Where(e => e.LatestScore != null);
 
@@ -160,7 +164,7 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
     {
         if (cityValues.Count == 0) return 0;
         var query = db.Establishments
-            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City));
+            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City) && e.DelistedAt == null);
         if (hideUnscored) query = query.Where(e => e.LatestScore != null);
         return await query.CountAsync(ct);
     }
@@ -169,7 +173,7 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
     {
         var rows = await db.Establishments
             .Where(e => e.CvrNumber != null && e.Pixibranche != null && e.Pixibranche != ""
-                     && !PixibrancheCategories.Placeholders.Contains(e.Pixibranche))
+                     && !PixibrancheCategories.Placeholders.Contains(e.Pixibranche) && e.DelistedAt == null)
             .GroupBy(e => e.Pixibranche)
             .Select(g => new { Category = g.Key!, Count = g.Count() })
             .OrderByDescending(g => g.Count)
@@ -189,7 +193,7 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
 
         var query = db.Establishments
             .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City)
-                     && e.Pixibranche == category);
+                     && e.Pixibranche == category && e.DelistedAt == null);
 
         if (hideUnscored) query = query.Where(e => e.LatestScore != null);
 
@@ -215,7 +219,7 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
         if (cityValues.Count == 0 || string.IsNullOrWhiteSpace(category)) return 0;
         var query = db.Establishments
             .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City)
-                     && e.Pixibranche == category);
+                     && e.Pixibranche == category && e.DelistedAt == null);
         if (hideUnscored) query = query.Where(e => e.LatestScore != null);
         return await query.CountAsync(ct);
     }
@@ -225,7 +229,7 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
         var rows = await db.Establishments
             .Where(e => e.CvrNumber != null && e.City != null && e.City != ""
                      && e.Pixibranche != null && e.Pixibranche != ""
-                     && !PixibrancheCategories.Placeholders.Contains(e.Pixibranche))
+                     && !PixibrancheCategories.Placeholders.Contains(e.Pixibranche) && e.DelistedAt == null)
             .GroupBy(e => new { e.City, e.Pixibranche })
             .Select(g => new { g.Key.City, g.Key.Pixibranche, Count = g.Count() })
             .AsNoTracking()
@@ -243,7 +247,7 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
 
         return await db.Establishments
             .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City)
-                     && e.LatestScoreDate != null)
+                     && e.LatestScoreDate != null && e.DelistedAt == null)
             .Include(e => e.Inspections.OrderByDescending(i => i.InspectedOn).Take(1))
             .OrderByDescending(e => e.LatestScoreDate)
             .ThenBy(e => e.Name)
@@ -261,7 +265,7 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
 
         var q = db.Establishments
             .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City)
-                     && e.LatestScoreDate != null);
+                     && e.LatestScoreDate != null && e.DelistedAt == null);
 
         // Single conditional-aggregation query instead of 3 sequential round trips — this call
         // stays live on every request (it's RecentlyInspectedHandlerAsync's 404 gate), so shrinking
@@ -318,6 +322,10 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
     // (@city0, @city1, ...) go into the string. FromSqlInterpolated can't parameterize a
     // variable-length list the way EF's .Contains() LINQ translation does, hence FromSqlRaw +
     // explicit SqlParameter[] (the same idiom GetNearbyAsync above already uses).
+    //
+    // Also excludes delisted establishments — both callers (GetRecentChangesByCitiesAsync,
+    // GetChangesSummaryAsync) feed the /find/{area-slug}/changes page, which shouldn't surface score
+    // transitions for places no longer in the source feed.
     private static (string Sql, List<SqlParameter> Parameters) BuildCityInClause(IReadOnlyList<string> cityValues)
     {
         var names = new List<string>(cityValues.Count);
@@ -328,7 +336,7 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
             names.Add(name);
             parameters.Add(new SqlParameter(name, cityValues[i]));
         }
-        return ($"AND e.City IN ({string.Join(", ", names)})", parameters);
+        return ($"AND e.City IN ({string.Join(", ", names)}) AND e.DelistedAt IS NULL", parameters);
     }
 
     public async Task<IReadOnlyList<ScoreChangeRow>> GetRecentChangesByCitiesAsync(
@@ -410,7 +418,7 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
     public async Task<IReadOnlyList<(string City, int Count)>> GetChangeCountsByCityAsync(
         DateOnly windowStart, CancellationToken ct = default)
     {
-        var sql = BuildCurrentTransitionsCte("AND e.City IS NOT NULL AND e.City <> ''") + """
+        var sql = BuildCurrentTransitionsCte("AND e.City IS NOT NULL AND e.City <> '' AND e.DelistedAt IS NULL") + """
             SELECT e.City AS City, COUNT(*) AS Count
             FROM CurrentTransitions ct
             INNER JOIN Establishments e ON e.Id = ct.EstablishmentId
@@ -430,7 +438,8 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
         if (cityValues.Count == 0) return new AreaScoreSnapshot(0, 0);
 
         var scored = db.Establishments
-            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City) && e.LatestScore != null);
+            .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City)
+                     && e.LatestScore != null && e.DelistedAt == null);
 
         // Single conditional-aggregation query instead of two sequential COUNTs — same result, half
         // the DB round trips. GroupBy(_ => 1) always yields at most one group, so SingleOrDefaultAsync
@@ -448,7 +457,7 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
 
         var scored = db.Establishments
             .Where(e => e.CvrNumber != null && e.City != null && cityValues.Contains(e.City)
-                     && e.Pixibranche == category && e.LatestScore != null);
+                     && e.Pixibranche == category && e.LatestScore != null && e.DelistedAt == null);
 
         // Same single-query combination as GetAreaScoreSnapshotAsync above.
         var counts = await scored
