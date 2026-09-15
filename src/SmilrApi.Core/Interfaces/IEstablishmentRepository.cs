@@ -4,7 +4,10 @@ namespace SmilrApi.Core.Interfaces;
 
 public interface IEstablishmentRepository
 {
-    Task<IReadOnlyList<Establishment>> GetByCvrAsync(string cvr, CancellationToken ct = default);
+    /// <summary>All establishments under a CVR (a CVR can map to multiple physical locations). By default
+    /// only the latest inspection per establishment is loaded (matches ToDto's single-inspection shape);
+    /// includeHistory: true loads every inspection instead, for GET /{cvr}?includeHistory=true.</summary>
+    Task<IReadOnlyList<Establishment>> GetByCvrAsync(string cvr, bool includeHistory = false, CancellationToken ct = default);
 
     /// <summary>Shared by the public /v1/establishments/search API (excludeDelisted: false, so a business's
     /// own API lookups keep working after it drops out of the source feed) and the /find search box
