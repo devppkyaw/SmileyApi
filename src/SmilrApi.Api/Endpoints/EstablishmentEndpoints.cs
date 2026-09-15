@@ -36,7 +36,7 @@ public static class EstablishmentEndpoints
                 return Error(400, "bad_request", "Query parameter 'q' is required.");
             limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
             page  = Math.Max(page == 0 ? 1 : page, 1);
-            var results = await repo.SearchAsync(q, page, limit, ct);
+            var results = await repo.SearchAsync(q, page, limit, ct: ct);
             return Results.Ok(new { page, limit, results = results.Select(ToSummaryDto) });
         });
 

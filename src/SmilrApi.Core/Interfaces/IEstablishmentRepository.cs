@@ -5,7 +5,12 @@ namespace SmilrApi.Core.Interfaces;
 public interface IEstablishmentRepository
 {
     Task<IReadOnlyList<Establishment>> GetByCvrAsync(string cvr, CancellationToken ct = default);
-    Task<IReadOnlyList<Establishment>> SearchAsync(string query, int page, int limit, CancellationToken ct = default);
+
+    /// <summary>Shared by the public /v1/establishments/search API (excludeDelisted: false, so a business's
+    /// own API lookups keep working after it drops out of the source feed) and the /find search box
+    /// (excludeDelisted: true, so the public directory doesn't surface listings for places no longer in
+    /// the feed).</summary>
+    Task<IReadOnlyList<Establishment>> SearchAsync(string query, int page, int limit, bool excludeDelisted = false, CancellationToken ct = default);
     Task<IReadOnlyList<Establishment>> GetNearbyAsync(double lat, double lng, double radiusKm, CancellationToken ct = default);
     Task<IReadOnlyList<Establishment>> GetHistoryAsync(string cvr, CancellationToken ct = default);
 
@@ -15,21 +20,24 @@ public interface IEstablishmentRepository
     /// <summary>Inspection history for one specific location (not merged across a whole CVR, unlike GetHistoryAsync).</summary>
     Task<Establishment?> GetHistoryByNavnelbnrAsync(int navnelbnr, CancellationToken ct = default);
 
-    /// <summary>Lightweight (Name, City, Navnelbnr, UpdatedAt) projection for every establishment that has a CVR — feeds the /find sitemap.</summary>
+    /// <summary>Lightweight (Name, City, Navnelbnr, UpdatedAt) projection for every establishment that has a
+    /// CVR and is not delisted (still present in the source feed) — feeds the /find sitemap.</summary>
     Task<IReadOnlyList<SitemapEntry>> GetAllForSitemapAsync(CancellationToken ct = default);
 
-    /// <summary>Distinct raw City values (with counts, most-common first) among establishments that have a
-    /// CVR and a non-empty City — source data for building the /find/{area-slug}/ lookup and the sitemap's
-    /// hub-page entries. Grouping by area-slug (Slugifier.Slugify(City)) happens in the caller, since raw
-    /// spellings aren't normalized in the DB (e.g. "København", "KØBENHAVN", "Kobenhavn " all collapse to
-    /// the same area-slug).</summary>
+    /// <summary>Distinct raw City values (with counts, most-common first) among non-delisted establishments
+    /// that have a CVR and a non-empty City — source data for building the /find/{area-slug}/ lookup and
+    /// the sitemap's hub-page entries. Grouping by area-slug (Slugifier.Slugify(City)) happens in the
+    /// caller, since raw spellings aren't normalized in the DB (e.g. "København", "KØBENHAVN",
+    /// "Kobenhavn " all collapse to the same area-slug).</summary>
     Task<IReadOnlyList<(string City, int Count)>> GetCityCountsAsync(CancellationToken ct = default);
 
     /// <summary>Paginated establishments whose City is one of the given raw values (already resolved from
-    /// an area-slug) — feeds the /find/{area-slug}/ hub page. <paramref name="sort"/> is one of
-    /// FindEndpoints.ValidSortValues ("score_asc"/"score_desc"/"recent") or null for the default
-    /// alphabetical-by-name order; unscored establishments always sort last regardless of direction.
-    /// <paramref name="hideUnscored"/> excludes establishments with no LatestScore when true.</summary>
+    /// an area-slug) — feeds the /find/{area-slug}/ hub page. Delisted establishments (no longer in the
+    /// source feed) are always excluded — the directory only lists places still confirmed present.
+    /// <paramref name="sort"/> is one of FindEndpoints.ValidSortValues ("score_asc"/"score_desc"/"recent")
+    /// or null for the default alphabetical-by-name order; unscored establishments always sort last
+    /// regardless of direction. <paramref name="hideUnscored"/> excludes establishments with no
+    /// LatestScore when true.</summary>
     Task<IReadOnlyList<Establishment>> GetByCitiesAsync(
         IReadOnlyList<string> cityValues, int page, int limit,
         string? sort = null, bool hideUnscored = false, CancellationToken ct = default);
