@@ -117,6 +117,18 @@ public static class BusinessEndpoints
             var business = await GetSessionBusinessAsync(ctx, svc, ct);
             if (business is null || !business.IsEmailVerified) return Results.Unauthorized();
 
+            // Developer API access requires Pro/Enterprise — except a Free business that already
+            // has a key (grandfathered from before this was gated) may still rotate it, just not
+            // acquire a first one.
+            if (business.Tier == "free")
+            {
+                var existingKey = await apiKeySvc.GetForBusinessAsync(business.Id, ct);
+                if (existingKey is null)
+                    return Results.Json(
+                        Error("pro_required", "Developer API access requires a Pro or Enterprise plan."),
+                        statusCode: 403);
+            }
+
             var (plaintext, _) = await apiKeySvc.GenerateForBusinessAsync(business, ct);
             return Results.Ok(new { key = plaintext, tier = business.Tier });
         });

@@ -170,6 +170,14 @@ var locationData = {};
   document.getElementById('welcomeMsg').textContent = 'Welcome back, ' + me.companyName;
   document.getElementById('dashContent').style.display = 'block';
 
+  // Developer API is Pro/Enterprise only — except a Free account that already has a key
+  // (grandfathered from before this was gated) still gets the tab, so it can view/rotate/revoke
+  // what it already has.
+  const hasApiKey = await loadApiKey();
+  if (me.tier === 'free' && !hasApiKey) {
+    document.querySelector('.dash-tab[data-tab="apikey"]').style.display = 'none';
+  }
+
   if (me.tier === 'pro') {
     document.getElementById('proActions').style.display     = 'block';
     document.getElementById('addForm').style.display        = 'flex';
@@ -225,7 +233,6 @@ var locationData = {};
   }
 
   loadLocations();
-  loadApiKey();
 })();
 
 document.querySelectorAll('.dash-tab').forEach(function (btn) {
@@ -251,6 +258,7 @@ async function loadApiKey() {
     document.getElementById('apikeyNoKey').style.display = 'block';
     document.getElementById('revokeBtn').style.display   = 'none';
   }
+  return data.hasKey;
 }
 
 async function generateApiKey() {
