@@ -269,11 +269,20 @@ public static class FindEndpoints
                 FindPageRenderer.NotFoundPage($"No area found for '{areaSlug}'."),
                 "text/html", statusCode: 404);
 
-        var categoryIndex = await GetCategoryIndexAsync(cache, repo, ct);
-        if (!categoryIndex.TryGetValue(categorySlug, out var category))
+        // Resolved against THIS area's own category list (not the nationwide GetCategoryIndexAsync)
+        // so a link this area's own hub page just rendered can never 404: the source data has enough
+        // real-world vocabulary drift (the same conceptual category spelled slightly differently across
+        // establishments/rows, e.g. differing punctuation) that two distinct raw strings can collide to
+        // the same slug. A nationwide index picks one canonical spelling per slug (last-write-wins, see
+        // GetCategoryIndexAsync) which may not be the spelling this specific area's establishments use —
+        // that mismatch is exactly what caused live 404s on categories the area hub itself was linking to.
+        var categoriesInArea = await GetCategoriesInAreaAsync(area.RawCityValues, cache, repo, ct);
+        var categoryMatch = categoriesInArea.FirstOrDefault(c => c.CategorySlug == categorySlug);
+        if (categoryMatch.Category is null)
             return Results.Content(
                 FindPageRenderer.NotFoundPage($"No category found for '{categorySlug}'."),
                 "text/html", statusCode: 404);
+        var category = categoryMatch.Category;
 
         // Canonical-redirect on a trailing-slash/case mismatch — same pattern as DetailHandlerAsync,
         // preserving the query string so a ?page=N request doesn't lose it.
