@@ -87,6 +87,16 @@ if (params.get('error') === 'invalid_token') {
   s.className = 'form-status form-status--error';
 }
 
+// Already logged in (e.g. clicked "Claim this listing" from a /find detail page while signed
+// in) — skip the sign-up form entirely instead of letting them submit into a 409 that bounces
+// them to /login.html, which reads as "I was already logged in and got asked to log in again."
+(async function () {
+  const res = await fetch('/v1/business/me');
+  if (!res.ok) return;
+  const claimCvr = params.get('claim_cvr');
+  location.replace('/dashboard.html' + (claimCvr ? '?claim_cvr=' + encodeURIComponent(claimCvr) : ''));
+})();
+
 document.getElementById('registerForm').addEventListener('submit', async function (e) {
   e.preventDefault();
   const btn    = document.getElementById('submitBtn');
