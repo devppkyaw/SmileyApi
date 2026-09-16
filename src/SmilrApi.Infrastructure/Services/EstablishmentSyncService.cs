@@ -79,8 +79,11 @@ public class EstablishmentSyncService(SmilrDbContext db, IEmailService emailServ
                     ISNULL(T.City,        '')            <> ISNULL(S.City,        '') OR
                     ISNULL(T.IndustryCode,'')            <> ISNULL(S.IndustryCode,'') OR
                     ISNULL(T.IndustryName,'')            <> ISNULL(S.IndustryName,'') OR
-                    ISNULL(CAST(T.GeoLat AS NVARCHAR(40)),'') <> ISNULL(CAST(S.GeoLat AS NVARCHAR(40)),'') OR
-                    ISNULL(CAST(T.GeoLng AS NVARCHAR(40)),'') <> ISNULL(CAST(S.GeoLng AS NVARCHAR(40)),'') OR
+                    -- Only counts as a change when source actually has a value — the current feed
+                    -- never sends GeoLat/GeoLng at all, and a missing source value must never look
+                    -- like a change that then wipes an existing one (see SET clause below).
+                    (S.GeoLat IS NOT NULL AND ISNULL(CAST(T.GeoLat AS NVARCHAR(40)),'') <> CAST(S.GeoLat AS NVARCHAR(40))) OR
+                    (S.GeoLng IS NOT NULL AND ISNULL(CAST(T.GeoLng AS NVARCHAR(40)),'') <> CAST(S.GeoLng AS NVARCHAR(40))) OR
                     ISNULL(T.ReportUrl,       '')        <> ISNULL(S.ReportUrl,       '') OR
                     ISNULL(T.LatestScore,     -1)        <> ISNULL(S.LatestScore,     -1) OR
                     ISNULL(T.VirksomhedsType, '')        <> ISNULL(S.VirksomhedsType, '') OR
@@ -96,8 +99,10 @@ public class EstablishmentSyncService(SmilrDbContext db, IEmailService emailServ
                     T.City            = S.City,
                     T.IndustryCode    = S.IndustryCode,
                     T.IndustryName    = S.IndustryName,
-                    T.GeoLat          = S.GeoLat,
-                    T.GeoLng          = S.GeoLng,
+                    -- COALESCE, not a plain overwrite: a null source value (the current feed
+                    -- provides no coordinates at all) must never clobber an existing one.
+                    T.GeoLat          = COALESCE(S.GeoLat, T.GeoLat),
+                    T.GeoLng          = COALESCE(S.GeoLng, T.GeoLng),
                     T.ReportUrl       = S.ReportUrl,
                     T.LatestScore     = S.LatestScore,
                     T.VirksomhedsType = S.VirksomhedsType,
