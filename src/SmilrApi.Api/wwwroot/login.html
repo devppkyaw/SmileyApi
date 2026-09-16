@@ -89,7 +89,7 @@ document.getElementById('loginForm').addEventListener('submit', async function (
     const res = await fetch('/v1/business/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
+      body: JSON.stringify({ email, claimCvr: params.get('claim_cvr') || null })
     });
 
     if (res.ok) {
@@ -99,7 +99,9 @@ document.getElementById('loginForm').addEventListener('submit', async function (
     } else {
       const data = await res.json();
       if (data.error?.code === 'not_registered') {
-        status.innerHTML = 'No account found. <a href="/register.html">Register first →</a>';
+        const claimCvr = params.get('claim_cvr');
+        const registerHref = '/register.html' + (claimCvr ? '?claim_cvr=' + encodeURIComponent(claimCvr) : '');
+        status.innerHTML = 'No account found. <a href="' + registerHref + '">Register first →</a>';
       } else {
         status.textContent = data.error?.message || 'Something went wrong. Please try again.';
       }
