@@ -47,6 +47,8 @@
         You're now on Pro. Welcome aboard!
       </div>
 
+      <div id="claimBanner" style="display:none;border-radius:8px;padding:14px 20px;margin-bottom:24px;font-weight:500"></div>
+
 
 
       <div id="proActions" style="display:none;margin-bottom:24px">
@@ -187,6 +189,39 @@ var locationData = {};
     document.getElementById('cvrFreeNote').style.display      = 'none';
     document.getElementById('tierBadge').textContent         = 'Pro account';
     history.replaceState(null, '', '/dashboard.html');
+  }
+
+  const claimCvr = new URLSearchParams(location.search).get('claim_cvr');
+  if (claimCvr) {
+    history.replaceState(null, '', '/dashboard.html');
+    const banner = document.getElementById('claimBanner');
+    banner.style.display = 'block';
+    try {
+      const claimRes  = await fetch('/v1/business/locations/by-cvr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cvr: claimCvr })
+      });
+      const claimData = await claimRes.json();
+      if (claimRes.ok) {
+        banner.style.background = '#d1fae5';
+        banner.style.border     = '1px solid #6ee7b7';
+        banner.style.color      = '#065f46';
+        banner.textContent      = claimData.added > 0
+          ? 'Listing claimed — added ' + claimData.added + ' location' + (claimData.added !== 1 ? 's' : '') + ' for CVR ' + claimCvr + '.'
+          : 'That listing (CVR ' + claimCvr + ') is already in your account.';
+      } else {
+        banner.style.background = '#fee2e2';
+        banner.style.border     = '1px solid #fca5a5';
+        banner.style.color      = '#991b1b';
+        banner.textContent      = claimData.error?.message || 'Could not claim that listing.';
+      }
+    } catch {
+      banner.style.background = '#fee2e2';
+      banner.style.border     = '1px solid #fca5a5';
+      banner.style.color      = '#991b1b';
+      banner.textContent      = 'Network error while claiming that listing.';
+    }
   }
 
   loadLocations();
