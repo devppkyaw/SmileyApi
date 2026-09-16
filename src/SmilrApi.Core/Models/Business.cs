@@ -10,6 +10,7 @@ public class Business
     public bool IsEmailVerified { get; set; }
     public string? MagicLinkToken { get; set; }
     public DateTime? MagicLinkTokenExpiry { get; set; }
+    public string? PendingClaimCvr { get; set; }
     public string? StripeCustomerId { get; set; }
     public string? StripeSubscriptionId { get; set; }
     public DateTime CreatedAt { get; set; }

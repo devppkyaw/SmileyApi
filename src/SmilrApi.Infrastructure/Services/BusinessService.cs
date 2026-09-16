@@ -9,7 +9,7 @@ namespace SmilrApi.Infrastructure.Services;
 public class BusinessService(SmilrDbContext db, IEmailService emailService) : IBusinessService
 {
     public async Task<Business?> RegisterOrResendAsync(
-        string email, string companyName, bool marketingConsent, string baseUrl, CancellationToken ct = default)
+        string email, string companyName, bool marketingConsent, string baseUrl, string? claimCvr = null, CancellationToken ct = default)
     {
         var existing = await db.Businesses.FirstOrDefaultAsync(b => b.Email == email, ct);
 
@@ -43,6 +43,12 @@ public class BusinessService(SmilrDbContext db, IEmailService emailService) : IB
             db.Businesses.Add(existing);
         }
 
+        // Only overwrite when a claim was actually passed — a plain resend without the param
+        // (e.g. clicking "resend" on the check-your-email screen) must not wipe an intent that
+        // was captured on an earlier submission.
+        if (!string.IsNullOrWhiteSpace(claimCvr))
+            existing.PendingClaimCvr = claimCvr.Trim();
+
         await db.SaveChangesAsync(ct);
         await emailService.SendVerificationEmailAsync(
             existing.Email, existing.CompanyName, $"{baseUrl}/v1/business/verify?token={token}", ct);
@@ -61,11 +67,18 @@ public class BusinessService(SmilrDbContext db, IEmailService emailService) : IB
         business.VerifiedAt           = DateTime.UtcNow;
         business.MagicLinkToken       = null;
         business.MagicLinkTokenExpiry = null;
+
+        // Capture/clear/restore: persist the claim as consumed so it never re-fires on a later
+        // login, but hand the original value back to the caller (BusinessEndpoints builds the
+        // post-verify redirect from it) since the in-memory property is now null after saving.
+        var pendingClaimCvr        = business.PendingClaimCvr;
+        business.PendingClaimCvr   = null;
         await db.SaveChangesAsync(ct);
+        business.PendingClaimCvr = pendingClaimCvr;
         return business;
     }
 
-    public async Task<bool> RequestMagicLinkAsync(string email, string baseUrl, CancellationToken ct = default)
+    public async Task<bool> RequestMagicLinkAsync(string email, string baseUrl, string? claimCvr = null, CancellationToken ct = default)
     {
         var business = await db.Businesses.FirstOrDefaultAsync(
             b => b.Email == email, ct);
@@ -74,6 +87,9 @@ public class BusinessService(SmilrDbContext db, IEmailService emailService) : IB
 
         var token = GenerateToken();
         business.MagicLinkToken = token;
+
+        if (!string.IsNullOrWhiteSpace(claimCvr))
+            business.PendingClaimCvr = claimCvr.Trim();
 
         if (!business.IsEmailVerified)
         {
@@ -100,7 +116,11 @@ public class BusinessService(SmilrDbContext db, IEmailService emailService) : IB
 
         business.MagicLinkToken       = null;
         business.MagicLinkTokenExpiry = null;
+
+        var pendingClaimCvr      = business.PendingClaimCvr;
+        business.PendingClaimCvr = null;
         await db.SaveChangesAsync(ct);
+        business.PendingClaimCvr = pendingClaimCvr;
         return business;
     }
 
