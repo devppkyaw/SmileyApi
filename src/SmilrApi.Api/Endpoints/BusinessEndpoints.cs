@@ -26,7 +26,7 @@ public static class BusinessEndpoints
                 return Results.BadRequest(Error("terms_required", "You must accept the Terms of Service to register."));
 
             var baseUrl  = $"{ctx.Request.Scheme}://{ctx.Request.Host}";
-            var business = await svc.RegisterOrResendAsync(req.Email.Trim(), req.CompanyName, req.MarketingConsent, baseUrl, ct);
+            var business = await svc.RegisterOrResendAsync(req.Email.Trim(), req.CompanyName, req.MarketingConsent, baseUrl, req.ClaimCvr, ct);
 
             if (business is null)
                 return Results.Conflict(Error("already_registered", "This email is already registered. Use the login link instead."));
@@ -48,7 +48,7 @@ public static class BusinessEndpoints
                 return Results.Redirect("/register.html?error=invalid_token");
 
             ctx.Session.SetInt32(SessionKey, business.Id);
-            return Results.Redirect("/dashboard.html");
+            return Results.Redirect(DashboardRedirectPath(business.PendingClaimCvr));
         });
 
         app.MapPost("/v1/business/login", async (
@@ -61,7 +61,7 @@ public static class BusinessEndpoints
                 return Results.BadRequest(Error("bad_request", "'email' is required."));
 
             var baseUrl = $"{ctx.Request.Scheme}://{ctx.Request.Host}";
-            var sent = await svc.RequestMagicLinkAsync(req.Email.Trim(), baseUrl, ct);
+            var sent = await svc.RequestMagicLinkAsync(req.Email.Trim(), baseUrl, req.ClaimCvr, ct);
             if (!sent)
                 return Results.NotFound(Error("not_registered", "No account found for that email."));
             return Results.Ok(new { message = "A login link has been sent." });
@@ -81,7 +81,7 @@ public static class BusinessEndpoints
                 return Results.Redirect("/login.html?error=expired_token");
 
             ctx.Session.SetInt32(SessionKey, business.Id);
-            return Results.Redirect("/dashboard.html");
+            return Results.Redirect(DashboardRedirectPath(business.PendingClaimCvr));
         });
 
         app.MapPost("/v1/business/logout", (HttpContext ctx) =>
@@ -459,10 +459,18 @@ public static class BusinessEndpoints
 
     private static object Error(string code, string message) =>
         new { error = new { code, message } };
+
+    // dashboard.html already knows how to consume ?claim_cvr= (added for the already-logged-in
+    // claim flow) — reused here so a pending claim captured at registration/login time gets
+    // attached the moment a session actually exists, instead of being silently dropped.
+    private static string DashboardRedirectPath(string? pendingClaimCvr) =>
+        string.IsNullOrWhiteSpace(pendingClaimCvr)
+            ? "/dashboard.html"
+            : "/dashboard.html?claim_cvr=" + Uri.EscapeDataString(pendingClaimCvr);
 }
 
-public record RegisterRequest(string Email, string CompanyName, bool TermsAccepted, bool MarketingConsent);
-public record LoginRequest(string Email);
+public record RegisterRequest(string Email, string CompanyName, bool TermsAccepted, bool MarketingConsent, string? ClaimCvr = null);
+public record LoginRequest(string Email, string? ClaimCvr = null);
 public record AddLocationRequest(int Navnelbnr);
 public record AddByCvrRequest(string Cvr);
 public record RemoveByCvrRequest(string? Cvr);

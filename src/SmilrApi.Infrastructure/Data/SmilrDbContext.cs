@@ -101,6 +101,7 @@ public class SmilrDbContext(DbContextOptions<SmilrDbContext> options) : DbContex
             e.Property(x => x.MagicLinkToken).HasMaxLength(64);
             e.Property(x => x.StripeCustomerId).HasMaxLength(64);
             e.Property(x => x.StripeSubscriptionId).HasMaxLength(64);
+            e.Property(x => x.PendingClaimCvr).HasMaxLength(20);
         });
 
         modelBuilder.Entity<BusinessLocation>(e =>

@@ -108,6 +108,8 @@ document.getElementById('registerForm').addEventListener('submit', async functio
   status.textContent = '';
   status.className   = 'form-status';
 
+  const claimCvr = params.get('claim_cvr');
+
   try {
     const res = await fetch('/v1/business/register', {
       method: 'POST',
@@ -116,7 +118,8 @@ document.getElementById('registerForm').addEventListener('submit', async functio
         email:           email,
         companyName:     document.getElementById('companyName').value.trim(),
         termsAccepted:   true,
-        marketingConsent: document.getElementById('marketing').checked
+        marketingConsent: document.getElementById('marketing').checked,
+        claimCvr:        claimCvr || null
       })
     });
 
@@ -130,7 +133,7 @@ document.getElementById('registerForm').addEventListener('submit', async functio
       status.textContent = 'This email is already registered. ';
       status.className   = 'form-status form-status--error';
       const a = document.createElement('a');
-      a.href = '/login.html';
+      a.href = '/login.html' + (claimCvr ? '?claim_cvr=' + encodeURIComponent(claimCvr) : '');
       a.textContent = 'Log in instead →';
       status.appendChild(a);
       btn.disabled    = false;
