@@ -5,7 +5,11 @@ namespace SmilrApi.Api.Workers;
 
 public class FodevareXmlParser(IHttpClientFactory httpClientFactory, ILogger<FodevareXmlParser> logger)
 {
-    private const string XmlUrl = "https://www.foedevarestyrelsen.dk/Media/638212360788086849/Smiley_xml.xml";
+    // Moved here from foedevarestyrelsen.dk (that feed froze 2026-09-08 and stopped being
+    // regenerated) — see https://www.findsmiley.dk/om-smiley/statistik-og-data/hent-smileydata.
+    // Schema changed along with the move: PascalCase tag names, a renamed/revalued category field
+    // (Pixibranche -> Smileybranche), MM/dd/yyyy dates, and no Geo_Lat/Geo_Lng at all.
+    private const string XmlUrl = "https://pub.fvst.dk/publikationer/Smileydata.xml";
 
     public async Task<FodevareFeedResult> ParseAsync(CancellationToken ct)
     {
@@ -30,12 +34,12 @@ public class FodevareXmlParser(IHttpClientFactory httpClientFactory, ILogger<Fod
         var totalRowsSeen = 0;
         while (await reader.ReadAsync())
         {
-            if (reader.NodeType != XmlNodeType.Element || reader.Name != "row")
+            if (reader.NodeType != XmlNodeType.Element || reader.Name != "Row")
                 continue;
 
             totalRowsSeen++;
 
-            // XNode.ReadFrom consumes the entire <row>...</row> at once,
+            // XNode.ReadFrom consumes the entire <Row>...</Row> at once,
             // avoiding the double-advance bug that occurs with ReadElementContentAsStringAsync
             // on compact (no-whitespace) XML.
             var element = (XElement)XNode.ReadFrom(reader);
@@ -52,16 +56,16 @@ public class FodevareXmlParser(IHttpClientFactory httpClientFactory, ILogger<Fod
 
     private static EstablishmentSyncRow? ReadRow(XElement e)
     {
-        var navnelbnr = TryParseInt(e.Element("navnelbnr")?.Value) ?? 0;
-        var name      = NullIfEmpty(e.Element("navn1")?.Value);
+        var idNummer = TryParseInt(e.Element("ID_nummer")?.Value) ?? 0;
+        var name     = NullIfEmpty(e.Element("Virksomhed")?.Value);
 
-        if (navnelbnr == 0 || name is null)
+        if (idNummer == 0 || name is null)
             return null;
 
-        var scoreNames = new[] { "seneste_kontrol",       "naestseneste_kontrol",
-                                 "tredjeseneste_kontrol",  "fjerdeseneste_kontrol" };
-        var dateNames  = new[] { "seneste_kontrol_dato",       "naestseneste_kontrol_dato",
-                                 "tredjeseneste_kontrol_dato",  "fjerdeseneste_kontrol_dato" };
+        var scoreNames = new[] { "Seneste_kontrol_resultat",       "Næstseneste_kontrol_resultat",
+                                 "Tredjeseneste_kontrol_resultat",  "Fjerdeseneste_kontrol_resultat" };
+        var dateNames  = new[] { "Seneste_kontrol_dato",       "Næstseneste_kontrol_dato",
+                                 "Tredjeseneste_kontrol_dato",  "Fjerdeseneste_kontrol_dato" };
 
         var latestScoreDate = TryParseDate(e.Element(dateNames[0])?.Value ?? "");
 
@@ -75,23 +79,26 @@ public class FodevareXmlParser(IHttpClientFactory httpClientFactory, ILogger<Fod
         }
 
         return new EstablishmentSyncRow(
-            navnelbnr,
-            NullIfEmpty(e.Element("cvrnr")?.Value),
+            idNummer,
+            NullIfEmpty(e.Element("CVR_nummer")?.Value),
             name,
-            NullIfEmpty(e.Element("adresse1")?.Value),
-            NullIfEmpty(e.Element("postnr")?.Value),
+            NullIfEmpty(e.Element("Adresse")?.Value),
+            NullIfEmpty(e.Element("Postnummer")?.Value),
             NullIfEmpty(e.Element("By")?.Value),
-            NullIfEmpty(e.Element("brancheKode")?.Value),
-            NullIfEmpty(e.Element("branche")?.Value),
-            TryParseDouble(e.Element("Geo_Lat")?.Value ?? ""),
-            TryParseDouble(e.Element("Geo_Lng")?.Value ?? ""),
-            // Built from navnelbnr rather than trusting the XML feed's own "URL" element,
-            // which still emits the old findsmiley.dk link format.
-            $"https://www.findsmiley.dk/app/{navnelbnr}",
-            NullIfEmpty(e.Element("virksomhedstype")?.Value),
-            NullIfEmpty(e.Element("Pixibranche")?.Value),
+            NullIfEmpty(e.Element("FVST_branchenummer")?.Value),
+            NullIfEmpty(e.Element("FVST_branche")?.Value),
+            // Geo_Lat/Geo_Lng no longer exist in this feed — always null now. Existing rows keep
+            // their last-synced values until this MERGE touches them, then those go null too.
+            null,
+            null,
+            // Built from ID_nummer rather than trusting the feed's own "URL" element, matching the
+            // pre-existing self-heal pattern (ReportUrl is a pure function of the id — see
+            // EstablishmentSyncService's MERGE) even though this feed's own URL now uses the same format.
+            $"https://www.findsmiley.dk/app/{idNummer}",
+            NullIfEmpty(e.Element("Virksomhedstype")?.Value),
+            NullIfEmpty(e.Element("Smileybranche")?.Value),
             latestScoreDate,
-            NullIfEmpty(e.Element("pnr")?.Value),
+            NullIfEmpty(e.Element("P_nummer")?.Value),
             inspections);
     }
 
@@ -101,11 +108,7 @@ public class FodevareXmlParser(IHttpClientFactory httpClientFactory, ILogger<Fod
     private static int? TryParseInt(string? value) =>
         int.TryParse(value, out var i) ? i : null;
 
-    private static double? TryParseDouble(string? value) =>
-        double.TryParse(value, System.Globalization.NumberStyles.Any,
-            System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null;
-
     private static DateOnly? TryParseDate(string? value) =>
-        DateOnly.TryParseExact(value, "dd-MM-yyyy HH:mm:ss", null,
+        DateOnly.TryParseExact(value, "MM/dd/yyyy", null,
             System.Globalization.DateTimeStyles.None, out var d) ? d : null;
 }
