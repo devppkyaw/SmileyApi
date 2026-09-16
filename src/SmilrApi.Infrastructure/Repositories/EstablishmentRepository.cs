@@ -174,7 +174,7 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
     {
         var rows = await db.Establishments
             .Where(e => e.CvrNumber != null && e.Pixibranche != null && e.Pixibranche != ""
-                     && !PixibrancheCategories.Placeholders.Contains(e.Pixibranche) && e.DelistedAt == null)
+                     && !e.Pixibranche.EndsWith(PixibrancheCategories.PlaceholderSuffix) && e.DelistedAt == null)
             .GroupBy(e => e.Pixibranche)
             .Select(g => new { Category = g.Key!, Count = g.Count() })
             .OrderByDescending(g => g.Count)
@@ -230,7 +230,7 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
         var rows = await db.Establishments
             .Where(e => e.CvrNumber != null && e.City != null && e.City != ""
                      && e.Pixibranche != null && e.Pixibranche != ""
-                     && !PixibrancheCategories.Placeholders.Contains(e.Pixibranche) && e.DelistedAt == null)
+                     && !e.Pixibranche.EndsWith(PixibrancheCategories.PlaceholderSuffix) && e.DelistedAt == null)
             .GroupBy(e => new { e.City, e.Pixibranche })
             .Select(g => new { g.Key.City, g.Key.Pixibranche, Count = g.Count() })
             .AsNoTracking()
