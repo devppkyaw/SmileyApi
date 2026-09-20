@@ -778,6 +778,7 @@ pre:not([class*="language-"]) strong {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
+  align-items: start;
 }
 .ov-cols .ov-card { margin-bottom: 20px; min-width: 0; }
 
@@ -860,6 +861,35 @@ pre:not([class*="language-"]) strong {
 .bench-who { font-size: 0.72rem; color: var(--text-muted); margin-right: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
 .bench-summary { font-size: 0.9rem; margin: 10px 0 4px; }
 .bench-h3 { font-size: 0.9rem; font-weight: 700; margin: 16px 0 4px; }
+
+/* ─── Risk / needs attention ──────────────────────────────── */
+
+.ov-chip--warn  { background: #fdf0d9; color: var(--amber); }
+.ov-chip--muted { background: var(--surface-2); color: var(--text-muted); }
+
+.ov-good {
+  font-size: 0.9rem;
+  color: var(--accent);
+  background: var(--green-dim);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.ov-more { padding: 10px 0 0; border-top: 1px solid var(--border); font-size: 0.875rem; }
+
+.risk-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.risk-badge--atrisk { background: var(--red-dim); color: var(--red); }
+.risk-badge--watch  { background: #fdf0d9; color: var(--amber); }
+
+.loc-risk { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 
 /* ─── Locations pager ─────────────────────────────────────── */
 

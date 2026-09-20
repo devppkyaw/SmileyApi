@@ -12,7 +12,7 @@ namespace SmilrApi.Api.Endpoints;
 public static class BusinessEndpoints
 {
     private const string SessionKey = "business_id";
-    private const int RecentChangesWindowDays = 90;
+    private const int RecentChangesWindowDays = RiskCalculator.RecentWindowDays;
 
     public static void MapBusinessEndpoints(this WebApplication app)
     {
@@ -365,14 +365,21 @@ public static class BusinessEndpoints
         // instead of every inspection row for every location the business owns. Default sort is by CVR
         // (then name) so a CVR group stays contiguous across pages; cvrGroups carries each group's
         // full filtered size so the group header count is right even when the group spans pages.
+        //
+        // Every row carries its RiskCalculator assessment (badge), `attention=1` restricts the list to the
+        // Overview's "Needs attention" set, and sort=risk orders most-concerning first. Risk is assessed
+        // for the whole portfolio (one owned-locations read + one transitions query), because the filter
+        // and the sort span pages.
         app.MapGet("/v1/business/locations", async (
             HttpContext ctx,
             IBusinessService svc,
             SmilrDbContext db,
+            IEstablishmentRepository establishments,
             int? page,
             int? pageSize,
             string? q,
             string? sort,
+            int? attention,
             CancellationToken ct) =>
         {
             var business = await GetSessionBusinessAsync(ctx, svc, ct);
@@ -381,6 +388,10 @@ public static class BusinessEndpoints
             var (pageNo, size) = LocationListPaging.Normalize(page, pageSize);
             var sortMode = LocationListPaging.NormalizeSort(sort);
             var search   = LocationListPaging.NormalizeSearch(q);
+            var attentionOnly = attention == 1;
+
+            var risk = await AssessRiskAsync(db, establishments, business.Id, ct);
+            var attentionIds = risk.Where(kv => kv.Value.NeedsAttention).Select(kv => kv.Key).ToList();
 
             var all = db.BusinessLocations
                 .Where(b => b.BusinessId == business.Id)
@@ -407,7 +418,10 @@ public static class BusinessEndpoints
                     x.e.Navnelbnr.ToString().Contains(search));
             }
 
-            var total = search is null ? locationCount : await filtered.CountAsync(ct);
+            if (attentionOnly)
+                filtered = filtered.Where(x => attentionIds.Contains(x.e.Navnelbnr));
+
+            var total = search is null && !attentionOnly ? locationCount : await filtered.CountAsync(ct);
 
             var ordered = sortMode switch
             {
@@ -422,26 +436,39 @@ public static class BusinessEndpoints
                     .ThenBy(x => x.e.Name).ThenBy(x => x.e.Navnelbnr),
             };
 
-            var pageRows = await ordered
-                .Skip((pageNo - 1) * size)
-                .Take(size)
-                .Select(x => new
-                {
-                    estId           = x.e.Id,
-                    navnelbnr       = x.e.Navnelbnr,
-                    cvrNumber       = x.e.CvrNumber,
-                    name            = x.e.Name,
-                    address         = x.e.Address,
-                    city            = x.e.City,
-                    latestScore     = x.e.LatestScore,
-                    latestScoreDate = x.e.LatestScoreDate,
-                    reportUrl       = x.e.ReportUrl,
-                    virksomhedsType = x.e.VirksomhedsType,
-                    addedAt         = x.AddedAt
-                })
-                .ToListAsync(ct);
+            List<LocationRow> pageRows;
+            if (sortMode == LocationListPaging.SortRisk)
+            {
+                // Risk rank lives in memory, not SQL: order the (id, name) pairs, page them, then load
+                // just that page's rows and put them back in rank order.
+                var candidates = await filtered.Select(x => new { x.e.Navnelbnr, x.e.Name }).ToListAsync(ct);
+                var pageIds = candidates
+                    .OrderBy(c => risk.GetValueOrDefault(c.Navnelbnr, LocationRisk.None).Rank)
+                    .ThenBy(c => c.Name).ThenBy(c => c.Navnelbnr)
+                    .Skip((pageNo - 1) * size).Take(size)
+                    .Select(c => c.Navnelbnr).ToList();
 
-            var estIds = pageRows.Select(l => l.estId).ToList();
+                var loaded = await all
+                    .Where(x => pageIds.Contains(x.e.Navnelbnr))
+                    .Select(x => new LocationRow(
+                        x.e.Id, x.e.Navnelbnr, x.e.CvrNumber, x.e.Name, x.e.Address, x.e.City,
+                        x.e.LatestScore, x.e.LatestScoreDate, x.e.ReportUrl, x.e.VirksomhedsType, x.AddedAt))
+                    .ToListAsync(ct);
+                var byNavnelbnr = loaded.ToDictionary(r => r.Navnelbnr);
+                pageRows = pageIds.Select(id => byNavnelbnr[id]).ToList();
+            }
+            else
+            {
+                pageRows = await ordered
+                    .Skip((pageNo - 1) * size)
+                    .Take(size)
+                    .Select(x => new LocationRow(
+                        x.e.Id, x.e.Navnelbnr, x.e.CvrNumber, x.e.Name, x.e.Address, x.e.City,
+                        x.e.LatestScore, x.e.LatestScoreDate, x.e.ReportUrl, x.e.VirksomhedsType, x.AddedAt))
+                    .ToListAsync(ct);
+            }
+
+            var estIds = pageRows.Select(l => l.EstId).ToList();
 
             var inspections = estIds.Count == 0
                 ? []
@@ -456,20 +483,21 @@ public static class BusinessEndpoints
 
             var locationItems = pageRows.Select(l =>
             {
-                var history = inspectionsByEst.GetValueOrDefault(l.estId) ?? [];
+                var history = inspectionsByEst.GetValueOrDefault(l.EstId) ?? [];
                 return new
                 {
-                    l.navnelbnr,
-                    l.cvrNumber,
-                    l.name,
-                    l.address,
-                    l.city,
-                    l.latestScore,
-                    l.latestScoreDate,
-                    l.reportUrl,
-                    l.virksomhedsType,
-                    l.addedAt,
-                    scoreHistory = history.Take(4).Select(i => new { date = i.InspectedOn, score = i.SmileyScore }).ToList(),
+                    navnelbnr       = l.Navnelbnr,
+                    cvrNumber       = l.CvrNumber,
+                    name            = l.Name,
+                    address         = l.Address,
+                    city            = l.City,
+                    latestScore     = l.LatestScore,
+                    latestScoreDate = l.LatestScoreDate,
+                    reportUrl       = l.ReportUrl,
+                    virksomhedsType = l.VirksomhedsType,
+                    addedAt         = l.AddedAt,
+                    risk            = RiskDto(risk.GetValueOrDefault(l.Navnelbnr, LocationRisk.None)),
+                    scoreHistory    = history.Take(4).Select(i => new { date = i.InspectedOn, score = i.SmileyScore }).ToList(),
                     inspectionCount = history.Count
                 };
             }).ToList();
@@ -487,6 +515,7 @@ public static class BusinessEndpoints
                 locationCount,
                 cvrCount,
                 total,
+                attentionCount = attentionIds.Count,
                 page = pageNo,
                 pageSize = size,
                 cvrGroups
@@ -537,23 +566,43 @@ public static class BusinessEndpoints
                 unscored = distributionRows.Where(r => r.score == null).Sum(r => r.count)
             };
 
-            var needsAttentionCount = distributionRows.Where(r => r.score >= 3).Sum(r => r.count);
-            var needsAttention = needsAttentionCount == 0
+            // The "Score 3 or 4" tile counts current scores only; the "Needs attention" panel is the wider
+            // RiskCalculator set (score 3/4, declined in the last 90 days, no score yet).
+            var highScoreCount = distributionRows.Where(r => r.score >= 3).Sum(r => r.count);
+
+            var risk = await AssessRiskAsync(db, establishments, business.Id, ct);
+            var attentionIds = risk.Where(kv => kv.Value.NeedsAttention).Select(kv => kv.Key).ToList();
+
+            // Ties inside a rank (e.g. several locations at score 4) are broken by name, so names are needed
+            // for the whole attention set — id + name only — before the top 5 get their full rows.
+            var attentionNames = attentionIds.Count == 0
                 ? []
-                : await owned
-                    .Where(e => e.LatestScore >= 3)
-                    .OrderByDescending(e => e.LatestScore).ThenBy(e => e.Name)
-                    .Take(5)
-                    .Select(e => new
-                    {
-                        navnelbnr = e.Navnelbnr,
-                        name = e.Name,
-                        city = e.City,
-                        latestScore = e.LatestScore,
-                        latestScoreDate = e.LatestScoreDate,
-                        virksomhedsType = e.VirksomhedsType
-                    })
+                : await owned.Where(e => attentionIds.Contains(e.Navnelbnr))
+                    .Select(e => new { e.Navnelbnr, e.Name }).ToListAsync(ct);
+            var topIds = attentionNames
+                .OrderBy(n => risk[n.Navnelbnr].Rank).ThenBy(n => n.Name).ThenBy(n => n.Navnelbnr)
+                .Take(5).Select(n => n.Navnelbnr).ToList();
+            var topRows = topIds.Count == 0
+                ? []
+                : await owned.Where(e => topIds.Contains(e.Navnelbnr))
+                    .Select(e => new { e.Navnelbnr, e.Name, e.City, e.LatestScore, e.LatestScoreDate, e.VirksomhedsType })
                     .ToListAsync(ct);
+            var topById = topRows.ToDictionary(r => r.Navnelbnr);
+            var needsAttention = topIds.Select(id =>
+            {
+                var r = topById[id];
+                return new
+                {
+                    navnelbnr = r.Navnelbnr,
+                    name = r.Name,
+                    city = r.City,
+                    detailPath = FindUrlBuilder.DetailPath(r.Name, r.City, r.Navnelbnr),
+                    virksomhedsType = r.VirksomhedsType,
+                    latestScore = r.LatestScore,
+                    latestScoreDate = r.LatestScoreDate,
+                    risk = RiskDto(risk[id])
+                };
+            }).ToList();
 
             var windowStart = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-RecentChangesWindowDays);
             var changeRows = locationCount == 0
@@ -579,7 +628,8 @@ public static class BusinessEndpoints
                 cvrCount,
                 averageScore,
                 scoreDistribution,
-                needsAttentionCount,
+                highScoreCount,
+                needsAttentionCount = attentionIds.Count,
                 needsAttention,
                 recentChangesWindowDays = RecentChangesWindowDays,
                 recentChanges
@@ -708,6 +758,58 @@ public static class BusinessEndpoints
             });
         });
     }
+
+    private sealed record LocationRow(
+        int EstId, int Navnelbnr, string? CvrNumber, string Name, string? Address, string? City,
+        int? LatestScore, DateOnly? LatestScoreDate, string? ReportUrl, string? VirksomhedsType, DateTime AddedAt);
+
+    // One RiskCalculator assessment per location in the business (keyed by Navnelbnr): one owned-locations
+    // read plus one recent-transitions query. Shared by the Overview's "Needs attention" panel and the
+    // Locations list (badges, needs-attention filter, risk sort) so both always agree.
+    private static async Task<Dictionary<int, LocationRisk>> AssessRiskAsync(
+        SmilrDbContext db, IEstablishmentRepository establishments, int businessId, CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var locations = await db.BusinessLocations
+            .Where(b => b.BusinessId == businessId)
+            .Join(db.Establishments, bn => bn.Navnelbnr, e => e.Navnelbnr,
+                (bn, e) => new { e.Id, e.Navnelbnr, e.LatestScore, IsDelisted = e.DelistedAt != null })
+            .ToListAsync(ct);
+        if (locations.Count == 0) return [];
+
+        var transitions = await establishments.GetRecentTransitionsForBusinessAsync(
+            businessId, today.AddDays(-RiskCalculator.RecentWindowDays), ct);
+        var byEstablishment = transitions
+            .GroupBy(t => t.EstablishmentId)
+            .ToDictionary(g => g.Key, g => g.Select(t => new ScoreTransition(t.ChangeDate, t.PreviousScore, t.NewScore)).ToList());
+
+        var result = new Dictionary<int, LocationRisk>(locations.Count);
+        foreach (var l in locations)
+        {
+            result[l.Navnelbnr] = RiskCalculator.Assess(
+                l.LatestScore, byEstablishment.GetValueOrDefault(l.Id) ?? [], today, l.IsDelisted);
+        }
+        return result;
+    }
+
+    // Wire shape for a location's risk: level plus reason codes (the UI words them; declines carry the
+    // date of the newest in-window downgrade).
+    private static object RiskDto(LocationRisk r) => new
+    {
+        level = r.Level switch { RiskLevel.AtRisk => "at_risk", RiskLevel.Watch => "watch", _ => "ok" },
+        reasons = r.Reasons.Select(reason => new
+        {
+            code = reason switch
+            {
+                RiskReason.HighScore => "high_score",
+                RiskReason.ConsecutiveDeclines => "consecutive_declines",
+                RiskReason.RecentDecline => "recent_decline",
+                _ => "no_score",
+            },
+            date = reason is RiskReason.ConsecutiveDeclines or RiskReason.RecentDecline ? r.DeclineDate : null
+        }).ToList()
+    };
 
     private sealed record BenchmarkInput(
         int Navnelbnr, string Name, string? City, string? Pixibranche, int? LatestScore, bool InPeerPopulation);

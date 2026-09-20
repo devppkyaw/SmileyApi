@@ -10,6 +10,8 @@ public static class LocationListPaging
     public const string SortByCvr = "cvr";
     public const string SortScoreAsc = "score-asc";
     public const string SortScoreDesc = "score-desc";
+    /// <summary>Most concerning first, per <see cref="RiskCalculator"/>'s rank.</summary>
+    public const string SortRisk = "risk";
 
     public static (int Page, int PageSize) Normalize(int? page, int? pageSize) =>
         (Math.Max(1, page ?? 1), Math.Clamp(pageSize ?? DefaultPageSize, 1, MaxPageSize));
@@ -18,6 +20,7 @@ public static class LocationListPaging
     {
         SortScoreAsc  => SortScoreAsc,
         SortScoreDesc => SortScoreDesc,
+        SortRisk      => SortRisk,
         _             => SortByCvr,
     };
 

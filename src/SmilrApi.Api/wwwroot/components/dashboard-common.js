@@ -10,6 +10,29 @@ function formatDate(iso) {
   return p[2] + '/' + p[1] + '/' + p[0].slice(2);
 }
 
+// "2026-08-28" -> "28/08" (e.g. "Declined 28/08" reason tags).
+function formatDayMonth(iso) {
+  var p = String(iso).slice(0, 10).split('-');
+  return p[2] + '/' + p[1];
+}
+
+// Why a location needs attention, in words. The server sends reason codes (see RiskCalculator); used by
+// the Overview's "Needs attention" panel and the Locations list so both word it identically.
+function reasonChip(reason, score) {
+  var text, cls;
+  switch (reason.code) {
+    case 'high_score':
+      text = 'Score ' + score; cls = 'ov-chip--down'; break;
+    case 'consecutive_declines':
+      text = 'Declined twice in 90 days' + (reason.date ? ' · latest ' + formatDayMonth(reason.date) : ''); cls = 'ov-chip--down'; break;
+    case 'recent_decline':
+      text = 'Declined ' + formatDayMonth(reason.date); cls = 'ov-chip--warn'; break;
+    default:
+      text = 'Awaiting first inspection'; cls = 'ov-chip--muted';
+  }
+  return '<span class="ov-chip ' + cls + '">' + text + '</span>';
+}
+
 // Common page bootstrap: resolves the session, fills the hero, reveals #dashContent (or #authError when
 // logged out). Returns the /me payload, or null when there is no session. `tier` is overridable so the
 // post-checkout ?upgraded=1 landing can show Pro before the webhook has flipped the account.

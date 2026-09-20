@@ -360,6 +360,27 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
         return await QueryRecentChangesAsync(filterSql, filterParams, windowStart, 1, limit, ct);
     }
 
+    public async Task<IReadOnlyList<ScoreTransitionRow>> GetRecentTransitionsForBusinessAsync(
+        int businessId, DateOnly windowStart, CancellationToken ct = default)
+    {
+        const string filterSql =
+            "AND e.DelistedAt IS NULL AND e.Navnelbnr IN (SELECT bl.Navnelbnr FROM BusinessLocations bl WHERE bl.BusinessId = @businessId)";
+        // rn is the transition's recency rank among ALL of the establishment's transitions (1 = newest),
+        // so filtering rn <= 2 before the date test keeps "the two most recent changes" honest.
+        var sql = BuildCurrentTransitionsCte(filterSql) + """
+            SELECT ct.EstablishmentId AS EstablishmentId, ct.PreviousScore AS PreviousScore,
+                   ct.NewScore AS NewScore, ct.ChangeDate AS ChangeDate
+            FROM CurrentTransitions ct
+            WHERE ct.rn <= 2 AND ct.ChangeDate >= @windowStart
+            """;
+
+        var rows = await db.Set<ScoreChangeSqlRow>()
+            .FromSqlRaw(sql, new SqlParameter("@businessId", businessId), new SqlParameter("@windowStart", windowStart))
+            .ToListAsync(ct);
+
+        return rows.Select(r => new ScoreTransitionRow(r.EstablishmentId, r.PreviousScore, r.NewScore, r.ChangeDate)).ToList();
+    }
+
     private async Task<IReadOnlyList<ScoreChangeRow>> QueryRecentChangesAsync(
         string establishmentFilterSql, List<SqlParameter> filterParams,
         DateOnly windowStart, int page, int limit, CancellationToken ct)
