@@ -486,4 +486,58 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
             .SingleOrDefaultAsync(ct);
         return counts is null ? new AreaScoreSnapshot(0, 0) : new AreaScoreSnapshot(counts.Total, counts.Top);
     }
+
+    // Scored, non-delisted establishments in a real (non-placeholder) category with a City — the peer
+    // population for benchmarking. Same CvrNumber != null / DelistedAt == null rules as the area snapshots.
+    private IQueryable<Establishment> PeerPopulation() =>
+        db.Establishments.Where(e => e.CvrNumber != null && e.City != null && e.LatestScore != null
+                                  && e.Pixibranche != null && e.Pixibranche != ""
+                                  && !e.Pixibranche.EndsWith(PixibrancheCategories.PlaceholderSuffix)
+                                  && e.DelistedAt == null);
+
+    public async Task<IReadOnlyDictionary<string, ScoreDistribution>> GetPeerScoreDistributionsAsync(
+        IReadOnlyCollection<string> cities, IReadOnlyCollection<string> categories, CancellationToken ct = default)
+    {
+        if (cities.Count == 0 || categories.Count == 0) return new Dictionary<string, ScoreDistribution>();
+
+        var cityList = cities.ToList();
+        var categoryList = categories.ToList();
+        var rows = await PeerPopulation()
+            .Where(e => cityList.Contains(e.City!) && categoryList.Contains(e.Pixibranche!))
+            .GroupBy(e => new { e.City, e.Pixibranche, e.LatestScore })
+            .Select(g => new { g.Key.City, g.Key.Pixibranche, g.Key.LatestScore, Count = g.Count() })
+            .ToListAsync(ct);
+
+        return ToDistributions(rows.Select(r => (BenchmarkCalculator.PeerKey(r.City!, r.Pixibranche!), r.LatestScore!.Value, r.Count)));
+    }
+
+    public async Task<IReadOnlyDictionary<string, ScoreDistribution>> GetNationalCategoryDistributionsAsync(CancellationToken ct = default)
+    {
+        var rows = await PeerPopulation()
+            .GroupBy(e => new { e.Pixibranche, e.LatestScore })
+            .Select(g => new { g.Key.Pixibranche, g.Key.LatestScore, Count = g.Count() })
+            .ToListAsync(ct);
+
+        return ToDistributions(rows.Select(r => (r.Pixibranche!.Trim().ToLowerInvariant(), r.LatestScore!.Value, r.Count)));
+    }
+
+    // Groups may split by casing/whitespace variants the SQL collation kept apart; merging on the
+    // normalized key sums them back together.
+    private static Dictionary<string, ScoreDistribution> ToDistributions(IEnumerable<(string Key, int Score, int Count)> rows)
+    {
+        var result = new Dictionary<string, ScoreDistribution>();
+        foreach (var (key, score, count) in rows)
+        {
+            var d = result.GetValueOrDefault(key);
+            result[key] = score switch
+            {
+                1 => d with { S1 = d.S1 + count },
+                2 => d with { S2 = d.S2 + count },
+                3 => d with { S3 = d.S3 + count },
+                4 => d with { S4 = d.S4 + count },
+                _ => d,
+            };
+        }
+        return result;
+    }
 }

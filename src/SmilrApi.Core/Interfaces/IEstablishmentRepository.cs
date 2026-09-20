@@ -1,4 +1,5 @@
 using SmilrApi.Core.Models;
+using SmilrApi.Core.Utils;
 
 namespace SmilrApi.Core.Interfaces;
 
@@ -123,6 +124,19 @@ public interface IEstablishmentRepository
     /// than an optional category filter on GetAreaScoreSnapshotAsync, matching this repository's existing
     /// convention of parallel "...AndCategory" methods (GetByCitiesAsync/GetByCitiesAndCategoryAsync).</summary>
     Task<AreaScoreSnapshot> GetCategoryScoreSnapshotAsync(IReadOnlyList<string> cityValues, string category, CancellationToken ct = default);
+
+    /// <summary>Score distributions per (City, Pixibranche) peer group for the business dashboard's
+    /// benchmarking, keyed by <see cref="BenchmarkCalculator.PeerKey"/>. One grouped query filtered by the
+    /// two lists, so it returns a superset of the pairs asked for (every listed city x every listed
+    /// category that has establishments) — the caller picks the pairs it needs. Same population as the
+    /// area snapshots: scored, non-delisted, real establishments; placeholder ("not yet assigned")
+    /// categories are never peer groups.</summary>
+    Task<IReadOnlyDictionary<string, ScoreDistribution>> GetPeerScoreDistributionsAsync(
+        IReadOnlyCollection<string> cities, IReadOnlyCollection<string> categories, CancellationToken ct = default);
+
+    /// <summary>Nationwide score distribution per Pixibranche category (same population as above), keyed by
+    /// lower-cased category. Small (about 26 entries) and slow-moving, so callers cache it.</summary>
+    Task<IReadOnlyDictionary<string, ScoreDistribution>> GetNationalCategoryDistributionsAsync(CancellationToken ct = default);
 }
 
 public record SitemapEntry(string Name, string? City, int Navnelbnr, DateTime UpdatedAt, bool HasInspectionDate);

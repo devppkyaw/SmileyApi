@@ -89,6 +89,12 @@
           </div>
         </div>
 
+        <div class="ov-card" id="benchCard">
+          <h2 class="ov-h2">How you compare</h2>
+          <p class="ov-note" id="benchNote">Against similar establishments — same category, in your area.</p>
+          <div id="benchBody"><p class="ov-empty">Loading…</p></div>
+        </div>
+
         <p style="margin-top:8px"><a href="/locations.html" class="btn-secondary">Manage locations →</a></p>
       </div>
 
@@ -117,6 +123,7 @@ var DIST = [
 
   var me = await initDashboardPage(upgraded ? { tier: 'pro' } : undefined);
   if (!me) return;
+  var tier = upgraded ? 'pro' : me.tier;
 
   if (upgraded) document.getElementById('upgradedBanner').style.display = 'block';
 
@@ -127,11 +134,73 @@ var DIST = [
   try {
     var res = await fetch('/v1/business/overview');
     if (!res.ok) throw new Error('status ' + res.status);
-    render(await res.json());
+    var overview = await res.json();
+    render(overview);
+    // Benchmarking is fetched after the landing content is on screen, so it never delays the overview.
+    if (overview.locationCount) loadBenchmark(tier);
   } catch (e) {
     document.getElementById('overviewError').style.display = 'block';
   }
 })();
+
+var BENCH_LOCKED = '<p class="ov-empty">Benchmarking against similar establishments is part of the Pro plan.</p>';
+
+async function loadBenchmark(tier) {
+  var body = document.getElementById('benchBody');
+  if (tier === 'free') { body.innerHTML = BENCH_LOCKED; return; }
+  try {
+    var res = await fetch('/v1/business/benchmark');
+    if (res.status === 403) { body.innerHTML = BENCH_LOCKED; return; }
+    if (!res.ok) throw new Error('status ' + res.status);
+    renderBenchmark(await res.json());
+  } catch (e) {
+    body.innerHTML = '<p class="ov-empty">Could not load the benchmark. Please refresh the page.</p>';
+  }
+}
+
+function pct(n) { return (Math.round(n * 10) / 10).toString().replace(/\.0$/, '') + '%'; }
+
+function renderBenchmark(d) {
+  var body = document.getElementById('benchBody');
+  var p = d.portfolio;
+  if (!p) {
+    body.innerHTML = '<p class="ov-empty">Not enough comparable establishments to benchmark your locations yet.</p>';
+    return;
+  }
+
+  var scopeLabel = { area: 'in the same area', national: 'nationwide' };
+  var html =
+    '<div class="bench-rows">' +
+      benchRow('Average score <small>(1 = best)</small>', p.yourAverage.toFixed(2), p.peerAverage.toFixed(2)) +
+      benchRow('Locations with score 1', pct(p.yourTopSharePercent), pct(p.peerTopSharePercent)) +
+    '</div>' +
+    '<p class="bench-summary">Compared with the average of their peers, <strong>' + p.betterThanPeers + '</strong> of your ' +
+      p.benchmarked + ' benchmarked location' + (p.benchmarked !== 1 ? 's' : '') + ' score better, <strong>' +
+      p.inLineWithPeers + '</strong> are in line and <strong>' + p.worseThanPeers + '</strong> score worse.</p>';
+
+  if (d.benchmarkedLocations < d.totalLocations) {
+    html += '<p class="ov-note">' + d.benchmarkedLocations + ' of ' + d.totalLocations +
+      ' locations benchmarked — the rest have no score yet, no category, or too few comparable establishments.</p>';
+  }
+
+  if (d.belowPeers.length) {
+    html += '<h3 class="bench-h3">Furthest below their peers</h3><ul class="ov-list">' +
+      d.belowPeers.map(function (l) {
+        return '<li class="ov-row">' +
+          '<div class="ov-row-main"><a href="' + esc(l.detailPath) + '" class="ov-row-link"><strong>' + esc(l.name) + '</strong></a>' +
+            (l.city ? '<span class="loc-addr">' + esc(l.city) + '</span>' : '') + '</div>' +
+          '<div class="ov-row-side"><span>Score <strong>' + l.score + '</strong> vs peer average <strong>' + l.peerAverage.toFixed(2) + '</strong></span>' +
+            '<span class="ov-date">' + scopeLabel[l.scope] + ', ' + l.peerCount + ' peers</span></div></li>';
+      }).join('') + '</ul>';
+  }
+  body.innerHTML = html;
+}
+
+function benchRow(label, you, peers) {
+  return '<div class="bench-row"><span class="bench-label">' + label + '</span>' +
+    '<span class="bench-val"><span class="bench-who">You</span> <strong>' + you + '</strong></span>' +
+    '<span class="bench-val"><span class="bench-who">Peers</span> <strong>' + peers + '</strong></span></div>';
+}
 
 async function claimListing(claimCvr) {
   var banner = document.getElementById('claimBanner');

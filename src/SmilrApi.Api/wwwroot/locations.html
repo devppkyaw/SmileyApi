@@ -107,10 +107,14 @@ var locationData = {};
 var cvrGroupCounts = {};
 var searchTimer = null;
 var loadSeq = 0;
+var canBenchmark = false;
 
 (async function () {
   var me = await initDashboardPage();
   if (!me) return;
+
+  // Benchmarking is Pro/Enterprise (any tier that isn't free), matching the API's 403 for Free.
+  canBenchmark = me.tier !== 'free';
 
   if (me.tier === 'pro') {
     document.getElementById('addForm').style.display     = 'flex';
@@ -208,6 +212,7 @@ function locRow(loc, showCvr) {
     '<td>' +
       '<div class="act-row">' +
         (loc.reportUrl ? '<a href="' + esc(loc.reportUrl) + '" target="_blank" rel="noopener" class="act-btn" title="View inspection report">&#x1F4CB; Report</a>' : '') +
+        (canBenchmark ? '<button onclick="openBenchModal(' + loc.navnelbnr + ')" class="act-btn" title="Compare with similar establishments">⚖ Compare</button>' : '') +
         '<button onclick="openEmbedModal(' + loc.navnelbnr + ')" class="act-btn" title="Embed code">⎘ Embed</button>' +
         '<button onclick="removeLocation(' + loc.navnelbnr + ')" class="act-btn act-btn--danger" title="Remove">✕</button>' +
       '</div>' +
@@ -425,6 +430,62 @@ function closeHistoryModal() {
   document.getElementById('historyModal').style.display = 'none';
 }
 
+var BENCH_DIST = [
+  { key: 's1', label: 'Score 1', cls: 'dist-seg--1' },
+  { key: 's2', label: 'Score 2', cls: 'dist-seg--2' },
+  { key: 's3', label: 'Score 3', cls: 'dist-seg--3' },
+  { key: 's4', label: 'Score 4', cls: 'dist-seg--4' }
+];
+
+function pct(n) { return (Math.round(n * 10) / 10).toString().replace(/\.0$/, '') + '%'; }
+
+async function openBenchModal(navnelbnr) {
+  var loc = locationData[navnelbnr];
+  document.getElementById('benchModalTitle').textContent = loc.name;
+  var body = document.getElementById('benchModalBody');
+  body.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem">Loading…</p>';
+  document.getElementById('benchModal').style.display = 'flex';
+
+  var res;
+  try { res = await fetch('/v1/business/locations/' + navnelbnr + '/benchmark'); } catch (e) { res = null; }
+  if (!res || !res.ok) {
+    body.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem">' +
+      (res && res.status === 403 ? 'Benchmarking is part of the Pro plan.' : 'Could not load the comparison.') + '</p>';
+    return;
+  }
+  var d = await res.json();
+  if (!d.benchmarked) {
+    body.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem">' + esc(d.reason) + '</p>';
+    return;
+  }
+
+  var where = d.scope === 'area' ? 'in ' + esc(d.city) : 'nationwide';
+  var bar = '', legend = '';
+  BENCH_DIST.forEach(function (seg) {
+    var n = d.peers[seg.key];
+    if (n > 0) bar += '<span class="dist-seg ' + seg.cls + '" style="flex:' + n + '" title="' + seg.label + ': ' + n + '"></span>';
+    legend += '<li><span class="dist-swatch ' + seg.cls + '"></span>' + seg.label + ' <strong>' + n + '</strong></li>';
+  });
+
+  body.innerHTML =
+    '<p class="ov-note" style="margin-top:0">This location scores <strong>' + d.score + '</strong>. Compared with ' + d.peerCount +
+      ' other <em>' + esc(d.category) + '</em> establishments ' + where + '.</p>' +
+    (d.scope === 'national'
+      ? '<p class="ov-note">Too few comparable establishments in ' + esc(d.city) + ', so this uses the whole country.</p>' : '') +
+    '<div class="dist-bar" role="img" aria-label="Peer score distribution">' + bar + '</div>' +
+    '<ul class="dist-legend">' + legend + '</ul>' +
+    '<div class="bench-rows" style="margin-top:14px">' +
+      '<div class="bench-row"><span class="bench-label">Peers with the same score</span><span class="bench-val"><strong>' + pct(d.samePercent) + '</strong></span></div>' +
+      '<div class="bench-row"><span class="bench-label">Peers scoring better</span><span class="bench-val"><strong>' + pct(d.peersBetterPercent) + '</strong></span></div>' +
+      '<div class="bench-row"><span class="bench-label">Peers scoring worse</span><span class="bench-val"><strong>' + pct(d.peersWorsePercent) + '</strong></span></div>' +
+      '<div class="bench-row"><span class="bench-label">Peer average <small>(1 = best)</small></span><span class="bench-val"><strong>' + d.peerAverage.toFixed(2) + '</strong></span></div>' +
+    '</div>';
+}
+
+function closeBenchModal() {
+  document.getElementById('benchModal').style.display = 'none';
+}
+
 function copyModalCode() {
   var code = document.getElementById('modalCode').textContent;
   navigator.clipboard.writeText(code).then(function () {
@@ -440,6 +501,9 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   document.getElementById('historyModal').addEventListener('click', function (e) {
     if (e.target === this) closeHistoryModal();
+  });
+  document.getElementById('benchModal').addEventListener('click', function (e) {
+    if (e.target === this) closeBenchModal();
   });
 });
 </script>
@@ -474,6 +538,18 @@ document.addEventListener('DOMContentLoaded', function () {
     </div>
     <div class="modal-body">
       <div id="historyModalBody"></div>
+    </div>
+  </div>
+</div>
+
+<div id="benchModal" class="modal-overlay" style="display:none">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <span id="benchModalTitle" style="font-weight:600;font-size:1rem"></span>
+      <button class="modal-close" onclick="closeBenchModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="benchModalBody"></div>
     </div>
   </div>
 </div>
