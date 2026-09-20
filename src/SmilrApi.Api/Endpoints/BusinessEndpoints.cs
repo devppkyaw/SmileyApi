@@ -421,6 +421,12 @@ public static class BusinessEndpoints
                     x.e.Navnelbnr.ToString().Contains(search));
             }
 
+            // "Needs attention (N)" counts the needs-attention locations matching the current search, so the
+            // number always equals what selecting that filter shows (the portfolio total when not searching).
+            var attentionCount = search is null
+                ? attentionIds.Count
+                : await filtered.Where(x => attentionIds.Contains(x.e.Navnelbnr)).CountAsync(ct);
+
             if (attentionOnly)
                 filtered = filtered.Where(x => attentionIds.Contains(x.e.Navnelbnr));
 
@@ -454,10 +460,12 @@ public static class BusinessEndpoints
                 return Results.Ok(new
                 {
                     locations = new List<object>(),
+                    groupsOnly = true,   // echoed so the page can tell a server that predates this mode
+                    cvrFilter,
                     locationCount,
                     cvrCount,
                     total,
-                    attentionCount = attentionIds.Count,
+                    attentionCount,
                     page = pageNo,
                     pageSize = size,
                     cvrGroups
@@ -546,10 +554,11 @@ public static class BusinessEndpoints
             return Results.Ok(new
             {
                 locations = locationItems,
+                cvrFilter,   // echoed so the page can tell a server that ignores the cvr parameter
                 locationCount,
                 cvrCount,
                 total,
-                attentionCount = attentionIds.Count,
+                attentionCount,
                 page = pageNo,
                 pageSize = size,
                 cvrGroups

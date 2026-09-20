@@ -162,6 +162,17 @@ function emptyMessage(locationCount) {
       : (locationCount ? 'No locations on this page.' : 'No locations yet. Add one above.');
 }
 
+// The page is served from disk but the API is a compiled build, so after a code change the two can be out
+// of step until the app is restarted. The API echoes `groupsOnly` / `cvrFilter` (newer builds only); when
+// they're missing, say so instead of rendering rows that belong to a different query.
+var STALE_SERVER_MSG = 'The server is running an older version of the app. Restart it, then reload this page.';
+
+function showStaleServer() {
+  document.getElementById('collapseExpandBtns').style.display = 'none';
+  document.getElementById('pager').style.display = 'none';
+  document.getElementById('locationList').innerHTML = emptyRow(STALE_SERVER_MSG, true);
+}
+
 function emptyRow(msg, isError) {
   return '<tr><td colspan="4" style="text-align:center;padding:28px;color:var(' + (isError ? '--red' : '--text-muted') +
     ');font-size:0.9rem">' + msg + '</td></tr>';
@@ -187,6 +198,8 @@ async function loadLocations() {
     return;
   }
   var data = await res.json();
+
+  if (grouped && data.groupsOnly !== true) { showStaleServer(); return; }
 
   // Removing the last row of the last page leaves that page empty — step back one.
   if (!grouped && !data.locations.length && data.total > 0 && state.page > 1) {
@@ -415,13 +428,27 @@ async function loadGroupPage(key, pageNo) {
   var data = await res.json();
   if (seq !== loadSeq) return;
 
-  data.locations.forEach(function (loc) { locationData[loc.navnelbnr] = loc; });
-  insertAfterGroup(key, data.locations.map(function (loc) { return locRow(loc, false); }).join(''));
-  g.loaded += data.locations.length;
+  // A server that predates the cvr parameter ignores it and returns rows for every group.
+  if (data.cvrFilter !== (key === '' ? 'none' : key)) {
+    insertAfterGroup(key, '<tr class="grp-more" data-cvr="' + esc(key) + '"><td colspan="4" style="text-align:center;padding:12px;font-size:0.85rem;color:var(--red)">' +
+      STALE_SERVER_MSG + '</td></tr>');
+    return;
+  }
+
+  // Belt and braces: only this group's own rows, and never the same location twice.
+  var shown = {};
+  groupRows(key).forEach(function (r) { if (r.dataset.navnelbnr) shown[r.dataset.navnelbnr] = true; });
+  var rows = data.locations.filter(function (loc) {
+    return (loc.cvrNumber || '') === key && !shown[loc.navnelbnr];
+  });
+
+  rows.forEach(function (loc) { locationData[loc.navnelbnr] = loc; });
+  insertAfterGroup(key, rows.map(function (loc) { return locRow(loc, false); }).join(''));
+  g.loaded += rows.length;
   g.page = pageNo;
 
   var remaining = g.count - g.loaded;
-  if (remaining > 0 && data.locations.length) {
+  if (remaining > 0 && rows.length) {
     insertAfterGroup(key, '<tr class="grp-more" data-cvr="' + esc(key) + '"><td colspan="4" style="text-align:center;padding:10px">' +
       '<button class="btn-secondary" onclick="loadGroupPage(\'' + esc(key) + '\',' + (pageNo + 1) + ')">Show ' +
       Math.min(PAGE_SIZE, remaining) + ' more (' + remaining + ' remaining)</button></td></tr>');
