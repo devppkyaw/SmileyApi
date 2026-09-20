@@ -144,7 +144,7 @@ public class AcsEmailService : IEmailService
                    "<table border=\"1\" cellpadding=\"6\" cellspacing=\"0\" style=\"border-collapse:collapse\">" +
                    "<thead><tr><th>CVR</th><th>Name</th><th>Address</th><th>Score change</th></tr></thead>" +
                    $"<tbody>{rows}</tbody></table>" +
-                   "<p>Log in to your <a href=\"https://smilrhq.dk/dashboard.html\">Smilr dashboard</a> for details.</p>",
+                   "<p>Log in to your <a href=\"https://smilrhq.dk/overview.html\">Smilr dashboard</a> for details.</p>",
             PlainText = (banner.Length > 0 ? $"{banner}\n\n" : "") +
                         $"Smilr score updates:\n\n{plainLines}"
         });

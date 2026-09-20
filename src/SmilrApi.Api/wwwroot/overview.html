@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Your Smilr business overview — score summary, recent changes and locations that need attention." />
+  <meta name="robots" content="noindex" />
+  <title>Overview — SmilrHQ</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<header class="hero" style="padding-bottom:40px">
+  <dash-nav active="overview"></dash-nav>
+  <div class="hero-content" style="padding-top:60px">
+    <h1 style="font-size:clamp(1.8rem,4vw,2.5rem)">Overview<br><span class="accent" id="tierBadge"></span></h1>
+    <p class="hero-sub" id="welcomeMsg">Loading…</p>
+  </div>
+</header>
+
+<section class="access">
+  <div class="container">
+
+    <div id="authError" style="display:none;text-align:center;padding:40px 0">
+      <p style="color:var(--red);margin-bottom:16px">You are not logged in.</p>
+      <a href="/login.html" class="btn-primary">Log in →</a>
+    </div>
+
+    <div id="dashContent" style="display:none">
+
+      <div id="upgradedBanner" style="display:none;background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:14px 20px;margin-bottom:24px;color:#065f46;font-weight:500">
+        You're now on Pro. Welcome aboard!
+      </div>
+
+      <div id="claimBanner" style="display:none;border-radius:8px;padding:14px 20px;margin-bottom:24px;font-weight:500"></div>
+
+      <div id="proActions" style="display:none;margin-bottom:24px">
+        <button class="btn-secondary" onclick="openPortal()">Manage subscription</button>
+        <span id="portalStatus" style="margin-left:12px;font-size:0.85rem;color:var(--text-muted)"></span>
+      </div>
+
+      <div id="overviewError" style="display:none;color:var(--red);margin-bottom:16px">Could not load your overview. Please refresh the page.</div>
+
+      <!-- Empty state -->
+      <div id="overviewEmpty" class="ov-card" style="display:none;text-align:center;padding:36px 24px">
+        <p style="font-weight:600;margin-bottom:8px">No locations yet</p>
+        <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:18px">Add your locations by CVR number to see score summaries and changes here.</p>
+        <a href="/locations.html" class="btn-primary">Add locations →</a>
+      </div>
+
+      <div id="overviewBody" style="display:none">
+
+        <div class="ov-tiles">
+          <div class="ov-tile">
+            <div class="ov-tile-value" id="tileLocations">–</div>
+            <div class="ov-tile-label">Locations</div>
+          </div>
+          <div class="ov-tile">
+            <div class="ov-tile-value" id="tileCvr">–</div>
+            <div class="ov-tile-label">CVR numbers</div>
+          </div>
+          <div class="ov-tile">
+            <div class="ov-tile-value" id="tileAvg">–</div>
+            <div class="ov-tile-label">Average score <small>(1 = best)</small></div>
+          </div>
+          <div class="ov-tile">
+            <div class="ov-tile-value" id="tileAttention">–</div>
+            <div class="ov-tile-label">Score 3 or 4</div>
+          </div>
+        </div>
+
+        <div class="ov-card">
+          <h2 class="ov-h2">Score distribution</h2>
+          <div class="dist-bar" id="distBar" role="img" aria-label="Score distribution"></div>
+          <ul class="dist-legend" id="distLegend"></ul>
+          <p class="ov-note"><a href="/scores.html">How scores work →</a></p>
+        </div>
+
+        <div class="ov-cols">
+          <div class="ov-card">
+            <h2 class="ov-h2">Recent score changes</h2>
+            <p class="ov-note" id="changesNote"></p>
+            <ul class="ov-list" id="changesList"></ul>
+          </div>
+          <div class="ov-card">
+            <h2 class="ov-h2">Needs attention</h2>
+            <p class="ov-note" id="attentionNote"></p>
+            <ul class="ov-list" id="attentionList"></ul>
+          </div>
+        </div>
+
+        <p style="margin-top:8px"><a href="/locations.html" class="btn-secondary">Manage locations →</a></p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<site-footer></site-footer>
+
+<script src="/components/footer.js"></script>
+<script src="/components/nav.js"></script>
+<script src="/components/dashboard-common.js"></script>
+<script src="/smilr-icons.js"></script>
+<script>
+var DIST = [
+  { key: 's1', label: 'Score 1', cls: 'dist-seg--1' },
+  { key: 's2', label: 'Score 2', cls: 'dist-seg--2' },
+  { key: 's3', label: 'Score 3', cls: 'dist-seg--3' },
+  { key: 's4', label: 'Score 4', cls: 'dist-seg--4' },
+  { key: 'unscored', label: 'No score yet', cls: 'dist-seg--none' }
+];
+
+(async function () {
+  var params   = new URLSearchParams(location.search);
+  var upgraded = params.get('upgraded') === '1';
+
+  var me = await initDashboardPage(upgraded ? { tier: 'pro' } : undefined);
+  if (!me) return;
+
+  if (upgraded) document.getElementById('upgradedBanner').style.display = 'block';
+
+  var claimCvr = params.get('claim_cvr');
+  if (upgraded || claimCvr) history.replaceState(null, '', '/overview.html');
+  if (claimCvr) await claimListing(claimCvr);
+
+  try {
+    var res = await fetch('/v1/business/overview');
+    if (!res.ok) throw new Error('status ' + res.status);
+    render(await res.json());
+  } catch (e) {
+    document.getElementById('overviewError').style.display = 'block';
+  }
+})();
+
+async function claimListing(claimCvr) {
+  var banner = document.getElementById('claimBanner');
+  banner.style.display = 'block';
+  function paint(kind, text) {
+    var ok = kind === 'ok';
+    banner.style.background = ok ? '#d1fae5' : '#fee2e2';
+    banner.style.border     = '1px solid ' + (ok ? '#6ee7b7' : '#fca5a5');
+    banner.style.color      = ok ? '#065f46' : '#991b1b';
+    banner.textContent      = text;
+  }
+  try {
+    var res  = await fetch('/v1/business/locations/by-cvr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cvr: claimCvr })
+    });
+    var data = await res.json();
+    if (res.ok) {
+      paint('ok', data.added > 0
+        ? 'Listing claimed — added ' + data.added + ' location' + (data.added !== 1 ? 's' : '') + ' for CVR ' + claimCvr + '.'
+        : 'That listing (CVR ' + claimCvr + ') is already in your account.');
+    } else {
+      paint('err', (data.error && data.error.message) || 'Could not claim that listing.');
+    }
+  } catch (e) {
+    paint('err', 'Network error while claiming that listing.');
+  }
+}
+
+function scoreImg(type, score) {
+  var icon = smilrIcon(type, score, 32);
+  return '<img src="' + icon.src + '" alt="' + esc(icon.alt) + '" class="score-thumb" />';
+}
+
+function render(d) {
+  if (!d.locationCount) {
+    document.getElementById('overviewEmpty').style.display = 'block';
+    return;
+  }
+  document.getElementById('overviewBody').style.display = 'block';
+
+  document.getElementById('tileLocations').textContent = d.locationCount;
+  document.getElementById('tileCvr').textContent       = d.cvrCount;
+  document.getElementById('tileAvg').textContent       = d.averageScore == null ? '–' : d.averageScore.toFixed(1);
+  document.getElementById('tileAttention').textContent = d.needsAttentionCount;
+
+  // Distribution: a segmented bar plus a text legend, so the counts don't depend on colour alone.
+  var bar = '', legend = '';
+  DIST.forEach(function (seg) {
+    var n = d.scoreDistribution[seg.key];
+    if (n > 0) {
+      bar += '<span class="dist-seg ' + seg.cls + '" style="flex:' + n + '" title="' + seg.label + ': ' + n + '"></span>';
+    }
+    legend += '<li><span class="dist-swatch ' + seg.cls + '"></span>' + seg.label + ' <strong>' + n + '</strong></li>';
+  });
+  document.getElementById('distBar').innerHTML    = bar;
+  document.getElementById('distLegend').innerHTML = legend;
+
+  // Recent changes
+  var changes = document.getElementById('changesList');
+  document.getElementById('changesNote').textContent =
+    'Last ' + d.recentChangesWindowDays + ' days, most recent first.';
+  changes.innerHTML = d.recentChanges.length
+    ? d.recentChanges.map(function (c) {
+        return '<li class="ov-row">' +
+          '<div class="ov-row-main"><a href="' + esc(c.detailPath) + '" class="ov-row-link"><strong>' + esc(c.name) + '</strong></a>' +
+            (c.city ? '<span class="loc-addr">' + esc(c.city) + '</span>' : '') + '</div>' +
+          '<div class="ov-row-side">' +
+            scoreImg(c.virksomhedsType, c.previousScore) + '<span aria-hidden="true">→</span>' + scoreImg(c.virksomhedsType, c.newScore) +
+            '<span class="ov-chip ' + (c.improved ? 'ov-chip--up' : 'ov-chip--down') + '">' +
+              (c.improved ? 'Improved' : 'Declined') + '</span>' +
+            '<span class="ov-date">' + formatDate(c.changeDate) + '</span>' +
+          '</div></li>';
+      }).join('')
+    : '<li class="ov-empty">No score changes in this period.</li>';
+
+  // Needs attention
+  var att = document.getElementById('attentionList');
+  document.getElementById('attentionNote').textContent = d.needsAttentionCount
+    ? d.needsAttentionCount + ' location' + (d.needsAttentionCount !== 1 ? 's' : '') + ' with a current score of 3 or 4.' +
+      (d.needsAttentionCount > d.needsAttention.length ? ' Showing the first ' + d.needsAttention.length + '.' : '')
+    : '';
+  att.innerHTML = d.needsAttention.length
+    ? d.needsAttention.map(function (l) {
+        return '<li class="ov-row">' +
+          '<div class="ov-row-main"><strong>' + esc(l.name) + '</strong>' +
+            (l.city ? '<span class="loc-addr">' + esc(l.city) + '</span>' : '') + '</div>' +
+          '<div class="ov-row-side">' + scoreImg(l.virksomhedsType, l.latestScore) +
+            (l.latestScoreDate ? '<span class="ov-date">' + formatDate(l.latestScoreDate) + '</span>' : '') +
+          '</div></li>';
+      }).join('')
+    : '<li class="ov-empty">None — every scored location currently has a 1 or 2.</li>';
+}
+</script>
+
+</body>
+</html>

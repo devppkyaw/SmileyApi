@@ -28,8 +28,8 @@ public static class StripeEndpoints
                 return Results.BadRequest(Error("already_pro", "Your account is already on the Pro tier."));
 
             var baseUrl    = $"{ctx.Request.Scheme}://{ctx.Request.Host}";
-            var successUrl = $"{baseUrl}/dashboard.html?upgraded=1";
-            var cancelUrl  = $"{baseUrl}/dashboard.html";
+            var successUrl = $"{baseUrl}/overview.html?upgraded=1";
+            var cancelUrl  = $"{baseUrl}/overview.html";
 
             var url = await stripeSvc.CreateCheckoutSessionAsync(
                 business.BusinessId, business.Email, successUrl, cancelUrl);
@@ -53,7 +53,7 @@ public static class StripeEndpoints
                 return Results.BadRequest(Error("no_subscription", "No active subscription found."));
 
             var baseUrl   = $"{ctx.Request.Scheme}://{ctx.Request.Host}";
-            var returnUrl = $"{baseUrl}/dashboard.html";
+            var returnUrl = $"{baseUrl}/overview.html";
 
             var url = await stripeSvc.CreatePortalSessionAsync(business.StripeCustomerId, returnUrl);
             return Results.Ok(new { url });

@@ -95,6 +95,12 @@ public interface IEstablishmentRepository
     Task<IReadOnlyList<ScoreChangeRow>> GetRecentChangesByCitiesAsync(
         IReadOnlyList<string> cityValues, DateOnly windowStart, int page, int limit, CancellationToken ct = default);
 
+    /// <summary>Most recent score transition per establishment (same semantics as
+    /// GetRecentChangesByCitiesAsync) across one business's own locations, newest first — feeds the
+    /// business dashboard overview.</summary>
+    Task<IReadOnlyList<ScoreChangeRow>> GetRecentChangesForBusinessAsync(
+        int businessId, DateOnly windowStart, int limit, CancellationToken ct = default);
+
     /// <summary>Stats for the given raw City values within the change window: total establishments
     /// with an in-window transition, how many improved vs downgraded, and the most recent change
     /// date.</summary>

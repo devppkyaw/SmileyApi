@@ -102,6 +102,14 @@ The real value proposition for the paid Business tier, since visibility alone is
 
 **Keep this scoped to monitoring/benchmarking the published result — see eSmiley competitive note below.** Do not drift into internal compliance/HACCP tooling (self-inspection checklists, audit prep, staff training) — that's a different, already-owned lane.
 
+**Dashboard structure (decided 2026-09-20, built on branch `business-overview-dashboard`):** the single tabbed `dashboard.html` (every load fetched the API key plus every inspection row for every location) is split into separate pages linked from a shared `<dash-nav>` menu (`components/nav.js`), each loading only its own data:
+- **`/overview.html` — the post-login landing page.** One light call, `GET /v1/business/overview`, computed in SQL: portfolio summary (location count, CVR count, average score, score distribution) plus **recent score changes** (last 90 days, this business's locations only) and a **needs-attention** list (current score 3 or 4). Login, Stripe checkout/portal return and claim-listing redirects all land here; `?claim_cvr=` / `?upgraded=1` handling lives here.
+- **`/locations.html`** — the old Locations tab: add/remove by CVR, group by CVR, embed code, history. Now server-paged and server-searched (`GET /v1/business/locations?page&pageSize&q&sort`), so a chain with hundreds of locations no longer ships every inspection row to the browser.
+- **`/developer-api.html`** — the old Developer API tab; the key is only fetched here. Pro/Enterprise only (plus grandfathered Free accounts that already hold a key), gated via `canUseDeveloperApi` on `/v1/business/me`.
+- `/dashboard.html` remains as a thin redirect to the overview so old bookmarks and emailed links keep working.
+
+Staged after this: **score trend charts** and **benchmarking against nearby/similar establishments** (the two remaining analytics ideas above). Both are deliberately not in the overview yet.
+
 ## 3. Consumer-facing directory site ("Smilr Finder") — SECONDARY, SEO/acquisition role
 
 See URL structure and category hub sections above — both implemented and shipped. Each page needs differentiated content beyond a plain score mirror to be worth ranking. "Claim this listing" CTA still funnels into Business registration. Chrome extension idea remains a later, optional addition.
@@ -114,14 +122,14 @@ Low-effort, high-differentiation: the webhook system already detects `smiley_sco
 
 All three reuse the same trend-data capability that also feeds the Business analytics dashboard (#2) — one data layer, two audiences.
 
-**Design spec received (2026-08-19):** a detailed spec + mockups for a related but distinct page, `/find/{area-slug}/recently-inspected` (ordered by latest inspection date, not score change), found in `docs/Design/Recently Inspected/`. Recommends building this before the score-change feed above, since it needs no dependency on the webhook change-detection logic (just `ORDER BY LatestInspectionDate DESC`) while validating the same routing/caching/structured-data architecture the `changes` page will reuse. Extends the reserved-segment routing pattern with `recently-inspected` and `changes` as literal segments checked before category-slug matching (same shape as the shipped category disambiguation above). Not yet implemented — pending decision on adoption and sequencing.
+**Design spec received (2026-08-19):** a detailed spec + mockups for a related but distinct page, `/find/{area-slug}/recently-inspected` (ordered by latest inspection date, not score change), found in `docs/Design/Recently Inspected/`. Recommends building this before the score-change feed above, since it needs no dependency on the webhook change-detection logic (just `ORDER BY LatestInspectionDate DESC`) while validating the same routing/caching/structured-data architecture the `changes` page will reuse. Extends the reserved-segment routing pattern with `recently-inspected` and `changes` as literal segments checked before category-slug matching (same shape as the shipped category disambiguation above). **Shipped 2026-08-22** (PR #1) — see the "Find & homepage" work; the "not yet implemented" state this paragraph used to describe is out of date.
 
 **Design spec drafted for `/find/{area-slug}/changes` (2026-08-22):** written for Claude Design to mock up, found in `docs/Design/Changes/`. Follows the same section structure and depth as the `recently-inspected` spec above, adapted for score-change semantics. Key points not shared with `recently-inspected`:
 - A business appears **only** if its score changed between two consecutive inspections — a first-ever inspection or a same-score re-inspection does not qualify (that's `recently-inspected` territory).
 - **Real data dependency found while writing the spec, worth flagging before estimating effort:** `recently-inspected` only needs `LatestInspectionDate`, a property of current state. `changes` needs the *previous* score too, not just the new one. The webhook system's `MERGE OUTPUT` diff already computes old-vs-new, but likely only as a transient payload for the webhook dispatcher — confirm whether it's persisted anywhere queryable. If not, this page depends on adding a small persisted `ScoreChangeLog` (Navnelbnr, PreviousScore, NewScore, ChangeDate), populated by the same `MERGE OUTPUT` step that already fires the webhook. Small addition, but a real prerequisite, not just a query-writing task.
 - Uses a rolling 90-day window (not "most recent N ever") so a city doesn't keep showing one stale change indefinitely.
 - Flags a tone consideration `recently-inspected` didn't need: "downgraded" is the closest thing on the site to public bad news about a named business — spec calls for neutral, non-ranked, non-leaderboard framing (no "worst restaurants"), with "most improved"/"recently downgraded" rankings explicitly deferred as separate future pages needing their own tone decision.
-- Not yet implemented — pending the same adoption/sequencing decision as `recently-inspected`, plus resolving the `ScoreChangeLog` dependency above.
+- **Shipped 2026-08-22**, and the `ScoreChangeLog` prerequisite above turned out not to be needed: score transitions are derived on the fly from the `Inspections` table with a SQL `LAG(SmileyScore) OVER (PARTITION BY EstablishmentId ORDER BY InspectedOn)` window (`EstablishmentRepository.BuildCurrentTransitionsCte`, semantics documented in `ScoreChangeCalculator`). The same query, scoped to one business's locations, now also feeds the Business overview's "recent changes" list (2026-09-20).
 
 ## 4. API marketplace listing (e.g. RapidAPI) — SECONDARY
 
@@ -151,10 +159,8 @@ Packaging work on top of #1. Distribution channel for developer audience, not a 
 Phase G (registered widget tier field) and Phase I (session-based Pro webhooks) directly support the analytics/SaaS positioning (#2) — prioritize these over Phase H polish if forced to choose. Phase H (static pages) still needed as the registration landing destination for both the API signup and the directory's claim-listing CTA.
 
 **Open decisions:**
-- Exact set of analytics features for the Business dashboard (trend charts, benchmarking, multi-location view — prioritize which ships first)
+- Which analytics feature ships after the overview: score trend charts vs. benchmarking against nearby/similar establishments (multi-location view and the portfolio summary/changes are done — see Dashboard structure in §2)
 - Caching/infra approach to keep public anonymous directory traffic from hitting Azure SQL directly at scale
-- Whether/how to adopt the `/find/{area-slug}/recently-inspected` design spec, and its suggested build-before-`changes` sequencing
-- Whether a persisted `ScoreChangeLog` already exists or needs to be added before `/find/{area-slug}/changes` can be built (see design spec note above, `docs/Design/Changes/`)
 
 **Resolved:**
 - Area-slug taxonomy: City name only (not postcode), raw/unnormalized, grouped by identical slugified text (2026-08-19)
@@ -163,5 +169,7 @@ Phase G (registered widget tier field) and Phase I (session-based Pro webhooks) 
 - Search UX: no on-site query-parsing investment; category/area hub pages carry that job via SEO instead (2026-08-19)
 - Minimum-establishment-count guard for area × category hub pages: threshold 3, render/noindex/404 tiering (2026-08-19)
 - Business analytics tier scope: monitoring/benchmarking the published result only, not internal compliance/HACCP tooling (2026-08-19)
+- Adoption/sequencing of `recently-inspected` and `changes`: both built and shipped (2026-08-22); no persisted `ScoreChangeLog` needed — changes are derived from `Inspections` via `LAG` (2026-08-22)
+- Business dashboard restructure: overview landing page (portfolio summary + recent changes + needs-attention) with separate Locations and Developer API pages and a shared nav; trend charts and benchmarking staged after it (2026-09-20)
 
 **Shipped (2026-08-19):** area hub pages, area × category hub pages, canonical establishment detail pages with Area/Category breadcrumbs and `BreadcrumbList` JSON-LD, and `sitemap.xml` covering all three page types. Next up per the sequencing above: either the "Recently changed" trend feed or the "Recently inspected" page (§3) — sequencing decision still open.

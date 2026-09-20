@@ -94,7 +94,7 @@ if (params.get('error') === 'invalid_token') {
   const res = await fetch('/v1/business/me');
   if (!res.ok) return;
   const claimCvr = params.get('claim_cvr');
-  location.replace('/dashboard.html' + (claimCvr ? '?claim_cvr=' + encodeURIComponent(claimCvr) : ''));
+  location.replace('/overview.html' + (claimCvr ? '?claim_cvr=' + encodeURIComponent(claimCvr) : ''));
 })();
 
 document.getElementById('registerForm').addEventListener('submit', async function (e) {

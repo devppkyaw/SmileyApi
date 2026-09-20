@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SmilrApi.Api.Rendering;
 using SmilrApi.Core.Interfaces;
 using SmilrApi.Core.Models;
+using SmilrApi.Core.Utils;
 using SmilrApi.Infrastructure.Data;
 
 namespace SmilrApi.Api.Endpoints;
@@ -9,6 +11,7 @@ namespace SmilrApi.Api.Endpoints;
 public static class BusinessEndpoints
 {
     private const string SessionKey = "business_id";
+    private const int RecentChangesWindowDays = 90;
 
     public static void MapBusinessEndpoints(this WebApplication app)
     {
@@ -93,10 +96,17 @@ public static class BusinessEndpoints
         app.MapGet("/v1/business/me", async (
             HttpContext ctx,
             IBusinessService svc,
+            IApiKeyService apiKeySvc,
             CancellationToken ct) =>
         {
             var business = await GetSessionBusinessAsync(ctx, svc, ct);
             if (business is null) return Results.Unauthorized();
+
+            // Developer API is Pro/Enterprise only — except a Free account that already has a key
+            // (grandfathered from before it was gated) still gets to view/rotate/revoke it. Resolved
+            // here so the shared nav can show/hide the link without its own /apikey round trip.
+            var canUseDeveloperApi = business.Tier != "free"
+                || await apiKeySvc.GetForBusinessAsync(business.Id, ct) is not null;
 
             return Results.Ok(new
             {
@@ -104,7 +114,8 @@ public static class BusinessEndpoints
                 email       = business.Email,
                 companyName = business.CompanyName,
                 tier        = business.Tier,
-                createdAt   = business.CreatedAt
+                createdAt   = business.CreatedAt,
+                canUseDeveloperApi
             });
         });
 
@@ -349,50 +360,102 @@ public static class BusinessEndpoints
             return Results.Ok(new { removed = toRemove.Count });
         });
 
+        // Paged: only the requested page's establishments get their inspection rows loaded (<= 100),
+        // instead of every inspection row for every location the business owns. Default sort is by CVR
+        // (then name) so a CVR group stays contiguous across pages; cvrGroups carries each group's
+        // full filtered size so the group header count is right even when the group spans pages.
         app.MapGet("/v1/business/locations", async (
             HttpContext ctx,
             IBusinessService svc,
             SmilrDbContext db,
+            int? page,
+            int? pageSize,
+            string? q,
+            string? sort,
             CancellationToken ct) =>
         {
             var business = await GetSessionBusinessAsync(ctx, svc, ct);
             if (business is null) return Results.Unauthorized();
 
-            var locations = await db.BusinessLocations
+            var (pageNo, size) = LocationListPaging.Normalize(page, pageSize);
+            var sortMode = LocationListPaging.NormalizeSort(sort);
+            var search   = LocationListPaging.NormalizeSearch(q);
+
+            var all = db.BusinessLocations
                 .Where(b => b.BusinessId == business.Id)
                 .Join(db.Establishments,
                     bn => bn.Navnelbnr,
                     e  => e.Navnelbnr,
-                    (bn, e) => new
-                    {
-                        estId           = e.Id,
-                        navnelbnr       = e.Navnelbnr,
-                        cvrNumber       = e.CvrNumber,
-                        name            = e.Name,
-                        address         = e.Address,
-                        city            = e.City,
-                        latestScore     = e.LatestScore,
-                        latestScoreDate = e.LatestScoreDate,
-                        reportUrl       = e.ReportUrl,
-                        virksomhedsType = e.VirksomhedsType,
-                        addedAt         = bn.AddedAt
-                    })
+                    (bn, e) => new { e, bn.AddedAt });
+
+            var locationCount = await all.CountAsync(ct);
+            var cvrCount = await all
+                .Where(x => x.e.CvrNumber != null)
+                .Select(x => x.e.CvrNumber)
+                .Distinct()
+                .CountAsync(ct);
+
+            var filtered = all;
+            if (search is not null)
+            {
+                filtered = filtered.Where(x =>
+                    x.e.Name.Contains(search) ||
+                    (x.e.Address != null && x.e.Address.Contains(search)) ||
+                    (x.e.City != null && x.e.City.Contains(search)) ||
+                    (x.e.CvrNumber != null && x.e.CvrNumber.Contains(search)) ||
+                    x.e.Navnelbnr.ToString().Contains(search));
+            }
+
+            var total = search is null ? locationCount : await filtered.CountAsync(ct);
+
+            var ordered = sortMode switch
+            {
+                LocationListPaging.SortScoreAsc => filtered
+                    .OrderBy(x => x.e.LatestScore == null).ThenBy(x => x.e.LatestScore)
+                    .ThenBy(x => x.e.Name).ThenBy(x => x.e.Navnelbnr),
+                LocationListPaging.SortScoreDesc => filtered
+                    .OrderBy(x => x.e.LatestScore == null).ThenByDescending(x => x.e.LatestScore)
+                    .ThenBy(x => x.e.Name).ThenBy(x => x.e.Navnelbnr),
+                _ => filtered
+                    .OrderBy(x => x.e.CvrNumber == null).ThenBy(x => x.e.CvrNumber)
+                    .ThenBy(x => x.e.Name).ThenBy(x => x.e.Navnelbnr),
+            };
+
+            var pageRows = await ordered
+                .Skip((pageNo - 1) * size)
+                .Take(size)
+                .Select(x => new
+                {
+                    estId           = x.e.Id,
+                    navnelbnr       = x.e.Navnelbnr,
+                    cvrNumber       = x.e.CvrNumber,
+                    name            = x.e.Name,
+                    address         = x.e.Address,
+                    city            = x.e.City,
+                    latestScore     = x.e.LatestScore,
+                    latestScoreDate = x.e.LatestScoreDate,
+                    reportUrl       = x.e.ReportUrl,
+                    virksomhedsType = x.e.VirksomhedsType,
+                    addedAt         = x.AddedAt
+                })
                 .ToListAsync(ct);
 
-            var estIds = locations.Select(l => l.estId).ToList();
+            var estIds = pageRows.Select(l => l.estId).ToList();
 
-            var inspections = await db.Inspections
-                .Where(i => estIds.Contains(i.EstablishmentId))
-                .Select(i => new { i.EstablishmentId, i.InspectedOn, i.SmileyScore })
-                .ToListAsync(ct);
+            var inspections = estIds.Count == 0
+                ? []
+                : await db.Inspections
+                    .Where(i => estIds.Contains(i.EstablishmentId))
+                    .Select(i => new { i.EstablishmentId, i.InspectedOn, i.SmileyScore })
+                    .ToListAsync(ct);
 
             var inspectionsByEst = inspections
                 .GroupBy(i => i.EstablishmentId)
                 .ToDictionary(g => g.Key, g => g.OrderByDescending(i => i.InspectedOn).ToList());
 
-            var locationItems = locations.Select(l =>
+            var locationItems = pageRows.Select(l =>
             {
-                var all = inspectionsByEst.GetValueOrDefault(l.estId) ?? [];
+                var history = inspectionsByEst.GetValueOrDefault(l.estId) ?? [];
                 return new
                 {
                     l.navnelbnr,
@@ -405,17 +468,120 @@ public static class BusinessEndpoints
                     l.reportUrl,
                     l.virksomhedsType,
                     l.addedAt,
-                    scoreHistory = all.Take(4).Select(i => new { date = i.InspectedOn, score = i.SmileyScore }).ToList(),
-                    inspectionCount = all.Count
+                    scoreHistory = history.Take(4).Select(i => new { date = i.InspectedOn, score = i.SmileyScore }).ToList(),
+                    inspectionCount = history.Count
                 };
             }).ToList();
 
-            var cvrCount = locationItems.Select(l => l.cvrNumber).Where(c => c != null).Distinct().Count();
+            var cvrGroups = (await filtered
+                    .GroupBy(x => x.e.CvrNumber)
+                    .Select(g => new { cvr = g.Key, count = g.Count() })
+                    .ToListAsync(ct))
+                .OrderBy(g => g.cvr == null).ThenBy(g => g.cvr)
+                .ToList();
+
             return Results.Ok(new
             {
-                locations     = locationItems,
-                locationCount = locationItems.Count,
-                cvrCount
+                locations = locationItems,
+                locationCount,
+                cvrCount,
+                total,
+                page = pageNo,
+                pageSize = size,
+                cvrGroups
+            });
+        });
+
+        // Landing-page aggregate for the dashboard: everything is computed in SQL and no per-location
+        // rows are returned beyond the handful of "needs attention" entries, so this stays light no
+        // matter how many locations the business has. Smiley scores run 1 (best) to 4 (worst).
+        app.MapGet("/v1/business/overview", async (
+            HttpContext ctx,
+            IBusinessService svc,
+            SmilrDbContext db,
+            IEstablishmentRepository establishments,
+            CancellationToken ct) =>
+        {
+            var business = await GetSessionBusinessAsync(ctx, svc, ct);
+            if (business is null) return Results.Unauthorized();
+
+            var owned = db.BusinessLocations
+                .Where(b => b.BusinessId == business.Id)
+                .Join(db.Establishments, bn => bn.Navnelbnr, e => e.Navnelbnr, (bn, e) => e);
+
+            var distributionRows = await owned
+                .GroupBy(e => e.LatestScore)
+                .Select(g => new { score = g.Key, count = g.Count() })
+                .ToListAsync(ct);
+
+            var locationCount = distributionRows.Sum(r => r.count);
+            var cvrCount = await owned
+                .Where(e => e.CvrNumber != null)
+                .Select(e => e.CvrNumber)
+                .Distinct()
+                .CountAsync(ct);
+
+            var scored = distributionRows.Where(r => r.score != null).ToList();
+            var scoredCount = scored.Sum(r => r.count);
+            double? averageScore = scoredCount == 0
+                ? null
+                : Math.Round(scored.Sum(r => (double)r.score!.Value * r.count) / scoredCount, 1);
+
+            var scoreDistribution = new
+            {
+                s1 = distributionRows.Where(r => r.score == 1).Sum(r => r.count),
+                s2 = distributionRows.Where(r => r.score == 2).Sum(r => r.count),
+                s3 = distributionRows.Where(r => r.score == 3).Sum(r => r.count),
+                s4 = distributionRows.Where(r => r.score == 4).Sum(r => r.count),
+                unscored = distributionRows.Where(r => r.score == null).Sum(r => r.count)
+            };
+
+            var needsAttentionCount = distributionRows.Where(r => r.score >= 3).Sum(r => r.count);
+            var needsAttention = needsAttentionCount == 0
+                ? []
+                : await owned
+                    .Where(e => e.LatestScore >= 3)
+                    .OrderByDescending(e => e.LatestScore).ThenBy(e => e.Name)
+                    .Take(5)
+                    .Select(e => new
+                    {
+                        navnelbnr = e.Navnelbnr,
+                        name = e.Name,
+                        city = e.City,
+                        latestScore = e.LatestScore,
+                        latestScoreDate = e.LatestScoreDate,
+                        virksomhedsType = e.VirksomhedsType
+                    })
+                    .ToListAsync(ct);
+
+            var windowStart = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-RecentChangesWindowDays);
+            var changeRows = locationCount == 0
+                ? []
+                : await establishments.GetRecentChangesForBusinessAsync(business.Id, windowStart, 10, ct);
+
+            var recentChanges = changeRows.Select(c => new
+            {
+                navnelbnr = c.Establishment.Navnelbnr,
+                name = c.Establishment.Name,
+                city = c.Establishment.City,
+                virksomhedsType = c.Establishment.VirksomhedsType,
+                detailPath = FindUrlBuilder.DetailPath(c.Establishment),
+                previousScore = c.PreviousScore,
+                newScore = c.NewScore,
+                changeDate = c.ChangeDate,
+                improved = c.NewScore < c.PreviousScore
+            }).ToList();
+
+            return Results.Ok(new
+            {
+                locationCount,
+                cvrCount,
+                averageScore,
+                scoreDistribution,
+                needsAttentionCount,
+                needsAttention,
+                recentChangesWindowDays = RecentChangesWindowDays,
+                recentChanges
             });
         });
 
@@ -460,13 +626,14 @@ public static class BusinessEndpoints
     private static object Error(string code, string message) =>
         new { error = new { code, message } };
 
-    // dashboard.html already knows how to consume ?claim_cvr= (added for the already-logged-in
-    // claim flow) — reused here so a pending claim captured at registration/login time gets
-    // attached the moment a session actually exists, instead of being silently dropped.
+    // overview.html (the dashboard landing page) already knows how to consume ?claim_cvr= (added for
+    // the already-logged-in claim flow) — reused here so a pending claim captured at
+    // registration/login time gets attached the moment a session actually exists, instead of being
+    // silently dropped.
     private static string DashboardRedirectPath(string? pendingClaimCvr) =>
         string.IsNullOrWhiteSpace(pendingClaimCvr)
-            ? "/dashboard.html"
-            : "/dashboard.html?claim_cvr=" + Uri.EscapeDataString(pendingClaimCvr);
+            ? "/overview.html"
+            : "/overview.html?claim_cvr=" + Uri.EscapeDataString(pendingClaimCvr);
 }
 
 public record RegisterRequest(string Email, string CompanyName, bool TermsAccepted, bool MarketingConsent, string? ClaimCvr = null);
