@@ -9,7 +9,7 @@ public enum RiskReason
     HighScore,
     /// <summary>The two most recent score changes were both downgrades, both within the recent window.</summary>
     ConsecutiveDeclines,
-    /// <summary>At least one downgrade within the recent window.</summary>
+    /// <summary>The most recent score change is a downgrade within the recent window.</summary>
     RecentDecline,
     /// <summary>No score yet — awaiting first inspection.</summary>
     NoScoreYet,
@@ -24,7 +24,7 @@ public readonly record struct ScoreTransition(DateOnly Date, int Previous, int N
 /// <param name="Level">Ok / Watch / AtRisk — what the Locations badge and risk sort use.</param>
 /// <param name="Reasons">Every reason the location qualifies for the Overview's "Needs attention" panel,
 /// most severe first. Empty when it doesn't qualify.</param>
-/// <param name="DeclineDate">Date of the most recent in-window downgrade, if any.</param>
+/// <param name="DeclineDate">Date of the latest score change, when that change is an in-window downgrade.</param>
 /// <param name="Rank">Sort key, lowest = most concerning; <see cref="long.MaxValue"/> when the location
 /// doesn't need attention.</param>
 public record LocationRisk(RiskLevel Level, IReadOnlyList<RiskReason> Reasons, DateOnly? DeclineDate, long Rank)
@@ -40,7 +40,8 @@ public record LocationRisk(RiskLevel Level, IReadOnlyList<RiskReason> Reasons, D
 ///
 ///   AtRisk = current score 3 or 4, OR the two most recent score changes are both downgrades and both
 ///            within <see cref="RecentWindowDays"/> days
-///   Watch  = at least one downgrade within <see cref="RecentWindowDays"/> days (and not AtRisk)
+///   Watch  = the most recent score change is a downgrade within <see cref="RecentWindowDays"/> days
+///            (and not AtRisk); a decline the location has since recovered from does not count
 ///   Ok     = otherwise
 ///
 /// "Needs attention" additionally lists locations with no score yet, which is not a risk level (there's
@@ -70,7 +71,10 @@ public static class RiskCalculator
         var windowStart = today.AddDays(-RecentWindowDays);
         var newestFirst = transitions.OrderByDescending(t => t.Date).ToList();
 
-        var recentDowngrades = newestFirst.Where(t => t.Date >= windowStart && t.IsDowngrade).ToList();
+        // Only the location's *latest* score change counts: a location that dipped and has since recovered
+        // (e.g. 1 -> 2 in June, 2 -> 1 in August) is back where it was and isn't flagged. The repository
+        // only supplies in-window changes, so when any are supplied the newest one is the real latest.
+        var latestDeclined = newestFirst.Count > 0 && newestFirst[0].IsDowngrade && newestFirst[0].Date >= windowStart;
         var consecutive = newestFirst.Count >= 2
             && newestFirst[0].IsDowngrade && newestFirst[0].Date >= windowStart
             && newestFirst[1].IsDowngrade && newestFirst[1].Date >= windowStart;
@@ -80,18 +84,18 @@ public static class RiskCalculator
         var reasons = new List<RiskReason>();
         if (highScore) reasons.Add(RiskReason.HighScore);
         if (consecutive) reasons.Add(RiskReason.ConsecutiveDeclines);
-        else if (recentDowngrades.Count > 0) reasons.Add(RiskReason.RecentDecline);
+        else if (latestDeclined) reasons.Add(RiskReason.RecentDecline);
         if (noScore) reasons.Add(RiskReason.NoScoreYet);
 
         var level = highScore || consecutive ? RiskLevel.AtRisk
-                  : recentDowngrades.Count > 0 ? RiskLevel.Watch
+                  : latestDeclined ? RiskLevel.Watch
                   : RiskLevel.Ok;
 
-        DateOnly? declineDate = recentDowngrades.Count > 0 ? recentDowngrades[0].Date : null;
+        DateOnly? declineDate = latestDeclined ? newestFirst[0].Date : null;
 
         long rank;
         if (highScore) rank = 0 * TierSpan + (4 - latestScore!.Value);                       // 4 before 3
-        else if (recentDowngrades.Count > 0) rank = 1 * TierSpan + (DayNumberCeiling - declineDate!.Value.DayNumber); // newest first
+        else if (latestDeclined) rank = 1 * TierSpan + (DayNumberCeiling - declineDate!.Value.DayNumber); // newest first
         else if (noScore) rank = 2 * TierSpan;
         else rank = long.MaxValue;
 
