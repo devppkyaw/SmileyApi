@@ -102,6 +102,13 @@ public interface IEstablishmentRepository
     Task<IReadOnlyList<ScoreChangeRow>> GetRecentChangesForBusinessAsync(
         int businessId, DateOnly windowStart, int limit, CancellationToken ct = default);
 
+    /// <summary>The two most recent score changes (newest first is up to the caller) of each of one
+    /// business's non-delisted establishments, restricted to those on or after windowStart. Feeds
+    /// RiskCalculator, which only needs in-window changes: "two consecutive downgrades within the
+    /// window" means the second-newest change is either in the window too or irrelevant.</summary>
+    Task<IReadOnlyList<ScoreTransitionRow>> GetRecentTransitionsForBusinessAsync(
+        int businessId, DateOnly windowStart, CancellationToken ct = default);
+
     /// <summary>Stats for the given raw City values within the change window: total establishments
     /// with an in-window transition, how many improved vs downgraded, and the most recent change
     /// date.</summary>
@@ -144,6 +151,9 @@ public record SitemapEntry(string Name, string? City, int Navnelbnr, DateTime Up
 public record RecentlyInspectedSummary(int TotalWithInspection, DateOnly? LatestInspectionDate, int Last30DaysCount);
 
 public record ScoreChangeRow(Establishment Establishment, int PreviousScore, int NewScore, DateOnly ChangeDate);
+
+/// <summary>One score change for an establishment, identified by its Establishments.Id.</summary>
+public record ScoreTransitionRow(int EstablishmentId, int PreviousScore, int NewScore, DateOnly ChangeDate);
 
 public record ChangesSummary(int TotalChanges, int ImprovedCount, int DowngradedCount, DateOnly? MostRecentChangeDate);
 

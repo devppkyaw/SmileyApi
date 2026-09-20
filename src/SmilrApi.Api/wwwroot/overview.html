@@ -246,7 +246,7 @@ function render(d) {
   document.getElementById('tileLocations').textContent = d.locationCount;
   document.getElementById('tileCvr').textContent       = d.cvrCount;
   document.getElementById('tileAvg').textContent       = d.averageScore == null ? '–' : d.averageScore.toFixed(1);
-  document.getElementById('tileAttention').textContent = d.needsAttentionCount;
+  document.getElementById('tileAttention').textContent = d.highScoreCount;
 
   // Distribution: a segmented bar plus a text legend, so the counts don't depend on colour alone.
   var bar = '', legend = '';
@@ -278,22 +278,44 @@ function render(d) {
       }).join('')
     : '<li class="ov-empty">No score changes in this period.</li>';
 
-  // Needs attention
-  var att = document.getElementById('attentionList');
-  document.getElementById('attentionNote').textContent = d.needsAttentionCount
-    ? d.needsAttentionCount + ' location' + (d.needsAttentionCount !== 1 ? 's' : '') + ' with a current score of 3 or 4.' +
-      (d.needsAttentionCount > d.needsAttention.length ? ' Showing the first ' + d.needsAttention.length + '.' : '')
-    : '';
-  att.innerHTML = d.needsAttention.length
-    ? d.needsAttention.map(function (l) {
-        return '<li class="ov-row">' +
-          '<div class="ov-row-main"><strong>' + esc(l.name) + '</strong>' +
-            (l.city ? '<span class="loc-addr">' + esc(l.city) + '</span>' : '') + '</div>' +
-          '<div class="ov-row-side">' + scoreImg(l.virksomhedsType, l.latestScore) +
-            (l.latestScoreDate ? '<span class="ov-date">' + formatDate(l.latestScoreDate) + '</span>' : '') +
-          '</div></li>';
-      }).join('')
-    : '<li class="ov-empty">None — every scored location currently has a 1 or 2.</li>';
+  renderNeedsAttention(d);
+}
+
+// Score 3 or 4, declined in the last 90 days, or no score yet — most concerning first, capped at 5 by the
+// server. Never blank: with nothing to flag it says so, using the newest entry of "Recent score changes".
+function renderNeedsAttention(d) {
+  var att  = document.getElementById('attentionList');
+  var note = document.getElementById('attentionNote');
+  var n    = d.needsAttentionCount;
+
+  if (!n) {
+    note.textContent = '';
+    var msg = 'Nothing needs attention — ' + (d.locationCount === 1 ? 'your location is' : 'all ' + d.locationCount + ' locations are') + ' current.';
+    var last = d.recentChanges[0];
+    msg += last
+      ? ' Last change: ' + esc(last.name) + ' ' + (last.improved ? 'improved' : 'declined') + ' from ' +
+        last.previousScore + ' to ' + last.newScore + ' on ' + formatDate(last.changeDate) + '.'
+      : ' No score changes in the last ' + d.recentChangesWindowDays + ' days.';
+    att.innerHTML = '<li class="ov-good">' + msg + '</li>';
+    return;
+  }
+
+  var more = n - d.needsAttention.length;
+  note.textContent = n + ' location' + (n !== 1 ? 's' : '') + ' worth a look' +
+    (more > 0 ? ' — showing the ' + d.needsAttention.length + ' most concerning.' : '.');
+
+  att.innerHTML = d.needsAttention.map(function (l) {
+    return '<li class="ov-row">' +
+      '<div class="ov-row-main"><a href="' + esc(l.detailPath) + '" class="ov-row-link"><strong>' + esc(l.name) + '</strong></a>' +
+        (l.city ? '<span class="loc-addr">' + esc(l.city) + '</span>' : '') + '</div>' +
+      '<div class="ov-row-side">' +
+        l.risk.reasons.map(function (r) { return reasonChip(r, l.latestScore); }).join('') +
+        (l.latestScore ? scoreImg(l.virksomhedsType, l.latestScore) : '') +
+      '</div></li>';
+  }).join('') +
+  (more > 0
+    ? '<li class="ov-more"><a href="/locations.html?attention=1&amp;sort=risk">+' + more + ' more →</a></li>'
+    : '');
 }
 </script>
 

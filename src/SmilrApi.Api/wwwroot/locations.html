@@ -65,6 +65,11 @@
             <option value="cvr">Group by CVR</option>
             <option value="score-asc">Score: Best first</option>
             <option value="score-desc">Score: Worst first</option>
+            <option value="risk">Risk: most concerning first</option>
+          </select>
+          <select id="attentionSelect" class="input-sm sort-select" onchange="onAttentionChange()" title="Filter locations">
+            <option value="">All locations</option>
+            <option value="1">Needs attention</option>
           </select>
           <input type="text" id="locSearch" class="search-input" placeholder="Search name, address, Navnelbnr or CVR…" oninput="onSearchInput()" />
         </div>
@@ -102,7 +107,7 @@
 <script src="/smilr-icons.js"></script>
 <script>
 var PAGE_SIZE = 25;
-var state = { page: 1, q: '', sort: 'cvr', total: 0 };
+var state = { page: 1, q: '', sort: 'cvr', attention: false, total: 0 };
 var locationData = {};
 var cvrGroupCounts = {};
 var searchTimer = null;
@@ -125,6 +130,18 @@ var canBenchmark = false;
     document.getElementById('cvrFreeNote').style.display = 'block';
   }
 
+  // Deep links from the Overview: /locations.html?attention=1&sort=risk
+  var params = new URLSearchParams(location.search);
+  if (params.get('attention') === '1') {
+    state.attention = true;
+    document.getElementById('attentionSelect').value = '1';
+  }
+  var wantedSort = params.get('sort');
+  if (wantedSort && document.querySelector('#sortSelect option[value="' + wantedSort + '"]')) {
+    state.sort = wantedSort;
+    document.getElementById('sortSelect').value = wantedSort;
+  }
+
   loadLocations();
 })();
 
@@ -133,6 +150,7 @@ async function loadLocations() {
   var seq = ++loadSeq;
   var qs = new URLSearchParams({ page: state.page, pageSize: PAGE_SIZE, sort: state.sort });
   if (state.q) qs.set('q', state.q);
+  if (state.attention) qs.set('attention', '1');
 
   var res  = await fetch('/v1/business/locations?' + qs);
   if (seq !== loadSeq) return;
@@ -151,6 +169,7 @@ async function loadLocations() {
 
   state.total = data.total;
   document.getElementById('locationCount').textContent = 'Locations (' + data.locationCount + ')';
+  document.querySelector('#attentionSelect option[value="1"]').textContent = 'Needs attention (' + data.attentionCount + ')';
 
   locationData = {};
   data.locations.forEach(function (loc) { locationData[loc.navnelbnr] = loc; });
@@ -168,6 +187,12 @@ function onSearchInput() {
     state.page = 1;
     loadLocations();
   }, 300);
+}
+
+function onAttentionChange() {
+  state.attention = document.getElementById('attentionSelect').value === '1';
+  state.page = 1;
+  loadLocations();
 }
 
 function onSortChange() {
@@ -195,13 +220,23 @@ function renderPager() {
   document.getElementById('nextBtn').disabled = state.page >= pages;
 }
 
+// Badge only for At risk / Watch — Ok rows stay clean across a long list.
+function riskBadge(risk) {
+  if (!risk || risk.level === 'ok') return '';
+  var atRisk = risk.level === 'at_risk';
+  return '<span class="risk-badge ' + (atRisk ? 'risk-badge--atrisk' : 'risk-badge--watch') + '">' + (atRisk ? 'At risk' : 'Watch') + '</span>';
+}
+
 function locRow(loc, showCvr) {
   var addr = [loc.address, loc.city].filter(Boolean).join(', ');
   return '<tr data-navnelbnr="' + loc.navnelbnr + '" data-cvr="' + esc(loc.cvrNumber || '') + '">' +
     '<td class="loc-id">' + loc.navnelbnr + '</td>' +
     '<td>' +
-      '<strong style="font-size:0.875rem">' + esc(loc.name) + '</strong>' +
+      '<strong style="font-size:0.875rem">' + esc(loc.name) + '</strong>' + riskBadge(loc.risk) +
       (addr ? '<span class="loc-addr">' + esc(addr) + '</span>' : '') +
+      (loc.risk && loc.risk.reasons.length
+        ? '<span class="loc-risk">' + loc.risk.reasons.map(function (r) { return reasonChip(r, loc.latestScore); }).join('') + '</span>'
+        : '') +
       (showCvr && loc.cvrNumber ? '<span class="loc-cvr">CVR ' + esc(loc.cvrNumber) + '</span>' : '') +
     '</td>' +
     '<td>' + scoreStrip(loc.scoreHistory, loc.virksomhedsType) +
@@ -241,7 +276,9 @@ function renderLocations(locations, locationCount) {
   if (!locations.length) {
     var msg = state.q
       ? 'No locations match your search.'
-      : (locationCount ? 'No locations on this page.' : 'No locations yet. Add one above.');
+      : state.attention
+        ? 'No locations need attention right now.'
+        : (locationCount ? 'No locations on this page.' : 'No locations yet. Add one above.');
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:28px;color:var(--text-muted);font-size:0.9rem">' + msg + '</td></tr>';
     collapseBtns.style.display = 'none';
     return;

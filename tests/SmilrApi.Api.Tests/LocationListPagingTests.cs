@@ -20,6 +20,7 @@ public class LocationListPagingTests
     [Theory]
     [InlineData("score-asc", "score-asc")]
     [InlineData("score-desc", "score-desc")]
+    [InlineData("risk", "risk")]
     [InlineData("cvr", "cvr")]
     [InlineData(null, "cvr")]
     [InlineData("name; DROP TABLE", "cvr")]  // unknown keys fall back to the default, not an error
