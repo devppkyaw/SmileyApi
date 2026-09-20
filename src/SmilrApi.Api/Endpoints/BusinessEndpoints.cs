@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SmilrApi.Api.Rendering;
 using SmilrApi.Core.Interfaces;
 using SmilrApi.Core.Models;
 using SmilrApi.Core.Utils;
@@ -564,6 +565,7 @@ public static class BusinessEndpoints
                 name = c.Establishment.Name,
                 city = c.Establishment.City,
                 virksomhedsType = c.Establishment.VirksomhedsType,
+                detailPath = FindUrlBuilder.DetailPath(c.Establishment),
                 previousScore = c.PreviousScore,
                 newScore = c.NewScore,
                 changeDate = c.ChangeDate,

@@ -198,7 +198,7 @@ function render(d) {
   changes.innerHTML = d.recentChanges.length
     ? d.recentChanges.map(function (c) {
         return '<li class="ov-row">' +
-          '<div class="ov-row-main"><strong>' + esc(c.name) + '</strong>' +
+          '<div class="ov-row-main"><a href="' + esc(c.detailPath) + '" class="ov-row-link"><strong>' + esc(c.name) + '</strong></a>' +
             (c.city ? '<span class="loc-addr">' + esc(c.city) + '</span>' : '') + '</div>' +
           '<div class="ov-row-side">' +
             scoreImg(c.virksomhedsType, c.previousScore) + '<span aria-hidden="true">→</span>' + scoreImg(c.virksomhedsType, c.newScore) +

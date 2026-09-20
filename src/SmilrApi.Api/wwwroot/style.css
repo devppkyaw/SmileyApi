@@ -793,6 +793,8 @@ pre:not([class*="language-"]) strong {
 }
 .ov-row:first-child { border-top: none; }
 .ov-row-main { min-width: 0; }
+.ov-row-link { color: inherit; }
+.ov-row-link:hover { color: var(--accent); text-decoration: underline; }
 .ov-row-side { display: flex; align-items: center; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
 .ov-date { font-size: 0.78rem; color: var(--text-muted); margin-left: 4px; }
 .ov-empty { font-size: 0.875rem; color: var(--text-muted); padding: 10px 0; }
