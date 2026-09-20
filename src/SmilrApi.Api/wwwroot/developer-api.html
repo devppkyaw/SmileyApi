@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Manage your Smilr Developer API key." />
+  <meta name="robots" content="noindex" />
+  <title>Developer API — SmilrHQ</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<header class="hero" style="padding-bottom:40px">
+  <dash-nav active="developer-api"></dash-nav>
+  <div class="hero-content" style="padding-top:60px">
+    <h1 style="font-size:clamp(1.8rem,4vw,2.5rem)">Developer API<br><span class="accent" id="tierBadge"></span></h1>
+    <p class="hero-sub" id="welcomeMsg">Loading…</p>
+  </div>
+</header>
+
+<section class="access">
+  <div class="container">
+
+    <div id="authError" style="display:none;text-align:center;padding:40px 0">
+      <p style="color:var(--red);margin-bottom:16px">You are not logged in.</p>
+      <a href="/login.html" class="btn-primary">Log in →</a>
+    </div>
+
+    <div id="dashContent" style="display:none">
+      <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:16px">
+        Use your API key with the <code>X-Api-Key</code> header to access the REST API.
+        <a href="/developers.html" target="_blank" rel="noopener">API docs →</a>
+      </p>
+      <div id="apikeyStatus" style="margin-bottom:12px;font-size:0.9rem"></div>
+      <div id="apikeyInfo" style="display:none;margin-bottom:16px;padding:14px 16px;border:1px solid var(--border);border-radius:6px;background:var(--surface)">
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px">Active key · tier: <strong><span id="apikeyTier"></span></strong></div>
+        <div style="font-size:0.8rem;color:var(--text-muted)">Created: <span id="apikeyCreatedAt"></span></div>
+      </div>
+      <div id="apikeyNoKey" style="display:none;margin-bottom:16px;font-size:0.875rem;color:var(--text-muted)">No active API key.</div>
+      <div id="apikeyNewKey" style="display:none;margin-bottom:16px;padding:14px 16px;border:1px solid #6ee7b7;border-radius:6px;background:#d1fae5;color:#065f46">
+        <strong>New key — save this, it won't be shown again:</strong><br>
+        <code id="apikeyPlaintext" style="font-family:var(--font-mono);word-break:break-all;font-size:0.9rem"></code>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn-primary" onclick="generateApiKey()">Generate new key</button>
+        <button class="btn-secondary" id="revokeBtn" style="display:none" onclick="revokeApiKey()">Revoke key</button>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<site-footer></site-footer>
+
+<script src="/components/footer.js"></script>
+<script src="/components/nav.js"></script>
+<script src="/components/dashboard-common.js"></script>
+<script>
+(async function () {
+  var me = await initDashboardPage();
+  if (!me) return;
+
+  // Pro/Enterprise only — except a Free account that already has a key (grandfathered from before this
+  // was gated), which can still view/rotate/revoke it. /me resolves that as canUseDeveloperApi.
+  if (!me.canUseDeveloperApi) {
+    location.replace('/overview.html');
+    return;
+  }
+
+  // Only this page ever needs the key — it is no longer fetched on every dashboard load.
+  loadApiKey();
+})();
+
+async function loadApiKey() {
+  var res  = await fetch('/v1/business/apikey');
+  var data = await res.json();
+  if (data.hasKey) {
+    document.getElementById('apikeyInfo').style.display  = 'block';
+    document.getElementById('apikeyNoKey').style.display = 'none';
+    document.getElementById('revokeBtn').style.display   = 'inline-block';
+    document.getElementById('apikeyTier').textContent    = data.tier;
+    document.getElementById('apikeyCreatedAt').textContent = formatDate(data.createdAt);
+  } else {
+    document.getElementById('apikeyInfo').style.display  = 'none';
+    document.getElementById('apikeyNoKey').style.display = 'block';
+    document.getElementById('revokeBtn').style.display   = 'none';
+  }
+  return data.hasKey;
+}
+
+async function generateApiKey() {
+  var hasKey = document.getElementById('revokeBtn').style.display !== 'none';
+  if (hasKey && !confirm('This will invalidate your existing key. Continue?')) return;
+  document.getElementById('apikeyNewKey').style.display = 'none';
+  var status = document.getElementById('apikeyStatus');
+  status.textContent = '';
+  var res  = await fetch('/v1/business/apikey/generate', { method: 'POST' });
+  var data = await res.json();
+  if (res.ok) {
+    document.getElementById('apikeyPlaintext').textContent = data.key;
+    document.getElementById('apikeyNewKey').style.display  = 'block';
+    loadApiKey();
+  } else {
+    status.style.color = 'var(--red)';
+    status.textContent = (data.error && data.error.message) || 'Failed.';
+  }
+}
+
+async function revokeApiKey() {
+  if (!confirm('Revoke your API key? All requests using it will stop working immediately.')) return;
+  var res = await fetch('/v1/business/apikey', { method: 'DELETE' });
+  if (res.ok) loadApiKey();
+}
+</script>
+
+</body>
+</html>

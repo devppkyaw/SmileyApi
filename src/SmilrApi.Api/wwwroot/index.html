@@ -193,20 +193,16 @@
 <site-footer></site-footer>
 
 <script src="/components/footer.js"></script>
+<script src="/components/nav.js"></script>
 <script>
-(async function () {
-  const res = await fetch('/v1/business/me');
-  if (res.ok) {
-    const link = document.getElementById('navAuthLink');
-    link.href = '/dashboard.html';
-    link.textContent = 'Dashboard →';
-
-    document.querySelectorAll('a[href="register.html"]').forEach(function (btn) {
-      btn.href = '/dashboard.html';
-      btn.textContent = 'Go to Dashboard →';
-    });
-  }
-})();
+// nav.js swaps the nav "Log in" link; the register CTAs on the page become dashboard links too.
+window.SmilrSession.me().then(function (me) {
+  if (!me) return;
+  document.querySelectorAll('a[href="register.html"]').forEach(function (btn) {
+    btn.href = '/overview.html';
+    btn.textContent = 'Go to Dashboard →';
+  });
+});
 </script>
 </body>
 </html>

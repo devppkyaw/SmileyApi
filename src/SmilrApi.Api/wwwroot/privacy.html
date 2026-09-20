@@ -88,15 +88,6 @@
 <site-footer></site-footer>
 
 <script src="/components/footer.js"></script>
-<script>
-(async function () {
-  const res = await fetch('/v1/business/me');
-  if (res.ok) {
-    const link = document.getElementById('navAuthLink');
-    link.href = '/dashboard.html';
-    link.textContent = 'Dashboard →';
-  }
-})();
-</script>
+<script src="/components/nav.js"></script>
 </body>
 </html>

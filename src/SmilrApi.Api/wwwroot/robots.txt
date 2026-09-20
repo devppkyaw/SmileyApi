@@ -2,6 +2,9 @@ User-agent: *
 Allow: /find/
 Disallow: /admin/
 Disallow: /dashboard.html
+Disallow: /overview.html
+Disallow: /locations.html
+Disallow: /developer-api.html
 Disallow: /v1/
 Disallow: /scalar/
 Disallow: /hangfire/

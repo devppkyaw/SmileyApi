@@ -344,11 +344,30 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
         IReadOnlyList<string> cityValues, DateOnly windowStart, int page, int limit, CancellationToken ct = default)
     {
         if (cityValues.Count == 0) return [];
+        var (cityFilterSql, cityParams) = BuildCityInClause(cityValues);
+        return await QueryRecentChangesAsync(cityFilterSql, cityParams, windowStart, page, limit, ct);
+    }
+
+    // Business dashboard variant: same transition semantics, scoped to one business's own locations via
+    // a subselect on BusinessLocations (a chain with hundreds of locations would otherwise need
+    // hundreds of SqlParameters). Excludes delisted establishments, like the city variant.
+    public async Task<IReadOnlyList<ScoreChangeRow>> GetRecentChangesForBusinessAsync(
+        int businessId, DateOnly windowStart, int limit, CancellationToken ct = default)
+    {
+        const string filterSql =
+            "AND e.DelistedAt IS NULL AND e.Navnelbnr IN (SELECT bl.Navnelbnr FROM BusinessLocations bl WHERE bl.BusinessId = @businessId)";
+        var filterParams = new List<SqlParameter> { new("@businessId", businessId) };
+        return await QueryRecentChangesAsync(filterSql, filterParams, windowStart, 1, limit, ct);
+    }
+
+    private async Task<IReadOnlyList<ScoreChangeRow>> QueryRecentChangesAsync(
+        string establishmentFilterSql, List<SqlParameter> filterParams,
+        DateOnly windowStart, int page, int limit, CancellationToken ct)
+    {
         page  = Math.Max(1, page);
         limit = Math.Clamp(limit, 1, 100);
 
-        var (cityFilterSql, cityParams) = BuildCityInClause(cityValues);
-        var sql = BuildCurrentTransitionsCte(cityFilterSql) + """
+        var sql = BuildCurrentTransitionsCte(establishmentFilterSql) + """
             SELECT ct.EstablishmentId AS EstablishmentId, ct.PreviousScore AS PreviousScore,
                    ct.NewScore AS NewScore, ct.ChangeDate AS ChangeDate
             FROM CurrentTransitions ct
@@ -358,7 +377,7 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
             OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
             """;
 
-        var parameters = new List<SqlParameter>(cityParams)
+        var parameters = new List<SqlParameter>(filterParams)
         {
             new("@windowStart", windowStart),
             new("@offset", (page - 1) * limit),

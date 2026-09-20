@@ -434,6 +434,11 @@ document.querySelectorAll('.dash-tab').forEach(function (btn) {
 serves no purpose, so it was dropped along with them. If either Webhooks or Developer API comes back,
 restore the tab bar (with only the relevant buttons) and this click handler together.
 
+**Update 2026-09-20:** superseded. The Developer API tab came back (PR #28) and the tab bar has since
+been replaced entirely by separate pages — `overview.html`, `locations.html`, `developer-api.html` —
+linked from the shared `<dash-nav>` in `components/nav.js`. Don't restore the tab bar; a returning
+Webhooks section should be its own page added to that nav.
+
 ---
 
 ## 9. "Upgrade to Pro" wording in tier-gate messages (dashboard + backend API)

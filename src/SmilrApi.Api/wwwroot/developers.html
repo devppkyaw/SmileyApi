@@ -246,7 +246,7 @@ console.log(data.results);</code></pre>
       <a href="/login.html" class="btn-secondary">Log in</a>
     </div>
     <div id="devCtaLoggedIn" style="display:none">
-      <a href="/dashboard.html" class="btn-primary">Go to dashboard →</a>
+      <a href="/overview.html" class="btn-primary">Go to dashboard →</a>
     </div>
   </div>
 </section>
@@ -258,17 +258,13 @@ console.log(data.results);</code></pre>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+<script src="/components/nav.js"></script>
 <script>
-(async function () {
-  const res = await fetch('/v1/business/me');
-  if (res.ok) {
-    const link = document.getElementById('navAuthLink');
-    link.href = '/dashboard.html';
-    link.textContent = 'Dashboard →';
-    document.getElementById('devCta').style.display         = 'none';
-    document.getElementById('devCtaLoggedIn').style.display = 'block';
-  }
-})();
+window.SmilrSession.me().then(function (me) {
+  if (!me) return;
+  document.getElementById('devCta').style.display         = 'none';
+  document.getElementById('devCtaLoggedIn').style.display = 'block';
+});
 </script>
 </body>
 </html>
