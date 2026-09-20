@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using SmilrApi.Api.Rendering;
 using SmilrApi.Core.Interfaces;
 using SmilrApi.Core.Models;
@@ -613,6 +614,162 @@ public static class BusinessEndpoints
 
             return Results.Ok(new { navnelbnr, name = est.Name, history });
         });
+
+        // ── Benchmarking (Pro/Enterprise) ─────────────────────────────────────────────────────────
+        // Loaded lazily by the Overview / Locations pages, separate from /overview, so the landing page
+        // stays one light call. Peers: same Pixibranche category in the same City, else the same
+        // category nationwide (see BenchmarkCalculator).
+        app.MapGet("/v1/business/benchmark", async (
+            HttpContext ctx,
+            IBusinessService svc,
+            SmilrDbContext db,
+            IEstablishmentRepository establishments,
+            IMemoryCache cache,
+            CancellationToken ct) =>
+        {
+            var business = await GetSessionBusinessAsync(ctx, svc, ct);
+            if (business is null) return Results.Unauthorized();
+            if (business.Tier == "free") return ProRequired();
+
+            var locations = await LoadBenchmarkInputsAsync(db, business.Id, null, ct);
+            var benchmarks = await BenchmarkLocationsAsync(locations, establishments, cache, ct);
+
+            var portfolio = BenchmarkCalculator.Rollup(benchmarks.Values.ToList(), locations.Count);
+
+            var belowPeers = locations
+                .Where(l => benchmarks.TryGetValue(l.Navnelbnr, out var b) && b.Score - b.PeerAverage > BenchmarkCalculator.InLineTolerance)
+                .Select(l => (Loc: l, Bench: benchmarks[l.Navnelbnr]))
+                .OrderByDescending(x => x.Bench.Score - x.Bench.PeerAverage).ThenBy(x => x.Loc.Name)
+                .Take(5)
+                .Select(x => new
+                {
+                    navnelbnr = x.Loc.Navnelbnr,
+                    name = x.Loc.Name,
+                    city = x.Loc.City,
+                    detailPath = FindUrlBuilder.DetailPath(x.Loc.Name, x.Loc.City, x.Loc.Navnelbnr),
+                    score = x.Bench.Score,
+                    peerAverage = Math.Round(x.Bench.PeerAverage, 2),
+                    scope = ScopeName(x.Bench.Scope),
+                    peerCount = x.Bench.PeerCount
+                })
+                .ToList();
+
+            return Results.Ok(new
+            {
+                totalLocations = locations.Count,
+                benchmarkedLocations = benchmarks.Count,
+                portfolio,
+                belowPeers
+            });
+        });
+
+        app.MapGet("/v1/business/locations/{navnelbnr:int}/benchmark", async (
+            int navnelbnr,
+            HttpContext ctx,
+            IBusinessService svc,
+            SmilrDbContext db,
+            IEstablishmentRepository establishments,
+            IMemoryCache cache,
+            CancellationToken ct) =>
+        {
+            var business = await GetSessionBusinessAsync(ctx, svc, ct);
+            if (business is null) return Results.Unauthorized();
+            if (business.Tier == "free") return ProRequired();
+
+            var location = (await LoadBenchmarkInputsAsync(db, business.Id, navnelbnr, ct)).FirstOrDefault();
+            if (location is null) return Results.NotFound();
+
+            var benchmarks = await BenchmarkLocationsAsync([location], establishments, cache, ct);
+            if (!benchmarks.TryGetValue(navnelbnr, out var b))
+            {
+                return Results.Ok(new
+                {
+                    benchmarked = false,
+                    reason = "There aren't enough comparable establishments (scored, in the same category) to benchmark this location."
+                });
+            }
+
+            return Results.Ok(new
+            {
+                benchmarked = true,
+                navnelbnr,
+                name = location.Name,
+                city = location.City,
+                category = location.Pixibranche,
+                score = b.Score,
+                scope = ScopeName(b.Scope),
+                peerCount = b.PeerCount,
+                peers = new { s1 = b.Peers.S1, s2 = b.Peers.S2, s3 = b.Peers.S3, s4 = b.Peers.S4 },
+                peerAverage = Math.Round(b.PeerAverage, 2),
+                peerTopSharePercent = b.PeerTopSharePercent,
+                samePercent = b.SamePercent,
+                peersBetterPercent = b.PeersBetterPercent,
+                peersWorsePercent = b.PeersWorsePercent
+            });
+        });
+    }
+
+    private sealed record BenchmarkInput(
+        int Navnelbnr, string Name, string? City, string? Pixibranche, int? LatestScore, bool InPeerPopulation);
+
+    private static IResult ProRequired() =>
+        Results.Json(Error("pro_required", "Benchmarking is available on the Pro plan."), statusCode: StatusCodes.Status403Forbidden);
+
+    private static string ScopeName(BenchmarkScope scope) => scope == BenchmarkScope.Area ? "area" : "national";
+
+    // One business's locations (optionally just one) as the small projection benchmarking needs.
+    // InPeerPopulation mirrors EstablishmentRepository.PeerPopulation's CvrNumber/DelistedAt rules, i.e.
+    // whether the location is itself counted in its peer group and must be subtracted from it.
+    private static async Task<List<BenchmarkInput>> LoadBenchmarkInputsAsync(
+        SmilrDbContext db, int businessId, int? navnelbnr, CancellationToken ct)
+    {
+        var owned = db.BusinessLocations
+            .Where(b => b.BusinessId == businessId && (navnelbnr == null || b.Navnelbnr == navnelbnr))
+            .Join(db.Establishments, bn => bn.Navnelbnr, e => e.Navnelbnr, (bn, e) => e);
+
+        return await owned
+            .Select(e => new BenchmarkInput(
+                e.Navnelbnr, e.Name, e.City, e.Pixibranche, e.LatestScore,
+                e.CvrNumber != null && e.DelistedAt == null))
+            .ToListAsync(ct);
+    }
+
+    // Benchmarks every eligible location (scored 1-4, has a City and a real category) and returns them by
+    // Navnelbnr; locations without enough peers are simply absent. Two grouped queries at most: the
+    // (City, category) peer groups for the locations, plus the nationwide per-category distribution
+    // (cached — it's ~26 rows and only moves when the feed syncs).
+    private static async Task<Dictionary<int, LocationBenchmark>> BenchmarkLocationsAsync(
+        IReadOnlyCollection<BenchmarkInput> locations, IEstablishmentRepository establishments,
+        IMemoryCache cache, CancellationToken ct)
+    {
+        var eligible = locations
+            .Where(l => l.LatestScore is >= 1 and <= 4
+                     && !string.IsNullOrWhiteSpace(l.City)
+                     && !string.IsNullOrWhiteSpace(l.Pixibranche)
+                     && !PixibrancheCategories.IsPlaceholder(l.Pixibranche))
+            .ToList();
+        if (eligible.Count == 0) return [];
+
+        var area = await establishments.GetPeerScoreDistributionsAsync(
+            eligible.Select(l => l.City!).Distinct().ToList(),
+            eligible.Select(l => l.Pixibranche!).Distinct().ToList(), ct);
+
+        var national = await cache.GetOrCreateAsync("benchmark:national-category-distributions", entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(12);
+            return establishments.GetNationalCategoryDistributionsAsync(ct);
+        }) ?? new Dictionary<string, ScoreDistribution>();
+
+        var result = new Dictionary<int, LocationBenchmark>();
+        foreach (var l in eligible)
+        {
+            ScoreDistribution? areaDist = area.TryGetValue(BenchmarkCalculator.PeerKey(l.City!, l.Pixibranche!), out var a) ? a : null;
+            ScoreDistribution? nationalDist = national.TryGetValue(l.Pixibranche!.Trim().ToLowerInvariant(), out var n) ? n : null;
+
+            var b = BenchmarkCalculator.ForLocation(l.LatestScore!.Value, areaDist, nationalDist, l.InPeerPopulation);
+            if (b is not null) result[l.Navnelbnr] = b;
+        }
+        return result;
     }
 
     private static async Task<Business?> GetSessionBusinessAsync(

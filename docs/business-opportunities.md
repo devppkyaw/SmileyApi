@@ -2,7 +2,7 @@
 
 > **Before editing this file:** it's actively updated from two places — Claude Code (local CLI) and a Cowork session in the Claude desktop app — often around the same time. Re-read the current on-disk content before writing; merge your changes into it rather than overwriting wholesale.
 
-Ideas for growing Smilr beyond the core widget. Captured 2026-08-11, revised 2026-08-18, 2026-08-19.
+Ideas for growing Smilr beyond the core widget. Captured 2026-08-11, revised 2026-08-18, 2026-08-19, 2026-09-20.
 
 ## Decision (2026-08-18, revised): API + Business analytics first, directory repositioned as SEO/acquisition channel
 
@@ -108,7 +108,12 @@ The real value proposition for the paid Business tier, since visibility alone is
 - **`/developer-api.html`** — the old Developer API tab; the key is only fetched here. Pro/Enterprise only (plus grandfathered Free accounts that already hold a key), gated via `canUseDeveloperApi` on `/v1/business/me`.
 - `/dashboard.html` remains as a thin redirect to the overview so old bookmarks and emailed links keep working.
 
-Staged after this: **score trend charts** and **benchmarking against nearby/similar establishments** (the two remaining analytics ideas above). Both are deliberately not in the overview yet.
+**Benchmarking (decided 2026-09-20, Pro/Enterprise only, built on branch `business-benchmarking`):** "how do my locations compare with similar establishments", the analytics feature findsmiley.dk and eSmiley don't offer. It is loaded lazily (`GET /v1/business/benchmark`, and `GET /v1/business/locations/{navnelbnr}/benchmark` for one location) so the Overview stays one light call; both return 403 `pro_required` for Free accounts, which see a "part of the Pro plan" note with no checkout button (the Free upgrade CTA is deliberately removed — see `removed-features-bring-back-list.md` §9).
+- **Peer group:** same `Pixibranche` category in the same `City` (scored, non-delisted, excluding the location itself). Fewer than **10** peers falls back to the same category **nationwide**, labelled as such; locations with no score, City or real category are excluded and reported ("N of M benchmarked").
+- **How it's reported:** scores are discrete (1–4) and ~90% of establishments hold a 1, so a single percentile is misleading ("tied with 90% of peers"). The comparison instead shows the share of peers with the **same**, a **better** and a **worse** score, plus the peer average and the peers' share with score 1. The Overview rolls this up (your average vs. peers', your share with score 1 vs. peers', and how many locations score better than / in line with / worse than their peer average, with a 0.05 in-line tolerance) and lists the locations furthest below their peers; the Locations page has a per-location "Compare" modal.
+- Logic lives in `BenchmarkCalculator` (Core, unit-tested); peer distributions come from `GetPeerScoreDistributionsAsync` / `GetNationalCategoryDistributionsAsync` on `EstablishmentRepository` (the nationwide one is cached for 12h).
+
+Staged after this: **score trend charts** (the one remaining analytics idea above). Not in the overview yet.
 
 ## 3. Consumer-facing directory site ("Smilr Finder") — SECONDARY, SEO/acquisition role
 
@@ -159,7 +164,7 @@ Packaging work on top of #1. Distribution channel for developer audience, not a 
 Phase G (registered widget tier field) and Phase I (session-based Pro webhooks) directly support the analytics/SaaS positioning (#2) — prioritize these over Phase H polish if forced to choose. Phase H (static pages) still needed as the registration landing destination for both the API signup and the directory's claim-listing CTA.
 
 **Open decisions:**
-- Which analytics feature ships after the overview: score trend charts vs. benchmarking against nearby/similar establishments (multi-location view and the portfolio summary/changes are done — see Dashboard structure in §2)
+- Whether/when to build score trend charts (the multi-location view, portfolio summary/changes and benchmarking are done — see Dashboard structure in §2)
 - Caching/infra approach to keep public anonymous directory traffic from hitting Azure SQL directly at scale
 
 **Resolved:**
@@ -171,5 +176,6 @@ Phase G (registered widget tier field) and Phase I (session-based Pro webhooks) 
 - Business analytics tier scope: monitoring/benchmarking the published result only, not internal compliance/HACCP tooling (2026-08-19)
 - Adoption/sequencing of `recently-inspected` and `changes`: both built and shipped (2026-08-22); no persisted `ScoreChangeLog` needed — changes are derived from `Inspections` via `LAG` (2026-08-22)
 - Business dashboard restructure: overview landing page (portfolio summary + recent changes + needs-attention) with separate Locations and Developer API pages and a shared nav; trend charts and benchmarking staged after it (2026-09-20)
+- Next analytics feature: benchmarking (peer group = same category + city, nationwide fallback under 10 peers; same/better/worse shares rather than a percentile; Pro/Enterprise only) chosen ahead of trend charts (2026-09-20)
 
-**Shipped (2026-08-19):** area hub pages, area × category hub pages, canonical establishment detail pages with Area/Category breadcrumbs and `BreadcrumbList` JSON-LD, and `sitemap.xml` covering all three page types. Next up per the sequencing above: either the "Recently changed" trend feed or the "Recently inspected" page (§3) — sequencing decision still open.
+**Shipped (2026-08-19):** area hub pages, area × category hub pages, canonical establishment detail pages with Area/Category breadcrumbs and `BreadcrumbList` JSON-LD, and `sitemap.xml` covering all three page types. Both follow-ups from that sequencing — the "Recently inspected" and "Recently changed" pages (§3) — shipped 2026-08-22.
