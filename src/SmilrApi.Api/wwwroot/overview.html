@@ -281,7 +281,7 @@ function render(d) {
   renderNeedsAttention(d);
 }
 
-// Score 3 or 4, declined in the last 90 days, or no score yet — most concerning first, capped at 5 by the
+// Score 3 or 4, latest score change a decline in the last 90 days, or no score yet — most concerning first, capped at 5 by the
 // server. Never blank: with nothing to flag it says so, using the newest entry of "Recent score changes".
 function renderNeedsAttention(d) {
   var att  = document.getElementById('attentionList');

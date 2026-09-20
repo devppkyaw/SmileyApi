@@ -34,6 +34,22 @@ public class LocationListPagingTests
     public void NormalizeSearch_returns_null_for_blank_input(string? input) =>
         Assert.Null(LocationListPaging.NormalizeSearch(input));
 
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    [InlineData("   ", null)]
+    [InlineData(" 29189420 ", "29189420")]
+    [InlineData("none", "none")]
+    [InlineData(" NONE ", "none")]  // the no-CVR sentinel is case-insensitive and normalized
+    public void NormalizeCvr_trims_and_recognizes_the_no_cvr_sentinel(string? input, string? expected) =>
+        Assert.Equal(expected, LocationListPaging.NormalizeCvr(input));
+
+    [Fact]
+    public void NormalizeCvr_caps_length()
+    {
+        Assert.Equal(20, LocationListPaging.NormalizeCvr(new string('9', 200))!.Length);
+    }
+
     [Fact]
     public void NormalizeSearch_trims_and_caps_length()
     {

@@ -380,6 +380,8 @@ public static class BusinessEndpoints
             string? q,
             string? sort,
             int? attention,
+            string? cvr,
+            int? groupsOnly,
             CancellationToken ct) =>
         {
             var business = await GetSessionBusinessAsync(ctx, svc, ct);
@@ -389,6 +391,7 @@ public static class BusinessEndpoints
             var sortMode = LocationListPaging.NormalizeSort(sort);
             var search   = LocationListPaging.NormalizeSearch(q);
             var attentionOnly = attention == 1;
+            var cvrFilter = LocationListPaging.NormalizeCvr(cvr);
 
             var risk = await AssessRiskAsync(db, establishments, business.Id, ct);
             var attentionIds = risk.Where(kv => kv.Value.NeedsAttention).Select(kv => kv.Key).ToList();
@@ -418,10 +421,56 @@ public static class BusinessEndpoints
                     x.e.Navnelbnr.ToString().Contains(search));
             }
 
+            // "Needs attention (N)" counts the needs-attention locations matching the current search, so the
+            // number always equals what selecting that filter shows (the portfolio total when not searching).
+            var attentionCount = search is null
+                ? attentionIds.Count
+                : await filtered.Where(x => attentionIds.Contains(x.e.Navnelbnr)).CountAsync(ct);
+
             if (attentionOnly)
                 filtered = filtered.Where(x => attentionIds.Contains(x.e.Navnelbnr));
 
-            var total = search is null && !attentionOnly ? locationCount : await filtered.CountAsync(ct);
+            // The CVR groups (with counts under the q / attention filters) are what the grouped view lists.
+            // Computed before the single-CVR restriction below, and skipped when one group's rows are asked for.
+            var cvrGroups = new List<CvrGroupCount>();
+            if (cvrFilter is null)
+            {
+                cvrGroups = (await filtered
+                        .GroupBy(x => x.e.CvrNumber)
+                        .Select(g => new { cvr = g.Key, count = g.Count() })
+                        .ToListAsync(ct))
+                    .OrderBy(g => g.cvr == null).ThenBy(g => g.cvr)
+                    .Select(g => new CvrGroupCount(g.cvr, g.count))
+                    .ToList();
+            }
+
+            // One group's rows: restrict to that CVR ("none" = the locations without one).
+            if (cvrFilter == LocationListPaging.NoCvr)
+                filtered = filtered.Where(x => x.e.CvrNumber == null);
+            else if (cvrFilter is not null)
+                filtered = filtered.Where(x => x.e.CvrNumber == cvrFilter);
+
+            var total = search is null && !attentionOnly && cvrFilter is null
+                ? locationCount
+                : await filtered.CountAsync(ct);
+
+            // Grouped view's first call: headers and counts only — no rows, no inspection history.
+            if (groupsOnly == 1)
+            {
+                return Results.Ok(new
+                {
+                    locations = new List<object>(),
+                    groupsOnly = true,   // echoed so the page can tell a server that predates this mode
+                    cvrFilter,
+                    locationCount,
+                    cvrCount,
+                    total,
+                    attentionCount,
+                    page = pageNo,
+                    pageSize = size,
+                    cvrGroups
+                });
+            }
 
             var ordered = sortMode switch
             {
@@ -502,20 +551,14 @@ public static class BusinessEndpoints
                 };
             }).ToList();
 
-            var cvrGroups = (await filtered
-                    .GroupBy(x => x.e.CvrNumber)
-                    .Select(g => new { cvr = g.Key, count = g.Count() })
-                    .ToListAsync(ct))
-                .OrderBy(g => g.cvr == null).ThenBy(g => g.cvr)
-                .ToList();
-
             return Results.Ok(new
             {
                 locations = locationItems,
+                cvrFilter,   // echoed so the page can tell a server that ignores the cvr parameter
                 locationCount,
                 cvrCount,
                 total,
-                attentionCount = attentionIds.Count,
+                attentionCount,
                 page = pageNo,
                 pageSize = size,
                 cvrGroups
@@ -758,6 +801,8 @@ public static class BusinessEndpoints
             });
         });
     }
+
+    private sealed record CvrGroupCount(string? Cvr, int Count);
 
     private sealed record LocationRow(
         int EstId, int Navnelbnr, string? CvrNumber, string Name, string? Address, string? City,

@@ -107,9 +107,12 @@
 <script src="/smilr-icons.js"></script>
 <script>
 var PAGE_SIZE = 25;
+var GROUP_AUTO_EXPAND_MAX = 3;   // open the groups automatically when the (filtered) list has this few CVRs
+var EXPAND_ALL_MAX = 25;         // "expand all" opens at most this many groups, so a big chain isn't hammered
 var state = { page: 1, q: '', sort: 'cvr', attention: false, total: 0 };
 var locationData = {};
-var cvrGroupCounts = {};
+var groups = {};        // CVR ('' = no CVR) -> { count, loaded, page, expanded, loading }   (grouped view only)
+var groupOrder = [];    // CVR keys in header order
 var searchTimer = null;
 var loadSeq = 0;
 var canBenchmark = false;
@@ -145,24 +148,61 @@ var canBenchmark = false;
   loadLocations();
 })();
 
+function filterParams(qs) {
+  if (state.q) qs.set('q', state.q);
+  if (state.attention) qs.set('attention', '1');
+  return qs;
+}
+
+function emptyMessage(locationCount) {
+  return state.q
+    ? 'No locations match your search.'
+    : state.attention
+      ? 'No locations need attention right now.'
+      : (locationCount ? 'No locations on this page.' : 'No locations yet. Add one above.');
+}
+
+// The page is served from disk but the API is a compiled build, so after a code change the two can be out
+// of step until the app is restarted. The API echoes `groupsOnly` / `cvrFilter` (newer builds only); when
+// they're missing, say so instead of rendering rows that belong to a different query.
+var STALE_SERVER_MSG = 'The server is running an older version of the app. Restart it, then reload this page.';
+
+function showStaleServer() {
+  document.getElementById('collapseExpandBtns').style.display = 'none';
+  document.getElementById('pager').style.display = 'none';
+  document.getElementById('locationList').innerHTML = emptyRow(STALE_SERVER_MSG, true);
+}
+
+function emptyRow(msg, isError) {
+  return '<tr><td colspan="4" style="text-align:center;padding:28px;color:var(' + (isError ? '--red' : '--text-muted') +
+    ');font-size:0.9rem">' + msg + '</td></tr>';
+}
+
 async function loadLocations() {
   // Guard against out-of-order responses while the user is still typing in the search box.
   var seq = ++loadSeq;
-  var qs = new URLSearchParams({ page: state.page, pageSize: PAGE_SIZE, sort: state.sort });
-  if (state.q) qs.set('q', state.q);
-  if (state.attention) qs.set('attention', '1');
+  var grouped = state.sort === 'cvr';
 
-  var res  = await fetch('/v1/business/locations?' + qs);
+  // Group by CVR lists every CVR as a header first (no rows); a group's locations load when it is opened.
+  var qs = grouped
+    ? filterParams(new URLSearchParams({ groupsOnly: 1, sort: 'cvr' }))
+    : filterParams(new URLSearchParams({ page: state.page, pageSize: PAGE_SIZE, sort: state.sort }));
+
+  var previouslyOpen = {};
+  Object.keys(groups).forEach(function (k) { if (groups[k].expanded) previouslyOpen[k] = true; });
+
+  var res = await fetch('/v1/business/locations?' + qs);
   if (seq !== loadSeq) return;
   if (!res.ok) {
-    document.getElementById('locationList').innerHTML =
-      '<tr><td colspan="4" style="text-align:center;padding:28px;color:var(--red);font-size:0.9rem">Could not load locations.</td></tr>';
+    document.getElementById('locationList').innerHTML = emptyRow('Could not load locations.', true);
     return;
   }
   var data = await res.json();
 
+  if (grouped && data.groupsOnly !== true) { showStaleServer(); return; }
+
   // Removing the last row of the last page leaves that page empty — step back one.
-  if (!data.locations.length && data.total > 0 && state.page > 1) {
+  if (!grouped && !data.locations.length && data.total > 0 && state.page > 1) {
     state.page = Math.ceil(data.total / PAGE_SIZE);
     return loadLocations();
   }
@@ -172,12 +212,17 @@ async function loadLocations() {
   document.querySelector('#attentionSelect option[value="1"]').textContent = 'Needs attention (' + data.attentionCount + ')';
 
   locationData = {};
-  data.locations.forEach(function (loc) { locationData[loc.navnelbnr] = loc; });
-  cvrGroupCounts = {};
-  data.cvrGroups.forEach(function (g) { cvrGroupCounts[g.cvr || ''] = g.count; });
+  groups = {};
+  groupOrder = [];
 
-  renderLocations(data.locations, data.locationCount);
-  renderPager();
+  if (grouped) {
+    renderGroups(data, previouslyOpen);
+    document.getElementById('pager').style.display = 'none';
+  } else {
+    data.locations.forEach(function (loc) { locationData[loc.navnelbnr] = loc; });
+    renderLocations(data.locations, data.locationCount);
+    renderPager();
+  }
 }
 
 function onSearchInput() {
@@ -255,54 +300,170 @@ function locRow(loc, showCvr) {
   '</tr>';
 }
 
-// The header count is the group's full size across all pages (cvrGroups from the server), not just
-// the rows of it that happen to be on this page.
+// Flat, row-paged list — used for the score and risk sorts (Group by CVR has its own view below).
+function renderLocations(locations, locationCount) {
+  var tbody = document.getElementById('locationList');
+  document.getElementById('collapseExpandBtns').style.display = 'none';
+
+  if (!locations.length) {
+    tbody.innerHTML = emptyRow(emptyMessage(locationCount));
+    return;
+  }
+  tbody.innerHTML = locations.map(function (loc) { return locRow(loc, true); }).join('');
+}
+
+// ── Group by CVR ─────────────────────────────────────────────────────────────────────────────
+// Every CVR is listed as a header with its location count (from the server, under the current search /
+// needs-attention filter). A group's locations are fetched when it is opened, PAGE_SIZE at a time.
+
 function groupHeader(cvr, showRemove) {
-  var count  = cvrGroupCounts[cvr || ''] || 0;
+  var count  = groups[cvr].count;
   var label  = '<span class="cvr-group-label">CVR <strong>' + esc(cvr || '—') + '</strong> · ' + count + ' location' + (count !== 1 ? 's' : '') + '</span>';
-  var toggle = '<button onclick="toggleGroup(\'' + esc(cvr) + '\')" class="cvr-toggle-btn" title="Collapse/expand">▼</button>';
+  var toggle = '<button onclick="toggleGroup(\'' + esc(cvr) + '\')" class="cvr-toggle-btn" title="Collapse/expand">▶</button>';
   var left   = '<div style="display:flex;align-items:center;gap:6px">' + toggle + label + '</div>';
   var btn    = showRemove
     ? '<button onclick="removeByCvr(\'' + esc(cvr) + '\')" class="act-btn act-btn--danger" style="font-size:0.78rem">Remove CVR ✕</button>'
     : '';
-  return '<tr class="cvr-group-header" data-group-cvr="' + esc(cvr) + '" data-collapsed="false"><td colspan="4"><div class="cvr-group-inner">' + left + btn + '</div></td></tr>';
+  return '<tr class="cvr-group-header" data-group-cvr="' + esc(cvr) + '" data-collapsed="true"><td colspan="4"><div class="cvr-group-inner">' + left + btn + '</div></td></tr>';
 }
 
-function renderLocations(locations, locationCount) {
-  var tbody        = document.getElementById('locationList');
+function renderGroups(data, previouslyOpen) {
+  var tbody = document.getElementById('locationList');
   var collapseBtns = document.getElementById('collapseExpandBtns');
-  var grouped      = state.sort === 'cvr';
 
-  if (!locations.length) {
-    var msg = state.q
-      ? 'No locations match your search.'
-      : state.attention
-        ? 'No locations need attention right now.'
-        : (locationCount ? 'No locations on this page.' : 'No locations yet. Add one above.');
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:28px;color:var(--text-muted);font-size:0.9rem">' + msg + '</td></tr>';
+  data.cvrGroups.forEach(function (g) {
+    var key = g.cvr || '';
+    groups[key] = { count: g.count, loaded: 0, page: 0, expanded: false, loading: false };
+    groupOrder.push(key);
+  });
+
+  if (!groupOrder.length) {
     collapseBtns.style.display = 'none';
+    tbody.innerHTML = emptyRow(emptyMessage(data.locationCount));
     return;
   }
 
-  collapseBtns.style.display = grouped ? '' : 'none';
+  collapseBtns.style.display = '';
+  tbody.innerHTML = groupOrder.map(function (key) { return groupHeader(key, !!key); }).join('');
 
-  var html = '';
-  if (!grouped) {
-    html = locations.map(function (loc) { return locRow(loc, true); }).join('');
-  } else {
-    // Rows arrive ordered by CVR (no-CVR last), so groups are contiguous — a header goes in whenever
-    // the CVR changes. A group split across pages simply repeats its header on the next page.
-    var current;
-    locations.forEach(function (loc) {
-      var cvr = loc.cvrNumber || '';
-      if (cvr !== current) {
-        html += groupHeader(cvr, !!cvr);
-        current = cvr;
-      }
-      html += locRow(loc, false);
-    });
+  // A handful of CVRs (a Free account's single one, or a search that narrows the list) opens straight
+  // away; a big chain starts as a tidy list of collapsed CVRs, plus whatever was open before a reload.
+  var autoOpen = groupOrder.length <= GROUP_AUTO_EXPAND_MAX;
+  groupOrder.forEach(function (key) {
+    if (autoOpen || previouslyOpen[key]) expandGroup(key);
+  });
+}
+
+function findHeader(key) {
+  var found = null;
+  document.querySelectorAll('#locationList tr.cvr-group-header').forEach(function (h) {
+    if (h.dataset.groupCvr === key) found = h;
+  });
+  return found;
+}
+
+// Every row of a group (locations plus its "loading" / "show more" helper rows) carries data-cvr.
+function groupRows(key) {
+  var rows = [];
+  document.querySelectorAll('#locationList tr[data-cvr]').forEach(function (r) {
+    if (r.dataset.cvr === key) rows.push(r);
+  });
+  return rows;
+}
+
+function setGroupCollapsed(header, collapsed) {
+  var key = header.dataset.groupCvr;
+  header.dataset.collapsed = collapsed ? 'true' : 'false';
+  header.querySelector('.cvr-toggle-btn').textContent = collapsed ? '▶' : '▼';
+  if (groups[key]) groups[key].expanded = !collapsed;
+  groupRows(key).forEach(function (r) { r.style.display = collapsed ? 'none' : ''; });
+}
+
+function expandGroup(key) {
+  var header = findHeader(key);
+  var g = groups[key];
+  if (!header || !g) return;
+  setGroupCollapsed(header, false);
+  if (g.loaded === 0 && g.count > 0 && !g.loading) loadGroupPage(key, 1);
+}
+
+function collapseAll() {
+  document.querySelectorAll('#locationList tr.cvr-group-header').forEach(function (h) { setGroupCollapsed(h, true); });
+}
+
+function expandAll() {
+  groupOrder.slice(0, EXPAND_ALL_MAX).forEach(expandGroup);
+}
+
+function toggleGroup(key) {
+  var header = findHeader(key);
+  if (!header) return;
+  if (header.dataset.collapsed === 'true') expandGroup(key);
+  else setGroupCollapsed(header, true);
+}
+
+async function loadGroupPage(key, pageNo) {
+  var g = groups[key];
+  if (!g || g.loading) return;
+  g.loading = true;
+  var seq = loadSeq;  // a reload (filter change, add/remove) invalidates in-flight group loads
+
+  // Replace the "show more" row with a loading row at the end of the group.
+  groupRows(key).forEach(function (r) { if (r.classList.contains('grp-more')) r.remove(); });
+  insertAfterGroup(key, '<tr class="grp-loading" data-cvr="' + esc(key) + '"><td colspan="4" style="text-align:center;padding:14px;color:var(--text-muted);font-size:0.85rem">Loading…</td></tr>');
+
+  var qs = filterParams(new URLSearchParams({ cvr: key === '' ? 'none' : key, page: pageNo, pageSize: PAGE_SIZE, sort: 'cvr' }));
+  var res;
+  try { res = await fetch('/v1/business/locations?' + qs); } catch (e) { res = null; }
+  if (seq !== loadSeq) return;
+
+  groupRows(key).forEach(function (r) { if (r.classList.contains('grp-loading')) r.remove(); });
+  g.loading = false;
+
+  if (!res || !res.ok) {
+    insertAfterGroup(key, '<tr class="grp-more" data-cvr="' + esc(key) + '"><td colspan="4" style="text-align:center;padding:12px;font-size:0.85rem">' +
+      '<span style="color:var(--red)">Could not load locations.</span> <a href="javascript:void(0)" onclick="loadGroupPage(\'' + esc(key) + '\',' + pageNo + ')">Retry</a></td></tr>');
+    return;
   }
-  tbody.innerHTML = html;
+  var data = await res.json();
+  if (seq !== loadSeq) return;
+
+  // A server that predates the cvr parameter ignores it and returns rows for every group.
+  if (data.cvrFilter !== (key === '' ? 'none' : key)) {
+    insertAfterGroup(key, '<tr class="grp-more" data-cvr="' + esc(key) + '"><td colspan="4" style="text-align:center;padding:12px;font-size:0.85rem;color:var(--red)">' +
+      STALE_SERVER_MSG + '</td></tr>');
+    return;
+  }
+
+  // Belt and braces: only this group's own rows, and never the same location twice.
+  var shown = {};
+  groupRows(key).forEach(function (r) { if (r.dataset.navnelbnr) shown[r.dataset.navnelbnr] = true; });
+  var rows = data.locations.filter(function (loc) {
+    return (loc.cvrNumber || '') === key && !shown[loc.navnelbnr];
+  });
+
+  rows.forEach(function (loc) { locationData[loc.navnelbnr] = loc; });
+  insertAfterGroup(key, rows.map(function (loc) { return locRow(loc, false); }).join(''));
+  g.loaded += rows.length;
+  g.page = pageNo;
+
+  var remaining = g.count - g.loaded;
+  if (remaining > 0 && rows.length) {
+    insertAfterGroup(key, '<tr class="grp-more" data-cvr="' + esc(key) + '"><td colspan="4" style="text-align:center;padding:10px">' +
+      '<button class="btn-secondary" onclick="loadGroupPage(\'' + esc(key) + '\',' + (pageNo + 1) + ')">Show ' +
+      Math.min(PAGE_SIZE, remaining) + ' more (' + remaining + ' remaining)</button></td></tr>');
+  }
+
+  // The group may have been collapsed while it was loading — keep its new rows hidden if so.
+  var header = findHeader(key);
+  if (header && header.dataset.collapsed === 'true') setGroupCollapsed(header, true);
+}
+
+// Inserts HTML after the last row of a group, or directly under its header when it has none yet.
+function insertAfterGroup(key, html) {
+  var rows = groupRows(key);
+  var anchor = rows.length ? rows[rows.length - 1] : findHeader(key);
+  if (anchor) anchor.insertAdjacentHTML('afterend', html);
 }
 
 function scoreStrip(history, virksomhedsType) {
@@ -321,29 +482,6 @@ function scoreStrip(history, virksomhedsType) {
     }
   }
   return '<div class="score-strip">' + cells + '</div>';
-}
-
-function setGroupCollapsed(header, collapsed) {
-  header.dataset.collapsed = collapsed ? 'true' : 'false';
-  header.querySelector('.cvr-toggle-btn').textContent = collapsed ? '▶' : '▼';
-  var cvr = header.dataset.groupCvr;
-  document.querySelectorAll('#locationList tr[data-navnelbnr]').forEach(function (r) {
-    if (r.dataset.cvr === cvr) r.style.display = collapsed ? 'none' : '';
-  });
-}
-
-function collapseAll() {
-  document.querySelectorAll('#locationList tr.cvr-group-header').forEach(function (h) { setGroupCollapsed(h, true); });
-}
-
-function expandAll() {
-  document.querySelectorAll('#locationList tr.cvr-group-header').forEach(function (h) { setGroupCollapsed(h, false); });
-}
-
-function toggleGroup(cvr) {
-  document.querySelectorAll('#locationList tr.cvr-group-header').forEach(function (h) {
-    if (h.dataset.groupCvr === cvr) setGroupCollapsed(h, h.dataset.collapsed !== 'true');
-  });
 }
 
 document.getElementById('addForm').addEventListener('submit', async function (e) {

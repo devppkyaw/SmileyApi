@@ -60,12 +60,29 @@ public class RiskCalculatorTests
     }
 
     [Fact]
-    public void A_newer_improvement_does_not_hide_an_earlier_in_window_decline_but_is_not_consecutive()
+    public void A_decline_the_location_has_since_recovered_from_is_not_flagged()
     {
-        var r = Assess(1, Up(5), Down(40, 1, 2));
-        Assert.Equal(RiskLevel.Watch, r.Level);
-        Assert.Equal([RiskReason.RecentDecline], r.Reasons);
-        Assert.Equal(Today.AddDays(-40), r.DeclineDate);
+        // Navnelbnr 1356778's shape: 1 -> 2 on 29/06, then 2 -> 1 on 27/08. Its latest score is a 1.
+        var r = Assess(1, Up(24, 2, 1), Down(83, 1, 2));
+        Assert.Equal(RiskLevel.Ok, r.Level);
+        Assert.False(r.NeedsAttention);
+        Assert.Null(r.DeclineDate);
+    }
+
+    [Fact]
+    public void Two_declines_followed_by_a_recovery_are_not_flagged()
+    {
+        var r = Assess(1, Up(5, 3, 1), Down(20, 2, 3), Down(40, 1, 2));
+        Assert.Equal(RiskLevel.Ok, r.Level);
+        Assert.False(r.NeedsAttention);
+    }
+
+    [Fact]
+    public void A_partial_recovery_that_is_itself_the_latest_change_is_not_a_decline()
+    {
+        // 1 -> 3 (decline), then 3 -> 2 (improvement): the latest change is an improvement.
+        var r = Assess(2, Up(5, 3, 2), Down(30, 1, 3));
+        Assert.False(r.NeedsAttention);
     }
 
     [Fact]

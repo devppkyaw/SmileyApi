@@ -24,6 +24,19 @@ public static class LocationListPaging
         _             => SortByCvr,
     };
 
+    /// <summary>Query value for the group of locations that have no CVR (the "no CVR" group).</summary>
+    public const string NoCvr = "none";
+
+    /// <summary>Trims the CVR filter and caps its length; null when blank (no CVR filter). The literal
+    /// <see cref="NoCvr"/> is returned as-is, and stands for "locations without a CVR".</summary>
+    public static string? NormalizeCvr(string? cvr)
+    {
+        if (string.IsNullOrWhiteSpace(cvr)) return null;
+        var trimmed = cvr.Trim();
+        if (trimmed.Equals(NoCvr, StringComparison.OrdinalIgnoreCase)) return NoCvr;
+        return trimmed.Length > 20 ? trimmed[..20] : trimmed;
+    }
+
     /// <summary>Trims the search text and caps its length; null when nothing searchable remains.</summary>
     public static string? NormalizeSearch(string? q)
     {
