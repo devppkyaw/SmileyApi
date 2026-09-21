@@ -858,9 +858,6 @@ pre:not([class*="language-"]) strong {
 .bench-label { flex: 1; min-width: 0; }
 .bench-label small { color: var(--text-muted); font-size: 0.75rem; }
 .bench-val { min-width: 84px; text-align: right; }
-.bench-who { font-size: 0.72rem; color: var(--text-muted); margin-right: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
-.bench-summary { font-size: 0.9rem; margin: 10px 0 4px; }
-.bench-h3 { font-size: 0.9rem; font-weight: 700; margin: 16px 0 4px; }
 
 /* ─── Risk / needs attention ──────────────────────────────── */
 
