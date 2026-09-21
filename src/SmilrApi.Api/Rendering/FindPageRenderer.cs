@@ -833,9 +833,11 @@ public static class FindPageRenderer
             </div>
             """;
 
-        var mapHref = est.GeoLat is { } lat && est.GeoLng is { } lng
+        // Name + address text lets Google open the actual business listing rather than a bare pin.
+        // Coordinates are only a fallback when there is no address to search on.
+        var mapHref = addressLine.Length == 0 && est.GeoLat is { } lat && est.GeoLng is { } lng
             ? $"https://www.google.com/maps/search/?api=1&query={lat.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture)},{lng.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture)}"
-            : $"https://www.google.com/maps/search/?api=1&query={Uri.EscapeDataString((addressLine.Length > 0 ? addressLine + ", " : "") + "Denmark")}";
+            : $"https://www.google.com/maps/search/?api=1&query={Uri.EscapeDataString(string.Join(" ", new[] { est.Name, est.Address, est.PostalCode, est.City }.Where(s => !string.IsNullOrWhiteSpace(s))))}";
         var locationHtml = $"""
             <div class="find-stats-card">
               <div class="find-stats-label">Location</div>
