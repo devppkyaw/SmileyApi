@@ -84,30 +84,4 @@ public class BenchmarkCalculatorTests
         Assert.Equal(0, new ScoreDistribution(0, 0, 0, 0).Total);
         Assert.Null(new ScoreDistribution(0, 0, 0, 0).Average);
     }
-
-    [Fact]
-    public void Rollup_counts_locations_better_in_line_and_worse_than_their_peer_average()
-    {
-        var peersMostlyOne = new ScoreDistribution(90, 8, 2, 0);   // peer avg ~1.12
-        var items = new[]
-        {
-            BenchmarkCalculator.ForLocation(1, peersMostlyOne, null, selfInPeerSets: false)!, // 1 vs 1.12 -> better (gap -0.12)
-            BenchmarkCalculator.ForLocation(3, peersMostlyOne, null, selfInPeerSets: false)!, // 3 vs 1.12 -> worse
-            BenchmarkCalculator.ForLocation(1, new ScoreDistribution(100, 0, 0, 0), null, selfInPeerSets: false)!, // 1 vs 1.00 -> in line
-        };
-
-        var p = BenchmarkCalculator.Rollup(items, totalLocations: 5)!;
-
-        Assert.Equal(3, p.Benchmarked);
-        Assert.Equal(5, p.Total);
-        Assert.Equal(1, p.BetterThanPeers);
-        Assert.Equal(1, p.InLineWithPeers);
-        Assert.Equal(1, p.WorseThanPeers);
-        Assert.Equal(1.67, p.YourAverage);
-        Assert.Equal(66.7, p.YourTopSharePercent);
-    }
-
-    [Fact]
-    public void Rollup_of_nothing_is_null() =>
-        Assert.Null(BenchmarkCalculator.Rollup([], totalLocations: 3));
 }

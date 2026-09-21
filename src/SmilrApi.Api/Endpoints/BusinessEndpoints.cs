@@ -709,53 +709,9 @@ public static class BusinessEndpoints
         });
 
         // ── Benchmarking (Pro/Enterprise) ─────────────────────────────────────────────────────────
-        // Loaded lazily by the Overview / Locations pages, separate from /overview, so the landing page
-        // stays one light call. Peers: same Pixibranche category in the same City, else the same
-        // category nationwide (see BenchmarkCalculator).
-        app.MapGet("/v1/business/benchmark", async (
-            HttpContext ctx,
-            IBusinessService svc,
-            SmilrDbContext db,
-            IEstablishmentRepository establishments,
-            IMemoryCache cache,
-            CancellationToken ct) =>
-        {
-            var business = await GetSessionBusinessAsync(ctx, svc, ct);
-            if (business is null) return Results.Unauthorized();
-            if (business.Tier == "free") return ProRequired();
-
-            var locations = await LoadBenchmarkInputsAsync(db, business.Id, null, ct);
-            var benchmarks = await BenchmarkLocationsAsync(locations, establishments, cache, ct);
-
-            var portfolio = BenchmarkCalculator.Rollup(benchmarks.Values.ToList(), locations.Count);
-
-            var belowPeers = locations
-                .Where(l => benchmarks.TryGetValue(l.Navnelbnr, out var b) && b.Score - b.PeerAverage > BenchmarkCalculator.InLineTolerance)
-                .Select(l => (Loc: l, Bench: benchmarks[l.Navnelbnr]))
-                .OrderByDescending(x => x.Bench.Score - x.Bench.PeerAverage).ThenBy(x => x.Loc.Name)
-                .Take(5)
-                .Select(x => new
-                {
-                    navnelbnr = x.Loc.Navnelbnr,
-                    name = x.Loc.Name,
-                    city = x.Loc.City,
-                    detailPath = FindUrlBuilder.DetailPath(x.Loc.Name, x.Loc.City, x.Loc.Navnelbnr),
-                    score = x.Bench.Score,
-                    peerAverage = Math.Round(x.Bench.PeerAverage, 2),
-                    scope = ScopeName(x.Bench.Scope),
-                    peerCount = x.Bench.PeerCount
-                })
-                .ToList();
-
-            return Results.Ok(new
-            {
-                totalLocations = locations.Count,
-                benchmarkedLocations = benchmarks.Count,
-                portfolio,
-                belowPeers
-            });
-        });
-
+        // Per-location benchmarking (Pro/Enterprise), loaded on demand by the Locations page "Compare" modal.
+        // Peers: same Pixibranche category in the same City, else the same category nationwide
+        // (see BenchmarkCalculator).
         app.MapGet("/v1/business/locations/{navnelbnr:int}/benchmark", async (
             int navnelbnr,
             HttpContext ctx,

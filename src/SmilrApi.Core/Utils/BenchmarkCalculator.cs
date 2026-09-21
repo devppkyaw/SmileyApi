@@ -41,17 +41,6 @@ public record LocationBenchmark(
     public int PeerCount => Peers.Total;
 }
 
-public record PortfolioBenchmark(
-    int Benchmarked,
-    int Total,
-    double YourAverage,
-    double PeerAverage,
-    double YourTopSharePercent,
-    double PeerTopSharePercent,
-    int BetterThanPeers,
-    int InLineWithPeers,
-    int WorseThanPeers);
-
 /// <summary>
 /// Benchmarks a business's locations against peers — same Pixibranche category in the same City,
 /// falling back to the same category nationwide when the local group is too small to mean anything.
@@ -64,9 +53,6 @@ public static class BenchmarkCalculator
 {
     /// <summary>Fewer peers than this and the area group is replaced by the nationwide category.</summary>
     public const int MinPeers = 10;
-
-    /// <summary>A location within this many points of its peer average counts as "in line".</summary>
-    public const double InLineTolerance = 0.05;
 
     /// <summary>Case-insensitive key for a (City, Pixibranche) peer group. SQL Server compares these
     /// case-insensitively, so lookups built from establishment rows must not be case-sensitive.</summary>
@@ -110,36 +96,6 @@ public static class BenchmarkCalculator
             SamePercent: Pct(same, total),
             PeersBetterPercent: Pct(peersBetter, total),
             PeersWorsePercent: Pct(peersWorse, total));
-    }
-
-    /// <summary>Rolls per-location benchmarks up into one portfolio summary.</summary>
-    /// <param name="items">Only the locations that could be benchmarked.</param>
-    /// <param name="totalLocations">All the business's locations, benchmarked or not.</param>
-    public static PortfolioBenchmark? Rollup(IReadOnlyList<LocationBenchmark> items, int totalLocations)
-    {
-        if (items.Count == 0) return null;
-
-        var better = 0;
-        var inLine = 0;
-        var worse = 0;
-        foreach (var i in items)
-        {
-            var gap = i.Score - i.PeerAverage; // positive = worse than peers (higher score is worse)
-            if (gap > InLineTolerance) worse++;
-            else if (gap < -InLineTolerance) better++;
-            else inLine++;
-        }
-
-        return new PortfolioBenchmark(
-            Benchmarked: items.Count,
-            Total: totalLocations,
-            YourAverage: Math.Round(items.Average(i => (double)i.Score), 2),
-            PeerAverage: Math.Round(items.Average(i => i.PeerAverage), 2),
-            YourTopSharePercent: Math.Round(100.0 * items.Count(i => i.Score == 1) / items.Count, 1),
-            PeerTopSharePercent: Math.Round(items.Average(i => i.PeerTopSharePercent), 1),
-            BetterThanPeers: better,
-            InLineWithPeers: inLine,
-            WorseThanPeers: worse);
     }
 
     private static ScoreDistribution Peers(ScoreDistribution? group, int score, bool selfIncluded) =>
