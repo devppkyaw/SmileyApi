@@ -14,6 +14,8 @@
   --red-dim:     rgba(184,50,50,0.12);
   --amber:       #a4551a;
   --yellow:      #fef3c7;
+  --smiley-card: #fef8ef;
+  --smiley-card-border: #e8dfd0;
   --radius:      10px;
   --font-body:   -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono:   "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
@@ -579,8 +581,8 @@ pre:not([class*="language-"]) strong {
 /* Official icon yellow badge — matches findsmiley.dk compact style */
 .static-badge {
   display: inline-block;
-  background: var(--yellow);
-  border: 2px solid #e9c46a;
+  background: var(--smiley-card);
+  border: 1px solid var(--smiley-card-border);
   border-radius: 8px;
   padding: 8px 10px;
   text-align: center;
@@ -1061,6 +1063,9 @@ pre:not([class*="language-"]) strong {
   white-space: nowrap;
 }
 
+.loc-name-link { color: inherit; }
+.loc-name-link:hover { color: var(--accent); }
+
 .loc-addr {
   display: block;
   font-size: 0.78rem;
@@ -1430,7 +1435,16 @@ a.find-pager-page:hover { background: var(--surface-2); color: var(--accent); te
   flex-wrap: wrap;
 }
 
-.find-detail-badge { flex-shrink: 0; }
+/* Cream card matching findsmiley.dk's "Seneste kontrol" panel; multiply blends the JPG's white into it. */
+.find-detail-badge {
+  flex-shrink: 0;
+  background: var(--smiley-card);
+  border: 1px solid var(--smiley-card-border);
+  border-radius: var(--radius);
+  padding: 12px;
+  line-height: 0;
+}
+.find-detail-badge img { mix-blend-mode: multiply; display: block; }
 
 .find-detail-info h1 { margin-bottom: 6px; }
 
