@@ -543,6 +543,7 @@ public static class BusinessEndpoints
                     latestScore     = l.LatestScore,
                     latestScoreDate = l.LatestScoreDate,
                     reportUrl       = l.ReportUrl,
+                    detailUrl       = FindUrlBuilder.DetailPath(l.Name, l.City, l.Navnelbnr),
                     virksomhedsType = l.VirksomhedsType,
                     addedAt         = l.AddedAt,
                     risk            = RiskDto(risk.GetValueOrDefault(l.Navnelbnr, LocationRisk.None)),

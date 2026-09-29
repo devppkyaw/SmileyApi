@@ -277,7 +277,11 @@ function locRow(loc, showCvr) {
   return '<tr data-navnelbnr="' + loc.navnelbnr + '" data-cvr="' + esc(loc.cvrNumber || '') + '">' +
     '<td class="loc-id">' + loc.navnelbnr + '</td>' +
     '<td>' +
-      '<strong style="font-size:0.875rem">' + esc(loc.name) + '</strong>' + riskBadge(loc.risk) +
+      '<strong style="font-size:0.875rem">' +
+        (loc.detailUrl
+          ? '<a href="' + esc(loc.detailUrl) + '" target="_blank" rel="noopener" class="loc-name-link" title="Open public Smilr page">' + esc(loc.name) + '</a>'
+          : esc(loc.name)) +
+      '</strong>' + riskBadge(loc.risk) +
       (addr ? '<span class="loc-addr">' + esc(addr) + '</span>' : '') +
       (loc.risk && loc.risk.reasons.length
         ? '<span class="loc-risk">' + loc.risk.reasons.map(function (r) { return reasonChip(r, loc.latestScore); }).join('') + '</span>'

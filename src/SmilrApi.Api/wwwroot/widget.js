@@ -44,8 +44,8 @@
       link.rel    = 'noopener noreferrer';
       link.setAttribute('style', [
         'display:inline-block',
-        'background:#fef3c7',
-        'border:2px solid #e9c46a',
+        'background:#fef8ef',
+        'border:1px solid #e8dfd0',
         'border-radius:8px',
         'padding:8px 10px',
         'text-align:center',
