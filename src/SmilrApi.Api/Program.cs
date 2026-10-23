@@ -11,6 +11,7 @@ using Scalar.AspNetCore;
 using SmilrApi.Api.Endpoints;
 using SmilrApi.Api.Middleware;
 using SmilrApi.Api.Rendering;
+using SmilrApi.Api.Telemetry;
 using SmilrApi.Api.Workers;
 using SmilrApi.Core.Interfaces;
 using SmilrApi.Core.Models;
@@ -19,6 +20,8 @@ using SmilrApi.Infrastructure.Jobs;
 using SmilrApi.Infrastructure.Repositories;
 using SmilrApi.Infrastructure.Services;
 using System.Threading.RateLimiting;
+using OpenTelemetry.Instrumentation.AspNetCore;
+using OpenTelemetry.Metrics;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -90,8 +93,20 @@ builder.Services.AddHttpClient("webhook", client => client.Timeout = TimeSpan.Fr
 builder.Services.AddHttpClient("fodevarestyrelsen", client =>
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Smilr/1.0 (+https://smilrhq.dk)"));
 builder.Services.AddSingleton<FodevareXmlParser>();
-builder.Services.AddHostedService<XmlSyncWorker>();
 
+// Off in the test environment (set via infra/parameters/test.bicepparam), so an idle test Container
+// App has nothing running in the background and can scale to zero. Enqueueing still works — jobs just
+// wait in the queue — and POST /admin/sync can still trigger a sync by hand.
+var backgroundJobsEnabled = builder.Configuration.GetValue("BackgroundJobs:Enabled", true);
+if (backgroundJobsEnabled)
+    builder.Services.AddHostedService<XmlSyncWorker>();
+
+// Hangfire only delivers score-change webhooks, which are enqueued once a day right after the sync, so
+// there's no need to poll for new jobs sub-second. QueuePollInterval used to be TimeSpan.Zero — several
+// polls a second, 24/7, each one logged to Application Insights as a SQL dependency (~85% of the Log
+// Analytics bill) and each one a round-trip against the 5-DTU SQL Basic database. Trade-off: a webhook
+// can now wait up to one poll interval (default 1 minute) before delivery starts.
+var hangfirePollInterval = TimeSpan.FromSeconds(builder.Configuration.GetValue("Hangfire:PollIntervalSeconds", 60));
 var connectionString = builder.Configuration.GetConnectionString("Default")!;
 builder.Services.AddHangfire(config => config
     .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
@@ -101,11 +116,21 @@ builder.Services.AddHangfire(config => config
     {
         CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
         SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
-        QueuePollInterval = TimeSpan.Zero,
+        QueuePollInterval = hangfirePollInterval,
+        JobExpirationCheckInterval = TimeSpan.FromHours(1),
         UseRecommendedIsolationLevel = true,
         DisableGlobalLocks = true
     }));
-builder.Services.AddHangfireServer();
+if (backgroundJobsEnabled)
+{
+    builder.Services.AddHangfireServer(options =>
+    {
+        options.SchedulePollingInterval = hangfirePollInterval;
+        // Each worker polls the queue on its own; a handful of daily webhook deliveries doesn't need
+        // the default of ProcessorCount * 5.
+        options.WorkerCount = builder.Configuration.GetValue("Hangfire:WorkerCount", 2);
+    });
+}
 
 builder.Services.AddCors(options =>
     options.AddPolicy("widget", policy =>
@@ -150,7 +175,31 @@ builder.Services.AddOpenApi("public", options =>
 var aiConnectionString = builder.Configuration["ApplicationInsights:ConnectionString"]
     ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
 if (!string.IsNullOrEmpty(aiConnectionString))
-    builder.Services.AddApplicationInsightsTelemetry();
+{
+    // Microsoft.ApplicationInsights.AspNetCore 3.x runs on OpenTelemetry, so filtering is done through
+    // the OpenTelemetry instrumentation options rather than classic ITelemetryProcessors.
+    builder.Services.AddApplicationInsightsTelemetry(options =>
+    {
+        // Rate-limited sampling: at Smilr's traffic (well under one request a second on average) this
+        // keeps nearly everything, and only thins out crawler bursts.
+        options.TracesPerSecond = builder.Configuration.GetValue("ApplicationInsights:TracesPerSecond", 1.0);
+        // Otherwise logs are dropped along with any trace that sampling (or a filter) discards — and
+        // these are warnings and errors only (see Logging:LogLevel), so keep every one of them.
+        options.EnableTraceBasedLogsSampler = false;
+    });
+    // Deliberately NO SqlClient filter for Hangfire's queries, even though they were the bulk of the
+    // bill: in OpenTelemetry.Instrumentation.SqlClient 1.15.2 a filtered-out command leaves its
+    // unrecorded activity behind as Activity.Current, so every later span in the same async flow is
+    // silently dropped too (verified locally 2026-10-23). XmlSyncWorker's loop enqueues webhooks via
+    // Hangfire at the end of each sync, so the next day's sync telemetry would vanish. The longer
+    // Hangfire poll interval above already removes ~95% of those rows on its own.
+    builder.Services.Configure<AspNetCoreTraceInstrumentationOptions>(options =>
+        options.Filter = ctx => !TelemetryFilters.IsHealthProbe(ctx.Request.Path));
+    // System.Net.Http's client metrics (open connections, active requests, ...) were ~0.85 GB/month
+    // of AppMetrics on their own. Outgoing calls are already visible as dependencies.
+    builder.Services.ConfigureOpenTelemetryMeterProvider(metrics =>
+        metrics.AddView("http.client.*", MetricStreamConfiguration.Drop));
+}
 
 builder.Services.AddRateLimiter(options =>
 {

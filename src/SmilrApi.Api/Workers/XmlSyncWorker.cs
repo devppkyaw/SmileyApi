@@ -8,7 +8,7 @@ namespace SmilrApi.Api.Workers;
 public class XmlSyncWorker(
     IServiceScopeFactory scopeFactory,
     FodevareXmlParser parser,
-    IWebHostEnvironment env,
+    IConfiguration config,
     ILogger<XmlSyncWorker> logger) : BackgroundService
 {
     internal static readonly SemaphoreSlim Lock = new(1, 1);
@@ -42,11 +42,14 @@ public class XmlSyncWorker(
         using var scope = scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SmilrDbContext>();
 
-        // In non-dev, skip if data is fresh — avoids full XML download + MERGE on every container restart.
-        if (!env.IsDevelopment() && await db.Establishments.AnyAsync(ct))
+        // Skip if data is fresh — avoids a full XML download + MERGE on every container restart or new
+        // revision. Applies in every environment (it used to be skipped in Development, which is also
+        // what the test environment runs as, so test re-synced on every restart); 0 disables the skip.
+        var minHoursBetweenRuns = config.GetValue("Sync:MinHoursBetweenRuns", 20);
+        if (minHoursBetweenRuns > 0 && await db.Establishments.AnyAsync(ct))
         {
             var lastSync = await db.Establishments.MaxAsync(e => e.UpdatedAt, ct);
-            if (lastSync > DateTime.UtcNow.AddHours(-20))
+            if (lastSync > DateTime.UtcNow.AddHours(-minHoursBetweenRuns))
             {
                 logger.LogInformation("XmlSyncWorker: data is fresh (last synced {LastSync:u}), skipping.", lastSync);
                 return;

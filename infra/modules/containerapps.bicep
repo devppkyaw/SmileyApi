@@ -6,6 +6,18 @@ param appInsightsConnectionString string
 param environment string
 param imageName string
 
+@description('Minimum replicas. 0 lets the app scale to zero when idle (HTTP traffic wakes it, at the cost of a cold start). Prod stays at 1 because the XML sync worker and the Hangfire server run in-process and would stop with it.')
+param minReplicas int = 1
+
+@description('vCPU per replica, as a string (e.g. \'0.25\'). Must form a valid Container Apps CPU/memory pair with containerMemory.')
+param containerCpu string = '0.5'
+
+@description('Memory per replica, e.g. \'0.5Gi\'. Must form a valid Container Apps CPU/memory pair with containerCpu.')
+param containerMemory string = '1Gi'
+
+@description('Run the in-process background work (daily XML sync worker + Hangfire server). Surfaced to the app as BackgroundJobs__Enabled.')
+param backgroundJobsEnabled bool = true
+
 // Custom domain for the Container App (e.g. 'smilrhq.dk'). Left empty by default — see
 // infra/parameters/prod.bicepparam for why this isn't set yet. Both the customDomains binding below and
 // the managed certificate are fully conditional on this being non-empty, so leaving it '' deploys no
@@ -25,6 +37,11 @@ resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: 'cae-${name}'
   location: location
   properties: {
+    // Console + system logs are kept in Log Analytics on purpose, even though Application Insights also
+    // receives the app's ILogger output. They're small (~0.3 GB/month in prod, nearly all of it exception
+    // stack traces) and they're the only record of failures that happen before or outside the app's own
+    // telemetry: a revision that crashes during startup (e.g. the 2026-05-24 migration hang), probe
+    // failures, image pulls. Dropping them would save a few kroner a month and lose that.
     appLogsConfiguration: {
       destination: 'log-analytics'
       logAnalyticsConfiguration: {
@@ -106,10 +123,11 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'AZURE_KEY_VAULT_URI', value: keyVaultUri }
             { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
             { name: 'ASPNETCORE_URLS', value: 'http://+:8080' }
+            { name: 'BackgroundJobs__Enabled', value: string(backgroundJobsEnabled) }
           ]
           resources: {
-            cpu: json('0.5')
-            memory: '1Gi'
+            cpu: json(containerCpu)
+            memory: containerMemory
           }
           probes: [
             {
@@ -129,8 +147,10 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           ]
         }
       ]
+      // maxReplicas stays 1: the /find page cache is in-process (see Program.cs). With minReplicas 0 and
+      // no explicit rules, Container Apps applies its default HTTP scale rule, so a request wakes it.
       scale: {
-        minReplicas: 1
+        minReplicas: minReplicas
         maxReplicas: 1
       }
     }
