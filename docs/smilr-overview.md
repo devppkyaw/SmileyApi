@@ -17,7 +17,8 @@ Smilr is a SaaS API and embeddable widget platform that surfaces Danish food ins
 - **Provider:** Fødevarestyrelsen (Danish Veterinary and Food Administration)
 - **Format:** Plain XML, downloaded and parsed every 24 hours (streamed via `HttpClient` + `XmlReader`, no ZIP step)
 - **Sync method:** Background worker using streaming XML parser; upserts ~30k+ establishment records via bulk SQL MERGE
-- **Score skip:** Sync is skipped on restart if data is less than 20 hours old (production only)
+- **Score skip:** Sync is skipped on restart if data is less than `Sync:MinHoursBetweenRuns` hours old (default 20, all environments; 0 disables the skip)
+- **Background jobs switch:** `BackgroundJobs:Enabled` (default `true`) controls the sync worker and the Hangfire server. It's `false` in the test environment, which only syncs when `POST /admin/sync` is called
 - **Manual override:** `POST /admin/sync` (requires `X-Admin-Key`) forces an immediate full resync, bypassing the 20-hour skip — see `docs/ProjectNotes.md`
 
 ---
@@ -119,7 +120,16 @@ Real-time push notifications when an establishment's smiley score changes.
 | CI/CD | GitHub Actions → ghcr.io → Bicep deploy |
 | IaC | Bicep (modular: containerapps, sql, keyvault, acs) |
 
-**Estimated monthly cost:** ~$8–12 (Container Apps + SQL Basic)
+**Monthly cost:** September 2026 actual was ~DKK 920 for prod + test combined. About half was Log Analytics ingestion, almost all of it Hangfire's sub-second job-queue polling logged as SQL dependencies. The rest was two Container Apps running a replica 24/7.
+
+After the October 2026 cost changes (`docs/azure-cost-reduction-brief.md`), the estimate is ~DKK 250–300/month. This hasn't been confirmed yet; check Cost Management a week after deploy.
+
+| Environment | Container App | Log Analytics | SQL Basic |
+|---|---|---|---|
+| Prod (`rg-smiley-api-prod`) | ~DKK 200: 1 replica always on, 0.5 vCPU / 1Gi | small: daily cap 0.5 GB | ~DKK 31 |
+| Test (`rg-smilr-test`) | ~0 when idle: scales to zero, 0.25 vCPU / 0.5Gi | ~0: daily cap 0.1 GB, no background jobs | ~DKK 31 |
+
+To get prod's Container App cost down further, it needs to scale to zero. That means moving the sync and webhook delivery out of the web app first; see Step 4 of the brief.
 
 ---
 

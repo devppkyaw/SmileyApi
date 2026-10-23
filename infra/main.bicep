@@ -4,7 +4,7 @@ param appName string
 @description('Azure region for all resources.')
 param location string = resourceGroup().location
 
-@allowed(['dev', 'prod'])
+@allowed(['dev', 'test', 'prod'])
 param environment string
 
 @description('SQL Server administrator login.')
@@ -50,6 +50,23 @@ param customDomainName string = ''
 @description('Phase 2 of custom domain setup: create the managed TLS certificate for customDomainName and bind it. Must stay false on the first deploy after setting customDomainName (phase 1, just registers the hostname), then true on a follow-up deploy. See infra/parameters/prod.bicepparam and infra/modules/containerapps.bicep for why.')
 param provisionManagedCertificate bool = false
 
+// Per-environment cost settings. Defaults match what prod ran with before these were parameterized,
+// so an environment's .bicepparam only needs to set the ones it changes. See
+// docs/azure-cost-reduction-brief.md for the September 2026 numbers behind these.
+@description('Container App minimum replicas. 0 = scale to zero when idle (test). Prod must stay at 1 while the sync worker and Hangfire run in-process.')
+param minReplicas int = 1
+
+@description('Container App vCPU per replica, as a string (e.g. \'0.25\').')
+param containerCpu string = '0.5'
+
+@description('Container App memory per replica (e.g. \'0.5Gi\'). Must pair validly with containerCpu.')
+param containerMemory string = '1Gi'
+
+@description('Run the in-process XML sync worker and Hangfire server.')
+param backgroundJobsEnabled bool = true
+
+@description('Log Analytics daily ingestion cap in GB, as a string (e.g. \'0.1\'). \'-1\' = no cap.')
+param logDailyQuotaGb string = '-1'
 
 // A short deterministic suffix scoped to this resource group avoids global naming conflicts
 // for App Service (*.azurewebsites.net) and Key Vault (globally unique).
@@ -63,6 +80,7 @@ module monitoring 'modules/monitoring.bicep' = {
   params: {
     name: suffix
     location: location
+    dailyQuotaGb: logDailyQuotaGb
   }
 }
 
@@ -82,6 +100,7 @@ module acs 'modules/acs.bicep' = {
   params: {
     name: suffix
     location: location
+    useCustomDomain: environment == 'prod'
   }
 }
 
@@ -117,6 +136,10 @@ module containerApp 'modules/containerapps.bicep' = {
     imageName: imageName
     customDomainName: customDomainName
     provisionManagedCertificate: provisionManagedCertificate
+    minReplicas: minReplicas
+    containerCpu: containerCpu
+    containerMemory: containerMemory
+    backgroundJobsEnabled: backgroundJobsEnabled
   }
 }
 
