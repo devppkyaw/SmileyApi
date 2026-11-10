@@ -15,7 +15,7 @@ public class SitemapTests
     private static readonly IReadOnlyList<(string City, int Count)> NoChangeCounts = [];
 
     private static SitemapEntry Entry(string name, string city, int navnelbnr, bool hasInspectionDate = true) =>
-        new(name, city, navnelbnr, new DateTime(2026, 5, 23), hasInspectionDate);
+        new(name, city, navnelbnr, hasInspectionDate ? new DateOnly(2026, 5, 23) : null);
 
     [Fact]
     public void One_url_per_establishment_plus_one_hub_page_per_area()
@@ -86,7 +86,7 @@ public class SitemapTests
 
     private static IReadOnlyList<FindPageRenderer.SitemapUrl> SampleUrls(int count) =>
         Enumerable.Range(1, count)
-            .Select(i => new FindPageRenderer.SitemapUrl($"/find/est-{i}-{i}", new DateTime(2026, 5, 23)))
+            .Select(i => new FindPageRenderer.SitemapUrl($"/find/est-{i}-{i}", new DateOnly(2026, 5, 23)))
             .ToList();
 
     [Theory]
@@ -165,10 +165,39 @@ public class SitemapTests
     [Fact]
     public void Chunk_xml_includes_lastmod_per_url()
     {
-        var urls = new[] { new FindPageRenderer.SitemapUrl("/find/x-1", new DateTime(2026, 5, 23)) };
+        var urls = new[] { new FindPageRenderer.SitemapUrl("/find/x-1", new DateOnly(2026, 5, 23)) };
 
         var xml = FindPageRenderer.SitemapChunkXml(urls, chunkIndex: 0, chunkSize: 45_000);
 
         Assert.Contains("<lastmod>2026-05-23</lastmod>", xml);
+    }
+
+    [Fact]
+    public void Chunk_xml_omits_lastmod_when_there_is_no_inspection_date()
+    {
+        var urls = new[] { new FindPageRenderer.SitemapUrl("/find/x-1", null) };
+
+        var xml = FindPageRenderer.SitemapChunkXml(urls, chunkIndex: 0, chunkSize: 45_000);
+
+        Assert.Contains("<url><loc>https://smilrhq.dk/find/x-1</loc></url>", xml);
+        Assert.DoesNotContain("<lastmod>", xml);
+    }
+
+    [Fact]
+    public void Lastmod_is_the_latest_inspection_date_and_hubs_take_their_newest_establishment()
+    {
+        IReadOnlyList<SitemapEntry> entries =
+        [
+            new("Cafe A", "Aarhus", 1, new DateOnly(2025, 3, 1)),
+            new("Cafe B", "Aarhus", 2, new DateOnly(2026, 10, 7)),
+            new("Cafe C", "Aarhus", 3, null),
+        ];
+
+        var urls = FindPageRenderer.BuildSitemapUrls(entries, NoCategoryCounts, NoChangeCounts, categorySlugThreshold: 3)
+            .ToDictionary(u => u.Loc, u => u.Lastmod);
+
+        Assert.Equal(new DateOnly(2025, 3, 1), urls[FindUrlBuilder.DetailPath("Cafe A", "Aarhus", 1)]);
+        Assert.Null(urls[FindUrlBuilder.DetailPath("Cafe C", "Aarhus", 3)]);
+        Assert.Equal(new DateOnly(2026, 10, 7), urls[FindUrlBuilder.HubPath("Aarhus")]);
     }
 }

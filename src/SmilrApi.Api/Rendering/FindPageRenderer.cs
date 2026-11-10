@@ -1100,8 +1100,9 @@ public static class FindPageRenderer
     /// <summary>One &lt;loc&gt;+&lt;lastmod&gt; pair destined for a sitemap file — the unit both
     /// SitemapChunkXml (a paginated &lt;urlset&gt; file) and SitemapIndexXml (the index pointing at all of
     /// them) operate on. Built once per sitemap cache window by BuildSitemapUrls below, then sliced per
-    /// chunk request — no DB access needed to render an individual chunk.</summary>
-    internal readonly record struct SitemapUrl(string Loc, DateTime Lastmod);
+    /// chunk request — no DB access needed to render an individual chunk. Lastmod is null when there is
+    /// no inspection date to report, and the &lt;lastmod&gt; tag is then left out.</summary>
+    internal readonly record struct SitemapUrl(string Loc, DateOnly? Lastmod);
 
     /// <summary>Flattens establishment/hub/category data into the full ordered list of sitemap URLs:
     /// one per establishment detail page, plus one per area hub, recently-inspected page, changes page,
@@ -1117,7 +1118,7 @@ public static class FindPageRenderer
         var urls = new List<SitemapUrl>(entries.Count + 64);
 
         foreach (var e in entries)
-            urls.Add(new SitemapUrl(FindUrlBuilder.DetailPath(e.Name, e.City, e.Navnelbnr), e.UpdatedAt));
+            urls.Add(new SitemapUrl(FindUrlBuilder.DetailPath(e.Name, e.City, e.Navnelbnr), e.LatestScoreDate));
 
         // One hub-page entry per area, derived from the same projection — no extra repository call needed.
         var hubGroups = entries
@@ -1125,11 +1126,12 @@ public static class FindPageRenderer
             .GroupBy(e => FindUrlBuilder.AreaSlug(e.City!))
             .ToList();
 
-        var areaLastmod = new Dictionary<string, DateTime>();
+        // An area page changes when any of its establishments gets a new inspection.
+        var areaLastmod = new Dictionary<string, DateOnly?>();
         foreach (var group in hubGroups)
         {
             var displaySpelling = group.First().City!;
-            var lastmod = group.Max(e => e.UpdatedAt);
+            var lastmod = group.Max(e => e.LatestScoreDate);
             areaLastmod[group.Key] = lastmod;
             urls.Add(new SitemapUrl(FindUrlBuilder.HubPath(displaySpelling), lastmod));
         }
@@ -1196,9 +1198,10 @@ public static class FindPageRenderer
         {
             sb.Append("  <url><loc>")
               .Append(SiteOrigin).Append(u.Loc)
-              .Append("</loc><lastmod>")
-              .Append(u.Lastmod.ToString("yyyy-MM-dd"))
-              .Append("</lastmod></url>\n");
+              .Append("</loc>");
+            if (u.Lastmod is { } lastmod)
+                sb.Append("<lastmod>").Append(lastmod.ToString("yyyy-MM-dd")).Append("</lastmod>");
+            sb.Append("</url>\n");
         }
 
         sb.Append("</urlset>");

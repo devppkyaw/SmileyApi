@@ -101,6 +101,12 @@ var backgroundJobsEnabled = builder.Configuration.GetValue("BackgroundJobs:Enabl
 if (backgroundJobsEnabled)
     builder.Services.AddHostedService<XmlSyncWorker>();
 
+// The sitemap URL list is built off the request path (see SitemapUrlCache). Warmed at startup only where
+// background work is allowed; in test it is built on the first sitemap fetch instead.
+builder.Services.AddSingleton(SitemapUrlCache.Create);
+if (backgroundJobsEnabled)
+    builder.Services.AddHostedService<SitemapWarmupService>();
+
 // Hangfire only delivers score-change webhooks, which are enqueued once a day right after the sync, so
 // there's no need to poll for new jobs sub-second. QueuePollInterval used to be TimeSpan.Zero — several
 // polls a second, 24/7, each one logged to Application Insights as a SQL dependency (~85% of the Log

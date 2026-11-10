@@ -53,7 +53,7 @@ public static class FindEndpoints
     private static readonly Regex DetailSlugPattern = new(@"^.+-(?<navnelbnr>\d+)$", RegexOptions.Compiled);
 
     // Establishment data only changes once per ~20-24h sync cycle (XmlSyncWorker), so a long TTL is safe.
-    private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(12);
+    internal static readonly TimeSpan CacheTtl = TimeSpan.FromHours(12);
 
     private const int SearchPageSize = 20;
     private const int HubPageSize = 20;
@@ -109,9 +109,9 @@ public static class FindEndpoints
 
         // Sitemap index — lists the chunk files below rather than URLs directly (see SitemapChunkSize).
         // This is what robots.txt's "Sitemap:" line and Search Console's submitted sitemap should point at.
-        find.MapGet("/sitemap.xml", async (IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct) =>
+        find.MapGet("/sitemap.xml", async (SitemapUrlCache sitemap, CancellationToken ct) =>
         {
-            var urls = await GetSitemapUrlsAsync(cache, repo, ct);
+            var urls = await sitemap.GetAsync(ct);
             var xml = FindPageRenderer.SitemapIndexXml(urls.Count, SitemapChunkSize);
             return Results.Content(xml, "application/xml");
         });
@@ -119,9 +119,9 @@ public static class FindEndpoints
         // One chunk of the sitemap (n is 1-indexed, matching the URLs SitemapIndexXml hands out above).
         // Reuses the same cached URL list as the index; slicing/rendering a chunk is pure in-memory work
         // (no DB access), so unlike the underlying list itself, the rendered chunk isn't cached separately.
-        find.MapGet("/sitemap-{n:int}.xml", async (int n, IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct) =>
+        find.MapGet("/sitemap-{n:int}.xml", async (int n, SitemapUrlCache sitemap, CancellationToken ct) =>
         {
-            var urls = await GetSitemapUrlsAsync(cache, repo, ct);
+            var urls = await sitemap.GetAsync(ct);
             var chunkCount = urls.Count == 0 ? 0 : (int)Math.Ceiling(urls.Count / (double)SitemapChunkSize);
             if (n < 1 || n > chunkCount)
                 return Results.NotFound();
@@ -524,21 +524,17 @@ public static class FindEndpoints
             "text/html", statusCode: 404);
     }
 
-    // Shared by both sitemap routes above — the expensive part (three repo calls + BuildSitemapUrls'
-    // flattening over tens of thousands of establishments) is cached once per CacheTtl window; each chunk
-    // request then just slices the same in-memory list.
-    private static async Task<IReadOnlyList<FindPageRenderer.SitemapUrl>> GetSitemapUrlsAsync(
-        IMemoryCache cache, IEstablishmentRepository repo, CancellationToken ct)
+    // The expensive part of both sitemap routes above (three repo calls + BuildSitemapUrls' flattening
+    // over tens of thousands of establishments). Only ever called by SitemapUrlCache, off the request
+    // path — see that class for why; each chunk request then just slices the same in-memory list.
+    internal static async Task<IReadOnlyList<FindPageRenderer.SitemapUrl>> BuildSitemapUrlsAsync(
+        IEstablishmentRepository repo, CancellationToken ct)
     {
-        return (await cache.GetOrCreateAsync("find:sitemap:urls", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = CacheTtl;
-            var entries = await repo.GetAllForSitemapAsync(ct);
-            var categoryCounts = await repo.GetCityCategoryCountsAsync(ct);
-            var changeWindowStart = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-ChangesWindowDays));
-            var changeCounts = await repo.GetChangeCountsByCityAsync(changeWindowStart, ct);
-            return FindPageRenderer.BuildSitemapUrls(entries, categoryCounts, changeCounts, CategorySlugThreshold);
-        }))!;
+        var entries = await repo.GetAllForSitemapAsync(ct);
+        var categoryCounts = await repo.GetCityCategoryCountsAsync(ct);
+        var changeWindowStart = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-ChangesWindowDays));
+        var changeCounts = await repo.GetChangeCountsByCityAsync(changeWindowStart, ct);
+        return FindPageRenderer.BuildSitemapUrls(entries, categoryCounts, changeCounts, CategorySlugThreshold);
     }
 
     private static async Task<IReadOnlyDictionary<string, AreaInfo>> GetAreaIndexAsync(

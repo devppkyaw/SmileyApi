@@ -112,7 +112,7 @@ public class EstablishmentRepository(SmilrDbContext db) : IEstablishmentReposito
     {
         return await db.Establishments
             .Where(e => e.CvrNumber != null && e.DelistedAt == null)
-            .Select(e => new SitemapEntry(e.Name, e.City, e.Navnelbnr, e.UpdatedAt, e.LatestScoreDate != null))
+            .Select(e => new SitemapEntry(e.Name, e.City, e.Navnelbnr, e.LatestScoreDate))
             .AsNoTracking()
             .ToListAsync(ct);
     }

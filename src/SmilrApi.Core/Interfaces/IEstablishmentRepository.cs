@@ -24,7 +24,7 @@ public interface IEstablishmentRepository
     /// <summary>Inspection history for one specific location (not merged across a whole CVR, unlike GetHistoryAsync).</summary>
     Task<Establishment?> GetHistoryByNavnelbnrAsync(int navnelbnr, CancellationToken ct = default);
 
-    /// <summary>Lightweight (Name, City, Navnelbnr, UpdatedAt) projection for every establishment that has a
+    /// <summary>Lightweight (Name, City, Navnelbnr, LatestScoreDate) projection for every establishment that has a
     /// CVR and is not delisted (still present in the source feed) — feeds the /find sitemap.</summary>
     Task<IReadOnlyList<SitemapEntry>> GetAllForSitemapAsync(CancellationToken ct = default);
 
@@ -146,7 +146,12 @@ public interface IEstablishmentRepository
     Task<IReadOnlyDictionary<string, ScoreDistribution>> GetNationalCategoryDistributionsAsync(CancellationToken ct = default);
 }
 
-public record SitemapEntry(string Name, string? City, int Navnelbnr, DateTime UpdatedAt, bool HasInspectionDate);
+// LatestScoreDate (not UpdatedAt) drives the sitemap's lastmod: the sync stamps UpdatedAt on every row
+// every day, so it said "changed today" for all ~60k URLs and Google learned to ignore it.
+public record SitemapEntry(string Name, string? City, int Navnelbnr, DateOnly? LatestScoreDate)
+{
+    public bool HasInspectionDate => LatestScoreDate is not null;
+}
 
 public record RecentlyInspectedSummary(int TotalWithInspection, DateOnly? LatestInspectionDate, int Last30DaysCount);
 
